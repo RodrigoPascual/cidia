@@ -273,7 +273,7 @@ Antes de restaurar hace una copia del estado actual; restaura en una base tempor
 1. Instala CidIA en el equipo nuevo como en el apartado 4.
 2. Copia la carpeta de la copia a `/opt/cidia/copias/`.
 3. `sudo cidia restaurar <copia>`. Las cuentas pasan a ser las de la copia: la contraseña de `secretos/admin-inicial.txt` del equipo nuevo deja de valer (bórralo) y se entra con las de siempre.
-4. Si usabas WeKnora, copia el valor de `WEKNORA_AES_KEY` del `configuracion.tar.gz` de la copia a `/opt/cidia/secretos/cidia.env` y `sudo cidia reiniciar`.
+4. Si usabas WeKnora, copia el valor de `WEKNORA_AES_KEY` del `configuracion.tar.gz` de la copia a `/opt/cidia/secretos/cidia.env` y `sudo cidia reiniciar`. Si usabas un perfil a medida, también va en ese fichero (`cidia/servidor/despliegue/perfiles/<nombre>.env`): instala el equipo nuevo con él (`--perfil <nombre>`).
 
 ## 10. Actualizar
 

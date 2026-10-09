@@ -37,5 +37,6 @@ comprobar "192.168.1.0/24 no solapa con 192.168.229.0/24" '! solapan 192.168.1.0
 comprobar "token fuera de la URL" '[[ $(url_sin_credenciales https://ana:ghp_secreto@github.com/empresa/cidia.git) == https://github.com/empresa/cidia.git ]]'
 comprobar "token fuera de los argumentos" '[[ $(url_sin_credenciales "--repo https://x:tok@h/r.git --si") != *tok* ]]'
 comprobar "también desde la entrada estándar" '[[ $(echo "fatal: https://u:p@h/r" | url_sin_credenciales) == "fatal: https://h/r" ]]'
+comprobar "plural" '[[ $(plural 1 aviso) == "1 aviso" && $(plural 0 problema) == "0 problemas" && $(plural 3 aviso) == "3 avisos" ]]'
 comprobar "URL sin credenciales intacta" '[[ $(url_sin_credenciales https://github.com/a/b) == https://github.com/a/b ]]'
 terminar

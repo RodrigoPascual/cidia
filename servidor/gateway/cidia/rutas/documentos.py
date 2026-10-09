@@ -351,7 +351,7 @@ def probar_busqueda(datos: PruebaBusqueda, actor: Actor = Depends(requiere_jefe)
     inicio = time.perf_counter()
     try:
         encontrados = m.buscar(bd, consulta, alcance, k)
-        ambitos = [a.__dict__ for a in m.ambitos(bd, alcance)] if hasattr(m, "ambitos") else None
+        ambitos = [a.__dict__ for a in (m.ambitos(bd, alcance) or [])] if m.externo else None
     except (ErrorModelo, ErrorWeKnora) as e:  # mensajes pensados para mostrarse (modelo o WeKnora caídos)
         log.warning("Fallo en la prueba de búsqueda: %s", e)
         raise HTTPException(502, f"La búsqueda ha fallado: {e}")
@@ -544,7 +544,7 @@ def editar(documento_id: int, datos: CambiosDocumento, actor: Actor = Depends(re
     cambios = {c: [antes[c], getattr(d, c)] for c in antes if antes[c] != getattr(d, c)}
     if not cambios:
         return _a_dict(bd, actor, d)
-    reetiquetar = getattr(motor(), "reetiquetar", None)
+    reetiquetar = motor().reetiquetar if motor().externo else None
     cambia_permiso = any(c in cambios for c in CAMPOS_PERMISO)
     if cambia_permiso and reetiquetar is not None and _indexado_en_curso(bd, d):
         # Con un motor externo, el indexado en curso pondría las etiquetas antiguas.
@@ -586,7 +586,7 @@ def reindexar(documento_id: int, actor: Actor = Depends(requiere_jefe),
 def borrar(documento_id: int, actor: Actor = Depends(requiere_jefe),
            bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
     d = _cargar(bd, actor, documento_id, gestionar=True)
-    if hasattr(motor(), "reetiquetar") and _indexado_en_curso(bd, d):
+    if motor().externo and _indexado_en_curso(bd, d):
         # Con un motor externo, el indexado en curso dejaría el documento huérfano allí.
         raise HTTPException(409, "El documento se está indexando. Espera a que termine para borrarlo.")
     info = {"titulo": d.titulo, "departamento_id": d.departamento_id, "origen": d.origen,

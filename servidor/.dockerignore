@@ -1,0 +1,15 @@
+# Contexto de construcción de las imágenes (docker compose build desde servidor/despliegue).
+# Nada de dependencias instaladas, compilados, datos ni secretos de desarrollo.
+**/__pycache__
+**/*.pyc
+web/node_modules
+web/dist
+gateway/.venv
+gateway/.env
+gateway/.env.*
+gateway/_datos*
+gateway/_registros_pruebas
+gateway/datos
+gateway/.herramientas
+gateway/.pytest_cache
+espacio-trabajo/__pycache__

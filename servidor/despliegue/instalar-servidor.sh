@@ -505,7 +505,7 @@ comprobar_equipo() {
 			if [[ -n $COMPOSE_VERSION ]]; then ok "Docker Compose $COMPOSE_VERSION"; else info "Falta el complemento Docker Compose: se instalaría."; fi
 			OTROS_CONTENEDORES=$("${DOCKER[@]}" ps -q | wc -l)
 			OTROS_CONTENEDORES=$((OTROS_CONTENEDORES - $("${DOCKER[@]}" ps -q --filter "$ETIQUETA" | wc -l)))
-			if ((OTROS_CONTENEDORES > 0)); then info "Hay $OTROS_CONTENEDORES contenedores de otros proyectos en marcha: no se tocarán."; fi
+			if ((OTROS_CONTENEDORES > 0)); then info "Contenedores de otros proyectos en marcha: $OTROS_CONTENEDORES (no se tocarán)."; fi
 		else
 			aviso "Docker está instalado, pero este usuario no puede usarlo (prueba con sudo)."
 		fi
@@ -994,7 +994,7 @@ instalar_toolkit_nvidia() {
 	fi
 	ejecutar "Configurando Docker para usar la GPU" nvidia-ctk runtime configure --runtime=docker || morir "nvidia-ctk ha fallado."
 	if ((OTROS_CONTENEDORES > 0)); then
-		aviso "Hay que reiniciar Docker: los $OTROS_CONTENEDORES contenedores de otros proyectos se pararán unos segundos y volverán a arrancar si tienen «restart»."
+		aviso "Hay que reiniciar Docker: los contenedores de otros proyectos ($OTROS_CONTENEDORES) se pararán unos segundos y volverán a arrancar si tienen «restart»."
 		if ! confirmar "¿Reiniciar Docker ahora?" s; then
 			aviso "Sin reiniciar Docker no se puede usar la GPU: CidIA seguirá sin ella. Reinicia Docker y vuelve a ejecutar el instalador."
 			GPU_USAR=0
@@ -1470,19 +1470,23 @@ modo_comprobar() {
 	paso "Qué haría el instalador (no se cambia nada)"
 	decidir_opciones
 	mostrar_resumen_opciones
+	if carpeta_protegida "$DIR"; then fallo "En $DIR no se puede instalar: usa una carpeta propia, como /opt/cidia (--dir)."; fi
 	if ((DOCKER_CLI)); then info "Docker: ya instalado, no se tocaría."; else info "Docker: se instalaría Docker Engine desde download.docker.com."; fi
 	if ((GPU_USAR && !TOOLKIT_OK)); then info "GPU: se instalaría el NVIDIA Container Toolkit."; fi
 	mostrar_modelos_pendientes
 	printf '\n'
 	if ((ERRORES)); then
-		printf '  %sResultado: %d problemas y %d avisos. No se ha cambiado nada.%s\n' "$C_ROJO" "$ERRORES" "${#AVISOS[@]}" "$C_R"
+		printf '  %sResultado: %s y %s. No se ha cambiado nada.%s\n' "$C_ROJO" "$(plural "$ERRORES" problema)" "$(plural "${#AVISOS[@]}" aviso)" "$C_R"
 	else
-		printf '  %sResultado: sin problemas (%d avisos). No se ha cambiado nada.%s\n' "$C_VERDE" "${#AVISOS[@]}" "$C_R"
+		printf '  %sResultado: sin problemas (%s). No se ha cambiado nada.%s\n' "$C_VERDE" "$(plural "${#AVISOS[@]}" aviso)" "$C_R"
 	fi
 	printf '  Registro: %s\n\n' "$REGISTRO"
 	if ((ERRORES)); then exit 1; fi
 	return 0
 }
+
+# plural N palabra -> «1 aviso», «3 avisos».
+plural() { if (($1 == 1)); then printf '1 %s' "$2"; else printf '%d %ss' "$1" "$2"; fi; }
 
 mostrar_modelos_pendientes() {
 	local cid m lista faltan=()

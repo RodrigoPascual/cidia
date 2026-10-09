@@ -383,7 +383,7 @@ modelos_descargar() {
 			fallo "No se ha podido descargar $m"
 		fi
 	done
-	((fallidos == 0)) || morir "Han fallado $fallidos descargas. Comprueba la conexión a Internet y el espacio en disco."
+	((fallidos == 0)) || morir "Descargas fallidas: $fallidos. Comprueba la conexión a Internet y el espacio en disco."
 }
 
 modelos_borrar() {

@@ -1,12 +1,15 @@
 // Verificación de una instalación de CidIA sin interfaz gráfica, por el protocolo CDP.
 //
 //   "%LOCALAPPDATA%\Programs\CidIA\CidIA.exe" --remote-debugging-port=9333
-//   node app/instalador/verificar.mjs [--puerto 9333] [--captura captura.png]
+//   node app/instalador/verificar.mjs [--puerto 9333] [--captura captura.png] [--datos <DSH_HOME>]
 //
 // Comprueba: destino dsh-app://app/, título y marca CidIA, secciones de CidIA en la barra
-// lateral, proxy al servidor (cidia/gw/salud), sesión del Host (cidia/estado) e interfaz web
-// embebida en el iframe con la base del proxy. Node 22 (WebSocket nativo), sin dependencias.
-import { writeFileSync } from 'node:fs'
+// lateral, proxy al servidor (cidia/gw/salud), sesión del Host (cidia/estado), interfaz web
+// embebida en el iframe con la base del proxy y que la credencial del modelo es el token de la
+// sesión (por huellas SHA-256). Node 22 (WebSocket nativo), sin dependencias.
+import { readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
 
 const args = process.argv.slice(2)
 const opcion = (nombre, porDefecto) => {
@@ -15,6 +18,7 @@ const opcion = (nombre, porDefecto) => {
 }
 const puerto = opcion('--puerto', '9333')
 const captura = opcion('--captura', null)
+const datos = opcion('--datos', join(process.env.LOCALAPPDATA ?? '', 'CidIA', 'datos'))
 
 let fallos = 0
 const comprobar = (ok, texto, detalle = '') => {
@@ -53,7 +57,12 @@ const estado = await evaluar(`(async () => {
   const salud = await fetch('cidia/gw/salud').then(r => r.json()).catch(e => ({ error: String(e) }))
   const host = await fetch('cidia/estado').then(r => r.json()).catch(e => ({ error: String(e) }))
   const doc = marco?.contentDocument
+  // Solo la huella del token de la interfaz: el token no sale del renderer.
+  const token = localStorage.getItem('cidia.token')
+  const huella = token ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)))]
+    .map(b => b.toString(16).padStart(2, '0')).join('') : null
   return {
+    huella,
     titulo: document.title,
     idioma: document.documentElement.lang,
     marca: Boolean(document.querySelector('svg rect[fill="#F2C200"]')),
@@ -71,6 +80,17 @@ comprobar(/Acceso|Inicio/.test(estado?.barra ?? '') && /Copiloto/.test(estado?.b
 comprobar(estado?.salud?.estado === 'ok', 'proxy al servidor CidIA (cidia/gw/salud)', JSON.stringify(estado?.salud))
 comprobar(estado?.host?.conectado === true, 'sesión del Host', `${estado?.host?.modo} · ${estado?.host?.servidor}`)
 comprobar(estado?.iframe?.base === '/cidia/gw/app/', 'interfaz web embebida por el proxy', estado?.iframe?.src)
+
+// La credencial del proveedor de modelos (CIDIA_GATEWAY_TOKEN en $DSH_HOME/.credentials.yaml)
+// debe ser el mismo token que usa la interfaz. Se comparan huellas, nunca los tokens.
+let huellaHost = null
+try {
+  const texto = readFileSync(join(datos, '.credentials.yaml'), 'utf8')
+  const valor = texto.match(/^\s*CIDIA_GATEWAY_TOKEN:\s*(\S+)\s*$/m)?.[1]?.replace(/^["']|["']$/g, '')
+  if (valor) huellaHost = createHash('sha256').update(valor).digest('hex')
+} catch { /* sin fichero de credenciales */ }
+comprobar(Boolean(huellaHost) && huellaHost === estado?.huella, 'credencial del modelo = token de la sesión',
+  `${estado?.host?.modo ?? '?'}${huellaHost ? '' : ' · sin CIDIA_GATEWAY_TOKEN en ' + datos}`)
 
 if (captura) {
   const r = await enviar('Page.captureScreenshot', { format: 'png' })

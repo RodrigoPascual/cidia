@@ -27,6 +27,7 @@ class Encontrado:
 
 class MotorConocimiento(ABC):
     nombre = "base"
+    externo = False  # True si los datos viven fuera de PostgreSQL (WeKnora): hay que reetiquetar
 
     @abstractmethod
     def indexar(

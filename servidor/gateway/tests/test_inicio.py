@@ -34,7 +34,8 @@ from cidia.modelos import (
     Usuario,
     ahora,
 )
-from cidia.seguridad import hash_contrasena
+from cidia.seguridad import Actor, hash_contrasena
+from cidia.servicios import evaluacion
 
 
 @dataclass
@@ -242,10 +243,13 @@ def test_contadores_por_rol(cliente, bd, taller):
     d = cliente.get("/api/inicio", headers=cab(cliente, exp.usuario)).json()
     assert d["experto"] == {"borradores": 1, "preguntas_por_revisar": 2} and d["equipo"] is None
 
-    # Jefa: bandejas de su departamento (y también es experta a efectos de preguntas).
+    # Jefa: bandejas de su departamento (y también es experta a efectos de preguntas). Los
+    # borradores cuentan los de su departamento, y Evaluación suma además las observaciones
+    # sugeridas: el número coincide con la página (evaluacion.contar_pendientes).
     c = cliente.get("/api/inicio/contadores", headers=cab(cliente, jefa.usuario)).json()
-    assert c["aportaciones"] == 1 and c["lagunas"] == 1 and c["borradores"] == 0
-    assert c["evaluacion"] == 1 + 2
+    assert c["aportaciones"] == 1 and c["lagunas"] == 1 and c["borradores"] == 1
+    assert c["evaluacion"] == evaluacion.contar_pendientes(bd, Actor(sesion=None, usuario=jefa))  # type: ignore[arg-type]
+    assert c["evaluacion"] >= 1 + 2
 
     # Un jefe de otro departamento no ve nada de este.
     c = cliente.get("/api/inicio/contadores", headers=cab(cliente, "ana")).json()
@@ -305,7 +309,10 @@ def test_inicio_coincide_con_progreso_y_evaluacion(cliente, bd, planta, taller):
             assert c["evaluacion"] == evaluacion.contar_pendientes(bd, Actor(sesion=None, usuario=u)), u.usuario  # type: ignore[arg-type]
         d = cliente.get("/api/inicio", headers=h).json()
         assert d["mis_tareas_total"] == len(progreso.tareas_de(bd, u))
-        assert d["cuestionarios_disponibles"] == c["evaluacion"] - (d["experto"] or {}).get("preguntas_por_revisar", 0)
+        if u.rol == "empleado":
+            assert d["cuestionarios_disponibles"] == c["evaluacion"] - (d["experto"] or {}).get("preguntas_por_revisar", 0)
+        else:  # a un jefe el contador le suma además las observaciones sugeridas
+            assert c["evaluacion"] == evaluacion.contar_pendientes(bd, Actor(sesion=None, usuario=u))  # type: ignore[arg-type]
 
     d = cliente.get("/api/inicio", headers=cab(cliente, op.usuario)).json()
     assert [t["id"] for t in d["mis_tareas"]] == [t1.id] and d["cuestionarios_disponibles"] == 1

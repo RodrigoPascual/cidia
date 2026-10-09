@@ -31,3 +31,4 @@ _datos_pruebas/
 !.env.plantilla
 _registros_pruebas/
 _datos_qa/
+servidor/despliegue/perfiles/generico.env

@@ -195,6 +195,7 @@ def _guardar_config(bd: Session, clave: str, valor: Any) -> None:
 
 class MotorWeKnora(MotorConocimiento):
     nombre = "weknora"
+    externo = True
 
     def __init__(self, url: str | None = None, api_key: str | None = None,
                  transporte: httpx.BaseTransport | None = None, espera_max: float = 900.0,
