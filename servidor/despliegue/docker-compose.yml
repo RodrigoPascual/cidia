@@ -1,0 +1,244 @@
+# Servidor CidIA. Uso (desde esta carpeta):
+#   docker compose --env-file <secretos>/cidia.env up -d                      # base
+#   docker compose --env-file <secretos>/cidia.env --profile weknora up -d    # con WeKnora
+#   docker compose --env-file <secretos>/cidia.env --profile espacio up -d    # con espacio de trabajo
+# En el MSI (GPU NVIDIA) se añade:  -f docker-compose.yml -f compose.gpu.yml
+# Para depurar desde el PC (puertos extra, siempre en 127.0.0.1): -f compose.debug.yml
+#
+# Reglas: todo puerto publicado lleva IP delante; nombres sin container_name; cada servicio
+# con límites de memoria y rotación de registros. Limpieza solo con `docker compose down`.
+
+name: cidia
+
+x-log: &log
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  # ------------------------------------------------------------------ núcleo
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    image: cidia-gateway:local
+    <<: *log
+    restart: unless-stopped
+    env_file: ["perfiles/${CIDIA_PERFIL:-oracle}.env"]
+    environment:
+      CIDIA_BASE_DATOS_URL: postgresql+pg8000://cidia:${CIDIA_PG_PASSWORD:?falta CIDIA_PG_PASSWORD}@postgres:5432/cidia
+      CIDIA_SECRETO_JWT: ${CIDIA_SECRETO_JWT:?falta CIDIA_SECRETO_JWT}
+      CIDIA_ADMIN_CONTRASENA: ${CIDIA_ADMIN_CONTRASENA:-}
+      CIDIA_LLM_BASE_URL: http://ollama:11434/v1
+      CIDIA_ASR_BASE_URL: http://asr:8000/v1
+      CIDIA_ESPACIO_URL: http://espacio-trabajo:8090
+      CIDIA_ESPACIO_SECRETO: ${CIDIA_ESPACIO_SECRETO:-}
+      CIDIA_WEKNORA_URL: http://weknora:8080/api/v1
+      CIDIA_WEKNORA_API_KEY: ${CIDIA_WEKNORA_API_KEY:-}
+    ports: ["${CIDIA_IP_PUBLICACION:-127.0.0.1}:${CIDIA_PUERTO:-18700}:8000"]
+    networks: [interna, borde]
+    volumes:
+      - ${CIDIA_DATOS:-/home/ubuntu/CidIA/datos}:/datos
+    depends_on:
+      postgres: { condition: service_healthy }
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cpus: ${CIDIA_CPU_GATEWAY:-1.5}
+    mem_limit: ${CIDIA_MEM_GATEWAY:-1g}
+    pids_limit: 512
+
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17-bookworm
+    <<: *log
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cidia
+      POSTGRES_PASSWORD: ${CIDIA_PG_PASSWORD:?falta CIDIA_PG_PASSWORD}
+      POSTGRES_DB: cidia
+      WEKNORA_DB_PASSWORD: ${WEKNORA_DB_PASSWORD:-sin-weknora}
+    volumes:
+      - pg-datos:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    networks: [interna]
+    shm_size: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cidia -d cidia"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    cpus: 1.0
+    mem_limit: ${CIDIA_MEM_POSTGRES:-512m}
+    pids_limit: 256
+
+  ollama:
+    image: ollama/ollama:0.40.2
+    <<: *log
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-16384}"
+      OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-1}"
+      OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-3}"
+      OLLAMA_KV_CACHE_TYPE: "q8_0"
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-30m}"
+    volumes: [ollama-modelos:/root/.ollama]
+    ports: ["127.0.0.1:${CIDIA_PUERTO_OLLAMA:-18720}:11434"]
+    networks: [interna, borde]
+    cpus: ${CIDIA_CPU_OLLAMA:-3.0}
+    cpu_shares: 512
+    mem_limit: ${CIDIA_MEM_OLLAMA:-4g}
+    pids_limit: 512
+
+  asr:
+    build: ../asr
+    image: cidia-asr:local
+    <<: *log
+    restart: unless-stopped
+    environment:
+      ASR_MODELO: ${ASR_MODELO:-base}
+      ASR_DISPOSITIVO: cpu
+      ASR_PRECISION: int8
+      ASR_HILOS: ${ASR_HILOS:-2}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    volumes: [asr-modelos:/modelos]
+    ports: ["127.0.0.1:${CIDIA_PUERTO_ASR:-18721}:8000"]
+    networks: [interna, borde]
+    cpus: ${CIDIA_CPU_ASR:-1.5}
+    cpu_shares: 512
+    mem_limit: ${CIDIA_MEM_ASR:-1536m}
+    pids_limit: 256
+
+  # ------------------------------------------------------------------ espacio de trabajo del agente
+  espacio-trabajo:
+    build: ../espacio-trabajo
+    image: cidia-espacio:local
+    profiles: [espacio]
+    <<: *log
+    restart: unless-stopped
+    environment:
+      ESPACIO_SECRETO: ${CIDIA_ESPACIO_SECRETO:?falta CIDIA_ESPACIO_SECRETO}
+      ESPACIO_DATOS_HOST: ${CIDIA_DATOS:-/home/ubuntu/CidIA/datos}/generador-de-contenido
+      ESPACIO_IMAGEN: cidia-sandbox:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${CIDIA_DATOS:-/home/ubuntu/CidIA/datos}/generador-de-contenido:/datos/generador-de-contenido
+    networks: [interna]
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 128
+
+  # ------------------------------------------------------------------ WeKnora (opcional)
+  qdrant:
+    image: qdrant/qdrant:v1.16.2
+    profiles: [weknora]
+    <<: *log
+    restart: unless-stopped
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes: [qdrant-datos:/qdrant/storage]
+    networks: [interna]
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 256
+
+  redis:
+    image: redis:7.2-alpine
+    profiles: [weknora]
+    <<: *log
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction",
+              "--requirepass", "${CIDIA_REDIS_PASSWORD:-sin-weknora}"]
+    volumes: [redis-datos:/data]
+    networks: [interna]
+    cpus: 0.5
+    mem_limit: 192m
+    pids_limit: 64
+
+  docreader:
+    image: wechatopenai/weknora-docreader:v0.8.2
+    profiles: [weknora]
+    <<: *log
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Madrid
+      DOCREADER_GRPC_MAX_WORKERS: "2"
+    volumes: [docreader-tmp:/tmp/docreader]
+    networks: [interna]
+    cpus: 1.0
+    cpu_shares: 512
+    mem_limit: 1g
+    pids_limit: 512
+
+  weknora:
+    image: wechatopenai/weknora-app:v0.8.2
+    profiles: [weknora]
+    <<: *log
+    restart: unless-stopped
+    env_file: [perfiles/weknora.env]
+    environment:
+      DB_DRIVER: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: weknora
+      DB_PASSWORD: ${WEKNORA_DB_PASSWORD:-sin-weknora}
+      DB_NAME: weknora
+      RETRIEVE_DRIVER: qdrant
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6334"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ${CIDIA_REDIS_PASSWORD:-sin-weknora}
+      DOCREADER_ADDR: "docreader:50051"
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      JWT_SECRET: ${WEKNORA_JWT_SECRET:-sin-weknora}
+      SYSTEM_AES_KEY: ${WEKNORA_AES_KEY:-sin-weknora-sin-weknora-sin-wekn}
+      LANGFUSE_ENABLED: "false"
+      WEKNORA_SANDBOX_DOCKER_ENABLED: "false"
+      TZ: Europe/Madrid
+    volumes:
+      - weknora-ficheros:/data/files
+      - docreader-tmp:/tmp/docreader:ro
+    networks: [interna]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      qdrant: { condition: service_started }
+      docreader: { condition: service_started }
+    cpus: 1.0
+    mem_limit: 1g
+    pids_limit: 512
+
+  weknora-ui:
+    image: wechatopenai/weknora-ui:v0.8.2
+    profiles: [weknora]
+    <<: *log
+    restart: unless-stopped
+    environment:
+      APP_HOST: weknora
+      APP_PORT: "8080"
+      APP_SCHEME: http
+    ports: ["127.0.0.1:${CIDIA_PUERTO_WEKNORA_UI:-18701}:80"]
+    networks: [interna, borde]
+    cpus: 0.25
+    mem_limit: 128m
+    pids_limit: 64
+
+networks:
+  interna:
+    name: cidia-interna
+    internal: true
+    ipam:
+      config: [{ subnet: "${CIDIA_RED_INTERNA:-172.29.11.0/24}" }]
+  borde:
+    name: cidia-borde
+    ipam:
+      config: [{ subnet: "${CIDIA_RED_BORDE:-172.29.10.0/24}" }]
+
+volumes:
+  pg-datos: {}
+  ollama-modelos: {}
+  asr-modelos: {}
+  qdrant-datos: {}
+  redis-datos: {}
+  docreader-tmp: {}
+  weknora-ficheros: {}

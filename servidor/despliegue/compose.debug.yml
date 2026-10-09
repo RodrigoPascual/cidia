@@ -1,0 +1,7 @@
+# Puertos extra para depurar desde el PC por túnel SSH (siempre en 127.0.0.1).
+services:
+  postgres:  { ports: ["127.0.0.1:18710:5432"], networks: [interna, borde] }
+  redis:     { ports: ["127.0.0.1:18711:6379"], networks: [interna, borde] }
+  qdrant:    { ports: ["127.0.0.1:18712:6333", "127.0.0.1:18713:6334"], networks: [interna, borde] }
+  weknora:   { ports: ["127.0.0.1:18702:8080"], networks: [interna, borde] }
+  espacio-trabajo: { ports: ["127.0.0.1:18730:8090"], networks: [interna, borde] }

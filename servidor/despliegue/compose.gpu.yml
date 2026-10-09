@@ -1,0 +1,10 @@
+# GPU NVIDIA para Ollama (MSI y servidores con gráfica). Requiere NVIDIA Container Toolkit.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -1,0 +1,27 @@
+# Dependencias y compilados
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+.pytest_cache/
+
+# Datos y secretos: nunca en el repositorio
+.env
+*.env.local
+secretos/
+_datos/
+datos/
+!datos-demo/
+*.pem
+*.key
+
+# Instaladores generados
+app/instalador/salida/
+*.exe
+
+# Sistema
+.DS_Store
+Thumbs.db
