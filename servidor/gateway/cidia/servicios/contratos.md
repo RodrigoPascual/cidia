@@ -34,3 +34,19 @@ que se diga lo contrario (lo hace quien llama).
 ## servicios/instrucciones.py
 * `publicar(bd, actor, instruccion_id) -> Instruccion`: marca obsoleta la anterior, indexa con `documentos.crear_desde_texto` (tipo `instruccion`, un elemento de `partes` por paso con metadatos `{"paso": orden, "paso_id": id, "instruccion_id": id, "codigo": ...}`), llama a `iluo.marcar_reevaluacion` y encola microlecciones y preguntas.
 * `a_dict(bd, ins, con_pasos=True) -> dict` con URLs firmadas de imágenes y clips.
+
+## Ampliaciones tras la implementación (9-10 de octubre)
+
+Funciones públicas que otros módulos ya usan. Mismas reglas: no se cambian sin avisar.
+
+* **documentos**: `partes_guardadas(bd, doc)`; `reindexar(bd, doc)` conserva los metadatos por parte de los documentos sin fichero (instrucciones); `marcar_interrumpidos(bd)` al arrancar. `Documento.estado` admite `obsoleto` (versión de instrucción sustituida: fuera del motor, la fila se conserva para la trazabilidad de las citas).
+* **MotorConocimiento**: `reetiquetar(bd, doc) -> bool` (por defecto `True`) y `ambitos(bd, alcance)` (por defecto `None`).
+* **consulta**: `preparar(bd, actor, pregunta, modo, contexto, historial) -> Preparada` (lanza HTTPException), `emitir`, `finalizar`, `a_dict(bd, consulta, alcance)`, `citadas(texto, n)`, `con_respaldo(encontrados)`. Al guardar una consulta del modo planta ya suma la consulta a la ejecución, al paso y a los críticos.
+* **lagunas**: `a_dict(laguna)`.
+* **memoria**: `listar`, `contar`, `anadir`, `borrar`, `borrar_todo`, `relevantes`, `activar`, `activa`, `extraer`, `encolar_extraccion`, `a_dict`.
+* **aportaciones**: `contar_validadas(bd, usuario_id, tarea_id=None) -> int`, `validadas_por_persona(bd, departamento_id=None) -> dict[int, int]`, `procesar_trabajo(bd, progreso, aportacion_id) -> dict` (lo usa el MCP), `validar(bd, actor, ap) -> Documento` (hace commit; lo usa la semilla).
+* **instrucciones**: `publicar()` **hace commit** (los trabajos que encola necesitan ver la versión publicada). También `publicar_con_detalle(bd, actor, id) -> (ins, reevaluaciones)`, `vigente(bd, tarea_id)`, `crear_borrador(...)`, `tarea_gestionable(bd, actor, tarea_id)`, `puede_gestionar(actor, departamento_id)`, `contar_borradores(bd, actor)`, `texto_indexable(ins)`, `paso_dict(p)`.
+* **planta**: `acceso_tareas`, `exigir_acceso`, `instrucciones_vigentes`, `instruccion_vigente`, `niveles`, `nivel_dict`.
+* **formacion** y **evaluacion**: `encolar_generacion(...)` devuelve el id del trabajo. `evaluacion.contar_pendientes(bd, actor) -> int` (contador del menú). Los cuestionarios usan opciones `{clave, texto}` y las respuestas `{pregunta_id: clave}`.
+* **iluo**: `instruccion_vigente`, `recalcular_con_evidencias(bd, u, t) -> (NivelIluo, Evidencias)`, `ajustar(bd, actor, u, t, nivel, motivo)`, `puede_evaluar(bd, actor, usuario, tarea, expertos=False)`, `gestiona_persona(...)`, `configuracion(bd)`, `inicio_ventana(fila, cfg, momento=None)`. `recalcular` lanza 404 si no existen la persona o la tarea; `validar_formador` lanza 403/400.
+* **progreso**: `tareas_de(bd, usuario)`, `mi_progreso(bd, actor)`.

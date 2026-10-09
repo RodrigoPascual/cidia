@@ -1,0 +1,35 @@
+CidIA · Condiciones de uso y avisos de licencias
+
+1. CidIA
+
+CidIA es un copiloto de conocimiento industrial: ayuda a capturar cómo se hacen las tareas, a formar a las personas, a acompañarlas en el puesto, a evaluarlas y a certificar su nivel (ILUO). Esta versión es un prototipo (MVP) preparado para el V DESAFÍO industrial y para pilotos con empresas.
+
+La app de este equipo es solo la interfaz. Los modelos de inteligencia artificial, los documentos y los datos de las personas están en el servidor CidIA de la empresa, que la propia empresa instala y controla. CidIA no envía datos a servicios externos.
+
+Al usar CidIA aceptas usarlo dentro de tu empresa y según sus normas. Las respuestas del copiloto pueden contener errores: ante cualquier duda de seguridad, sigue siempre la instrucción de trabajo vigente y consulta con tu responsable.
+
+2. Privacidad en este equipo
+
+· La telemetría y la analítica de producto de la app base están desactivadas.
+· La app no se actualiza sola: las actualizaciones llegan con un nuevo instalador de CidIA.
+· Tus conversaciones y ajustes de la app se guardan en tu usuario de Windows (%LOCALAPPDATA%\CidIA). El desinstalador te pregunta si quieres borrarlos.
+· Limitación conocida: la app base consulta al arrancar si su versión sigue permitida (harness.deepseek.com). Esa consulta no lleva datos de CidIA y el equipo de sistemas puede bloquearla en el cortafuegos.
+
+3. Software de terceros incluido
+
+· DeepSeek Harness 0.2.0-rc.2 (app base de escritorio). Copyright (c) 2026 DeepSeek. Licencia MIT (texto completo más abajo). «DeepSeek Harness» es una marca registrada de DeepSeek. CidIA es un proyecto independiente: no está afiliado a DeepSeek ni cuenta con su respaldo.
+· Electron y Chromium: sus licencias están en la carpeta de instalación, en app\LICENSE.electron.txt y app\LICENSES.chromium.html.
+· Node.js y pnpm (incluidos en la app base): licencias MIT; avisos en app\resources\runtime.
+· NSIS (sistema con el que se ha hecho este instalador): licencia zlib/libpng.
+
+4. Licencia MIT de DeepSeek Harness
+
+MIT License
+
+Copyright (c) 2026 DeepSeek
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

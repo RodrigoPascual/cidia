@@ -1,0 +1,135 @@
+/* ==========================================================================
+   Inicio · panel de cada persona. Usa las variables de estilos.css.
+   ========================================================================== */
+
+/* ----------------------------------------------------------- portada */
+
+.ini-portada {
+  position: relative; overflow: hidden; background: var(--tinta); color: #fff; border-radius: 20px;
+  padding: 28px 30px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 410px); gap: 24px;
+  align-items: center; margin-bottom: 18px; box-shadow: var(--sombra-2);
+}
+.ini-portada::after {
+  content: ''; position: absolute; width: 420px; height: 420px; border-radius: 50%; right: -150px; top: -190px;
+  border: 60px solid rgba(242, 194, 0, 0.1); pointer-events: none;
+}
+.ini-portada > * { position: relative; z-index: 1; }
+@media (max-width: 880px) { .ini-portada { grid-template-columns: 1fr; padding: 22px 20px; } }
+
+.ini-fecha { font-size: 13px; color: #c3c9d1; letter-spacing: 0.02em; }
+.ini-fecha::first-letter { text-transform: uppercase; }
+.ini-portada h1 { font-size: 32px; color: #fff; margin: 4px 0 6px; }
+@media (max-width: 520px) { .ini-portada h1 { font-size: 26px; } }
+.ini-sub { color: #aab2bd; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 14.5px; }
+.ini-sub .separa { opacity: 0.5; }
+.ini-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+.ini-chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08); color: #e9ebee; font-size: 13px; text-decoration: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.06); transition: background var(--transicion);
+}
+.ini-chip svg { width: 14px; height: 14px; color: var(--acento); }
+.ini-chip strong { color: #fff; }
+a.ini-chip:hover { background: rgba(255, 255, 255, 0.15); }
+
+.ini-continuar { background: var(--blanco); color: var(--tinta); border-radius: 16px; padding: 18px 20px; box-shadow: var(--sombra-3); }
+.ini-continuar .antetitulo {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--acento-oscuro); font-weight: 700;
+  display: flex; align-items: center; gap: 6px;
+}
+.ini-continuar .antetitulo svg { width: 14px; height: 14px; }
+.ini-continuar h3 { font-size: 18px; margin: 8px 0 2px; }
+.ini-continuar .codigo { font-family: var(--mono); font-size: 12.5px; color: var(--pizarra); }
+.ini-continuar .detalle { color: var(--pizarra); font-size: 13.5px; margin-bottom: 10px; }
+
+/* ----------------------------------------------------------- accesos rápidos */
+
+.ini-accesos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 24px; }
+@media (max-width: 1080px) { .ini-accesos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ini-acceso {
+  position: relative; display: flex; flex-direction: column; gap: 10px; padding: 18px 18px 16px; border-radius: 16px;
+  background: var(--blanco); border: 1px solid var(--linea-suave); box-shadow: var(--sombra-1); color: var(--tinta);
+  text-decoration: none !important; min-height: 148px;
+  transition: transform var(--transicion), box-shadow var(--transicion), border-color var(--transicion);
+}
+.ini-acceso:hover { transform: translateY(-2px); box-shadow: var(--sombra-2); border-color: var(--linea); }
+.ini-acceso .icono { width: 54px; height: 54px; border-radius: 15px; display: grid; place-items: center; }
+.ini-acceso .icono svg { width: 27px; height: 27px; }
+.ini-acceso h3 { font-size: 17px; }
+.ini-acceso p { margin: 0; color: var(--pizarra); font-size: 13.5px; line-height: 1.4; }
+.ini-acceso .flecha { position: absolute; right: 16px; top: 20px; color: var(--pizarra-2); transition: transform var(--transicion), color var(--transicion); }
+.ini-acceso:hover .flecha { transform: translateX(3px); color: var(--tinta); }
+.ini-acceso.planta .icono { background: var(--acento); color: var(--tinta); }
+.ini-acceso.chat .icono { background: var(--tinta); color: var(--acento); }
+.ini-acceso.formacion .icono { background: var(--verde-suave); color: var(--verde); }
+.ini-acceso.aportaciones .icono { background: var(--aviso-suave); color: var(--aviso); }
+@media (max-width: 520px) {
+  .ini-acceso { min-height: 0; padding: 14px; }
+  .ini-acceso p { display: none; }
+  .ini-acceso .icono { width: 44px; height: 44px; }
+  .ini-acceso .flecha { display: none; }
+}
+
+/* ----------------------------------------------------------- secciones */
+
+.ini-seccion { margin-bottom: 24px; }
+.ini-seccion-titulo { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; flex-wrap: wrap; }
+.ini-seccion-titulo h2 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.ini-seccion-titulo h2 svg { width: 19px; height: 19px; color: var(--acento-oscuro); }
+
+.ini-cifras { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+
+.ini-dos { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .ini-dos { grid-template-columns: 1fr; } }
+
+.ini-bandejas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .ini-bandejas { grid-template-columns: 1fr; } }
+.ini-bandeja-cifra {
+  min-width: 30px; height: 26px; padding: 0 9px; border-radius: 13px; display: inline-grid; place-items: center;
+  font-size: 13.5px; font-weight: 800; background: var(--papel); color: var(--tinta-2);
+}
+.ini-bandeja-cifra.activa { background: var(--acento); color: var(--tinta); }
+.ini-bandeja-cifra.alerta { background: var(--alerta); color: #fff; }
+
+/* ----------------------------------------------------------- listas */
+
+.ini-lista { list-style: none; margin: 0; padding: 0; }
+.ini-item {
+  display: flex; align-items: center; gap: 12px; padding: 11px 20px; border-bottom: 1px solid var(--linea-suave);
+  color: var(--tinta); text-decoration: none !important; transition: background var(--transicion); min-width: 0;
+}
+a.ini-item:hover, button.ini-item:hover { background: #fafbfc; }
+button.ini-item { width: 100%; border: none; border-bottom: 1px solid var(--linea-suave); background: none; font: inherit; text-align: left; cursor: pointer; }
+.ini-item:last-child { border-bottom: none; }
+.ini-item .cuerpo { flex: 1; min-width: 0; }
+.ini-item .titulo { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ini-item .sub { font-size: 12.5px; color: var(--pizarra); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ini-item .codigo { font-family: var(--mono); font-size: 12px; color: var(--pizarra); }
+.ini-item .icono-item {
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0;
+  background: var(--papel); color: var(--pizarra);
+}
+.ini-item .icono-item svg { width: 17px; height: 17px; }
+.ini-nivel { text-align: right; font-size: 12px; color: var(--pizarra); white-space: nowrap; flex-shrink: 0; }
+.ini-nivel strong { display: block; font-size: 15px; color: var(--tinta); }
+.ini-frecuencia { font-weight: 700; color: var(--alerta); font-size: 13px; white-space: nowrap; }
+
+.ini-vacio-mini { padding: 18px 20px; color: var(--pizarra); font-size: 13.5px; display: flex; gap: 10px; align-items: center; }
+.ini-vacio-mini svg { width: 18px; height: 18px; color: var(--verde); flex-shrink: 0; }
+
+.ini-experto { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ini-experto a {
+  display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 12px; background: var(--papel);
+  color: var(--tinta); text-decoration: none !important; transition: background var(--transicion);
+}
+.ini-experto a:hover { background: var(--acento-suave); }
+.ini-experto strong { font-size: 24px; line-height: 1.1; }
+.ini-experto span { font-size: 13px; color: var(--pizarra); }
+
+.ini-enlaces-admin { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ini-enlace-admin {
+  display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 10px; background: var(--papel);
+  color: var(--tinta); font-weight: 600; font-size: 14px; text-decoration: none !important; transition: background var(--transicion);
+}
+.ini-enlace-admin svg { width: 17px; height: 17px; color: var(--pizarra); }
+.ini-enlace-admin:hover { background: var(--acento-suave); }

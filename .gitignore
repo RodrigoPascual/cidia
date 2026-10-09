@@ -25,3 +25,9 @@ app/instalador/salida/
 # Sistema
 .DS_Store
 Thumbs.db
+_datos_pruebas/
+.herramientas/
+.env.*
+!.env.plantilla
+_registros_pruebas/
+_datos_qa/

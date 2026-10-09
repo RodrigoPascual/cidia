@@ -236,15 +236,32 @@ export function ZonaSubida({ onFicheros, acepta, multiple, texto, detalle }: {
 
 // ------------------------------------------------------------------ modal
 
+// Pila de diálogos abiertos: Escape cierra solo el de arriba.
+const pilaModales: number[] = []
+let siguienteModal = 1
+
 export function Modal({ abierto, titulo, onCerrar, children, pie, ancho }: {
   abierto: boolean; titulo: ReactNode; onCerrar: () => void; children: ReactNode; pie?: ReactNode; ancho?: boolean
 }) {
+  const cerrar = useRef(onCerrar)
+  cerrar.current = onCerrar
   useEffect(() => {
     if (!abierto) return
-    const tecla = (e: KeyboardEvent) => e.key === 'Escape' && onCerrar()
+    const id = siguienteModal++
+    pilaModales.push(id)
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && pilaModales[pilaModales.length - 1] === id) {
+        e.stopPropagation()
+        cerrar.current()
+      }
+    }
     window.addEventListener('keydown', tecla)
-    return () => window.removeEventListener('keydown', tecla)
-  }, [abierto, onCerrar])
+    return () => {
+      window.removeEventListener('keydown', tecla)
+      const i = pilaModales.indexOf(id)
+      if (i >= 0) pilaModales.splice(i, 1)
+    }
+  }, [abierto])
   if (!abierto) return null
   return (
     <div className="velo" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
@@ -369,7 +386,7 @@ export function Iluo({ nivel, tamano = 28, caducado }: { nivel: number; tamano?:
   )
 }
 
-export const LETRA_ILUO = ['—', 'I', 'L', 'U', 'O']
+export const LETRA_ILUO = ['·', 'I', 'L', 'U', 'O']
 export const NOMBRE_ILUO = ['Sin iniciar', 'En formación', 'Ejecuta con apoyo', 'Autónomo', 'Puede formar a otros']
 
 // ------------------------------------------------------------------ voz
@@ -382,17 +399,29 @@ export function useGrabadora() {
   const trozos = useRef<Blob[]>([])
   const resolver = useRef<((b: Blob | null) => void) | null>(null)
   const inicio = useRef(0)
+  const flujoActual = useRef<MediaStream | null>(null)
+
+  // Al desmontar el componente se apaga el micrófono si seguía grabando.
+  useEffect(() => () => {
+    flujoActual.current?.getTracks().forEach((t) => t.stop())
+    if (grabador.current && grabador.current.state !== 'inactive') {
+      resolver.current = null
+      try { grabador.current.stop() } catch { /* ya parado */ }
+    }
+  }, [])
 
   const empezar = useCallback(async () => {
     setError(null)
     try {
       const flujo = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      flujoActual.current = flujo
       const tipo = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : ''
       const g = new MediaRecorder(flujo, tipo ? { mimeType: tipo } : undefined)
       trozos.current = []
       g.ondataavailable = (e) => e.data.size && trozos.current.push(e.data)
       g.onstop = () => {
         flujo.getTracks().forEach((t) => t.stop())
+        flujoActual.current = null
         const blob = new Blob(trozos.current, { type: g.mimeType || 'audio/webm' })
         const corto = Date.now() - inicio.current < 400
         resolver.current?.(corto ? null : blob)
@@ -416,7 +445,7 @@ export function useGrabadora() {
     })
   }, [])
 
-  return { grabando, error, empezar, parar }
+  return { grabando, error, empezar, parar, flujo: flujoActual }
 }
 
 // ------------------------------------------------------------------ confirmación

@@ -29,6 +29,8 @@ services:
       CIDIA_BASE_DATOS_URL: postgresql+pg8000://cidia:${CIDIA_PG_PASSWORD:?falta CIDIA_PG_PASSWORD}@postgres:5432/cidia
       CIDIA_SECRETO_JWT: ${CIDIA_SECRETO_JWT:?falta CIDIA_SECRETO_JWT}
       CIDIA_ADMIN_CONTRASENA: ${CIDIA_ADMIN_CONTRASENA:-}
+      CIDIA_DEMO_CONTRASENA: ${CIDIA_DEMO_CONTRASENA:-}
+      CIDIA_MCP_HOSTS: ${CIDIA_MCP_HOSTS:-*}
       CIDIA_LLM_BASE_URL: http://ollama:11434/v1
       CIDIA_ASR_BASE_URL: http://asr:8000/v1
       CIDIA_ESPACIO_URL: http://espacio-trabajo:8090
@@ -77,7 +79,7 @@ services:
     environment:
       OLLAMA_HOST: "0.0.0.0:11434"
       OLLAMA_NO_CLOUD: "1"
-      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-16384}"
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-8192}"   # MSI: 32768 (en el fichero de secretos/entorno)
       OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-1}"
       OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-3}"
       OLLAMA_KV_CACHE_TYPE: "q8_0"
@@ -87,7 +89,7 @@ services:
     networks: [interna, borde]
     cpus: ${CIDIA_CPU_OLLAMA:-3.0}
     cpu_shares: 512
-    mem_limit: ${CIDIA_MEM_OLLAMA:-4g}
+    mem_limit: ${CIDIA_MEM_OLLAMA:-5g}   # MSI: 24g (la VRAM va aparte)
     pids_limit: 512
 
   asr:
@@ -116,10 +118,20 @@ services:
     profiles: [espacio]
     <<: *log
     restart: unless-stopped
+    # Solo este servicio monta el socket de Docker (equivale a root en el servidor): no publica
+    # puertos, solo se le llega desde la red interna y con el secreto compartido.
     environment:
-      ESPACIO_SECRETO: ${CIDIA_ESPACIO_SECRETO:?falta CIDIA_ESPACIO_SECRETO}
+      ESPACIO_SECRETO: ${CIDIA_ESPACIO_SECRETO:-}
       ESPACIO_DATOS_HOST: ${CIDIA_DATOS:-/home/ubuntu/CidIA/datos}/generador-de-contenido
       ESPACIO_IMAGEN: cidia-sandbox:local
+      ESPACIO_UID: "1000"
+      ESPACIO_GID: "1000"
+      ESPACIO_SIMULTANEAS: "2"
+    user: "1000:1000"
+    group_add: ["${CIDIA_DOCKER_GID:-120}"]   # grupo del socket: stat -c %g /var/run/docker.sock
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${CIDIA_DATOS:-/home/ubuntu/CidIA/datos}/generador-de-contenido:/datos/generador-de-contenido
@@ -164,6 +176,12 @@ services:
       TZ: Europe/Madrid
       DOCREADER_GRPC_MAX_WORKERS: "2"
     volumes: [docreader-tmp:/tmp/docreader]
+    healthcheck:
+      test: ["CMD-SHELL", "grpc_health_probe -addr=:50051 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
     networks: [interna]
     cpus: 1.0
     cpu_shares: 512
@@ -194,6 +212,10 @@ services:
       SYSTEM_AES_KEY: ${WEKNORA_AES_KEY:-sin-weknora-sin-weknora-sin-wekn}
       LANGFUSE_ENABLED: "false"
       WEKNORA_SANDBOX_DOCKER_ENABLED: "false"
+      WEKNORA_LANGUAGE: es-ES
+      OLLAMA_OPTIONAL: "true"
+      SSRF_WHITELIST: gateway,asr,ollama
+      STORAGE_TYPE: local
       TZ: Europe/Madrid
     volumes:
       - weknora-ficheros:/data/files
@@ -203,7 +225,7 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
       qdrant: { condition: service_started }
-      docreader: { condition: service_started }
+      docreader: { condition: service_healthy }
     cpus: 1.0
     mem_limit: 1g
     pids_limit: 512

@@ -12,17 +12,17 @@ Convenciones: **[verificado]** = leído en código, manifiesto o documentación 
 
 * **SDK MCP:** la última versión es `mcp` **2.3.0** (2026-10-02, MIT, Python ≥ 3.10). **`FastMCP` ya no existe en la 2.x: ahora se llama `MCPServer`** (`from mcp.server.mcpserver import MCPServer, Context`). Importar `mcp.server.fastmcp` lanza `ModuleNotFoundError` [verificado: `mcp/server/fastmcp.py:1-16`]. Hay que actualizar el plan y `docs/arquitectura.md`, donde pone «FastAPI + FastMCP».
 * La app (cliente MCP de dsh) negocia en modo `auto` y con nuestro servidor acabará en el protocolo **2026-07-28**, que **no tiene sesión**. Se aplica tanto al clon `dsh-v0.2.1-alpha.1` como a la 0.2.0-rc.2 instalada [verificado]. `stateless_http=True` solo afecta a clientes antiguos, pero conviene dejarlo puesto.
-* **Base Python de todas las imágenes propias: 3.12** (`python:3.12-slim`). Con 3.10 o 3.11 no sirve: SQLAlchemy 2.1 pide ≥ 3.11 y numpy 2.5 y PyAV 19 piden ≥ 3.12. Todas las dependencias tienen ruedas `manylinux aarch64` para cp312 [verificado en PyPI].
+* **Base Python de todas las imágenes propias: 3.12** (`python:3.12-slim`). Con 3.10 o 3.11 no se pueden instalar las versiones que fijamos: SQLAlchemy 2.1 pide ≥ 3.11 y numpy 2.5 y PyAV 19 piden ≥ 3.12 (pip resolvería versiones anteriores). Todas las dependencias tienen ruedas `manylinux aarch64` para cp312 [verificado en PyPI].
 * **Ollama 0.40.2** (`ollama/ollama`, amd64 + arm64) ofrece `/v1/chat/completions` con streaming, visión con imágenes en base64 (sin URL http) y herramientas, además de `/v1/embeddings` y `/api/embed`. **No admite `tool_choice`. El contexto por defecto es de 4096 tokens** (en GPU de menos de 24 GiB también es 4K), así que hay que fijar `OLLAMA_CONTEXT_LENGTH` [verificado].
 * **Trío para Oracle:** `qwen3:0.6b` (chat y agente, 523 MB), `qwen3.5:0.8b` (visión con herramientas, 1,32 GB) y `qwen3-embedding:0.6b` (639 MB, **el mismo que en el MSI**). Los tres son Apache-2.0 [verificado: capa de licencia en `registry.ollama.ai` y, para el de embeddings, la tarjeta de Hugging Face]. Para voz, faster-whisper `base` o `small` en int8 sobre CPU.
 * **Trío del MSI confirmado:** `ministral-3:8b` (6,02 GB, Q4_K_M, visión y herramientas, 256K de contexto, Apache-2.0), `qwen3-embedding:0.6b` (1024 dimensiones) y Whisper `large-v3-turbo` (faster-whisper, MIT).
 
 **Alertas de licencia (contradicen el plan)**
 
-1. **La imagen de speaches incluye componentes GPL dentro del proceso:**
-   * `piper-tts` (GPL-3.0-or-later), importado en `src/speaches/executors/piper.py:11`;
-   * `phonemizer` (GPL-3.0+), que llega a través de `kokoro-onnx`;
-   * el `ffmpeg` de Ubuntu, instalado con `apt` en su `Dockerfile` y compilado con GPL.
+1. **La imagen de speaches incluye componentes GPL dentro del proceso** (corregido en la verificación: se distingue la imagen publicada `0.8.3` de la rama `master`):
+   * en la imagen `0.8.3` (`uv.lock` del tag v0.8.3): `phonemizer-fork` 3.3.1 (GPL-3.0+), que llega a través de `kokoro-onnx` 0.4.5, y la biblioteca eSpeak NG (GPL-3.0+), que cargan `espeakng-loader` 0.2.4 y `piper-phonemize` 1.2.0. En esa imagen `piper-tts` es la 1.2.0, que es **MIT** (rhasspy/piper);
+   * en `master` (futura 0.9.x): `piper-tts>=1.3.0` (GPL-3.0-or-later, OHF-Voice/piper1-gpl), importado en `src/speaches/executors/piper.py:11`;
+   * en las dos, el `ffmpeg` de Ubuntu, instalado con `apt` en su `Dockerfile` y compilado con GPL.
 
    El plan la da por «MIT» (`plan_mvp_cidia_final.tex:789`, `:808`). **Propuesta: un servicio `asr` propio y mínimo** (FastAPI + faster-whisper + ffmpeg LGPL como programa externo). Va en el §3.4.
 2. **Los wheels binarios de PyAV (`av`), de los que faster-whisper depende, traen FFmpeg enlazado con libx264 y libx265 (GPL-2.0+).** El proyecto `pyav-ffmpeg` parchea el `configure` de FFmpeg para que esas dos librerías no exijan `--enable-gpl` [verificado: `patches/ffmpeg.patch` y `scripts/build-ffmpeg.py:183-186`]. **Mitigación:** compilar `av` desde el código fuente contra el FFmpeg LGPL de BtbN (§3.5).
@@ -37,10 +37,10 @@ Convenciones: **[verificado]** = leído en código, manifiesto o documentación 
 
 | Dato | Valor |
 |---|---|
-| Última 2.x | **2.3.0** (2026-10-02). Antes: 2.0.0 (2026-07-28), 2.1.x, 2.2.0 (2026-09-07). La rama 1.x sigue con la 1.29.1 (2026-08-24). |
+| Última 2.x | **2.3.0** (2026-10-02). Antes: 2.0.0 (2026-07-28), 2.0.1, 2.1.x, 2.2.0 (2026-09-07). La rama 1.x sigue: la última es la **1.30.0** (2026-09-07). |
 | Licencia | MIT |
 | Python | `>=3.10` (clasificadores de 3.10 a 3.14) |
-| Dependencias nuevas en la 2.x | `mcp-types==2.3.0` (los tipos del protocolo), `httpx2>=2.10` (en lugar de `httpx`), `pyjwt[crypto]`, `python-multipart`, `sse-starlette`, `starlette`, `uvicorn` y `opentelemetry-api` |
+| Dependencias | Nuevas respecto a la 1.30: `mcp-types==2.3.0` (los tipos del protocolo), `httpx2>=2.10.0` (sustituye a `httpx` y `httpx-sse`) y `opentelemetry-api`. Desaparece `pydantic-settings`. Siguen como en la 1.x: `pyjwt[crypto]`, `python-multipart`, `sse-starlette`, `starlette>=0.27` y `uvicorn` |
 | Fijar en el proyecto | `mcp>=2.3,<3`. `ctx.headers` ya existe desde la 2.0.0 [verificado en los wheels 2.0.0, 2.2.0 y 2.3.0] |
 
 ### 1.2 `FastMCP` pasa a ser `MCPServer`
@@ -62,9 +62,10 @@ Todo lo de este apartado está verificado en `docs/run/asgi.md`, `docs/run/deplo
 * `mcp.streamable_http_app(...)` devuelve una app **Starlette** con la ruta `/mcp` (configurable con `streamable_http_path`). Su lifespan arranca `mcp.session_manager.run()` (`lowlevel/server.py:851`).
 * **Si se monta dentro de otra app, el lifespan de la sub-app no se ejecuta.** La app principal tiene que entrar en `mcp.session_manager.run()` dentro de su propio lifespan. Si no lo hace, la primera petición falla con `RuntimeError: Task group is not initialized` (`streamable_http_manager.py:184-185`).
 * `mcp.session_manager` solo existe después de llamar a `streamable_http_app()`. Por eso la sub-app se construye a nivel de módulo y el manager solo se toca dentro del lifespan.
-* **Protección contra DNS rebinding:** si no se pasa `transport_security`, el servidor solo acepta `Host` igual a `127.0.0.1:*`, `localhost:*` o `[::1]:*` (`lowlevel/server.py:752-758`). Detrás de un nombre o una IP de la LAN, **todas las peticiones devuelven `421 Invalid Host header`**.
-  * Hay que pasar `TransportSecuritySettings(allowed_hosts=[...])` con la forma sin puerto y con `:*`. Detrás de un proxy que ya controla `Host`, se puede usar `enable_dns_rebinding_protection=False`.
-  * Si no llega cabecera `Origin`, se acepta (`transport_security.py:71-76`). El cliente MCP de dsh corre en Node y no la envía [inferencia].
+* **Protección contra DNS rebinding:** si no se pasa `transport_security` y el parámetro `host` de `streamable_http_app()` es el de por defecto (`"127.0.0.1"`, o `"localhost"`/`"::1"`), el servidor solo acepta `Host` igual a `127.0.0.1:*`, `localhost:*` o `[::1]:*` (`lowlevel/server.py:752-758`). Detrás de un nombre o una IP de la LAN, **todas las peticiones devuelven `421 Invalid Host header`**.
+  * Si se pasa `host="0.0.0.0"` sin `transport_security`, la protección **no** se activa y no hay comprobación de `Host` ni de `Origin` (`lowlevel/server.py:753`, `transport_security.py:46-48`; `docs/migration.md:756`). No es lo que queremos: mejor pasar siempre `transport_security`.
+  * Hay que pasar `TransportSecuritySettings(allowed_hosts=[...])` con la forma sin puerto y con `:*`: el patrón `nombre:*` exige que el `Host` lleve puerto (`transport_security.py:60-67`), así que detrás de un proxy en el 443 hace falta también `"nombre"` a secas. Detrás de un proxy que ya controla `Host`, se puede usar `enable_dns_rebinding_protection=False`.
+  * Si no llega cabecera `Origin`, se acepta (`transport_security.py:72-76`); si llega y no está en `allowed_origins`, responde `403` (`:118-121`). El cliente MCP de dsh corre en el proceso Node del host (la app trae su propio `resources/runtime/bin/node`) y el `fetch` de Node no envía `Origin` [inferencia: comprobar en la fase 2; si aparece `403 Invalid Origin header`, añadir el origen a `allowed_origins`].
 * Si `Mount("/")` va primero, captura todas las rutas. Las rutas propias de FastAPI deben declararse **antes** del `app.mount("/", mcp_app)`.
 * El cuerpo de las peticiones tiene un límite de **4 MiB** por defecto (`transport_security.py:15`). Si una herramienta recibe imágenes en base64, hay que subirlo con `max_request_body_size=`.
 * Detrás de un proxy TLS, uvicorn necesita `--proxy-headers --forwarded-allow-ips=...` (`docs/run/deploy.md`).
@@ -72,12 +73,12 @@ Todo lo de este apartado está verificado en `docs/run/asgi.md`, `docs/run/deplo
 ### 1.5 Modo sin estado y eras del protocolo
 
 * El transporte enruta cada petición según la cabecera `MCP-Protocol-Version` [verificado: `streamable_http_manager.py:192-204`].
-  * Si la cabecera no corresponde a una versión con handshake, la petición va a la **ruta moderna 2026-07-28**: un POST con su respuesta, sin `Mcp-Session-Id`.
-  * Solo las peticiones de clientes 2025-11-25 o anteriores pasan por `stateless_http`. Con `True`, cada POST crea un transporte nuevo, no hace falta `initialize` y no hay `Mcp-Session-Id` (`:206-259`; `docs/run/deploy.md`, tabla «Workers»).
+  * Si la cabecera **existe** y no es una versión con handshake (`2024-11-05` a `2025-11-25`, `mcp_types/version.py:33-38`), la petición va a la **ruta moderna 2026-07-28**: un POST con su respuesta, sin `Mcp-Session-Id`.
+  * Si la cabecera **no llega**, o es una versión con handshake, la petición va a la ruta antigua: con `stateless_http=True`, cada POST crea un transporte nuevo, no hace falta `initialize` y no hay `Mcp-Session-Id` (`:206-259`; `docs/run/deploy.md`, tabla «Workers»).
 * **La app (dsh)** usa `@modelcontextprotocol/client` 2.0.0 con `versionNegotiation: { mode: 'auto' }`:
   * clon: `packages/mcp/mcp-client/package.json` y `src/connection.ts:258-262`;
-  * 0.2.0-rc.2 instalada: el mismo literal `versionNegotiation: { mode: "auto" }` y `MODERN_PROTOCOL_VERSION = "2026-07-28"` dentro de `resources/app.asar` [verificado];
-  * en `auto`, el cliente envía primero `server/discover`, y `MCPServer` lo contesta en todos los transportes (`docs/protocol-versions.md`).
+  * 0.2.0-rc.2 instalada: `dsh-mcp-client/lib/index.js:601` con `versionNegotiation: { mode: "auto" }` y `:46` con `requestInit: { headers: config.headers }`; su `package.json` fija `@modelcontextprotocol/client` 2.0.0. Dentro del cliente, las constantes son `FIRST_MODERN_PROTOCOL_VERSION = "2026-07-28"` y `MODERN_WIRE_REVISION = "2026-07-28"` (`dist/src-D_zzAWoS.mjs:444` y `:4024`) [verificado en `resources/app.asar`, solo lectura];
+  * en `auto`, el cliente envía primero `server/discover` con la cabecera `mcp-protocol-version: 2026-07-28`, que el transporte saca del sobre `_meta` de la petición (`dist/index.mjs:2635-2645` y `:5059-5064`). Por eso nuestro servidor lo enruta a la ruta moderna, y `MCPServer` contesta `server/discover` en todos los transportes (`docs/protocol-versions.md:37`).
 
   **Conclusión: con nuestro gateway la conexión será 2026-07-28, sin sesión**, y se puede escalar a varios workers sin sesiones fijas.
 * Lo que se pierde sin sesión: el servidor no puede pedir cosas al cliente por iniciativa propia (sampling, elicitación tipo push, `roots/list`). En 2026-07-28 se usan peticiones de varias vueltas (`InputRequiredResult`). Si hay varios workers, deben compartir clave y nombre: `RequestStateSecurity(keys=[...])` y el **mismo** nombre de `MCPServer` (`docs/run/deploy.md`).
@@ -212,7 +213,7 @@ Resultado esperado: un JSON-RPC con `quien_soy` en `result.tools`. Desde la app,
 | pgvector (Python) | 0.5.1 (2026-10-09) | MIT | ≥3.10 | pura | `from pgvector.sqlalchemy import VECTOR, HALFVEC`. Registrar el tipo solo hace falta para arrays de vectores |
 | argon2-cffi | 25.1.0 | MIT | ≥3.8 | vía `argon2-cffi-bindings` 26.1.0 (MIT, abi3 aarch64) | `PasswordHasher().hash()/verify()` |
 | pyjwt | 2.15.1 (2026-09-28) | MIT | ≥3.9 | pura | `pyjwt[crypto]` añade cryptography 50.0.2 (Apache-2.0 o BSD, abi3 aarch64) |
-| httpx | 0.28.1 (**2024-12-06**) | BSD-3 | ≥3.8 | pura | Sin versiones desde hace 22 meses |
+| httpx | 0.28.1 (**2024-12-06**) | BSD-3 | ≥3.8 | pura | Sin versiones estables desde hace 22 meses; solo prereleases `1.0.devN` (la última, `1.0.dev6`, del 2026-08-31) |
 | **httpx2** | 2.13.1 (2026-09-23) | BSD-3 | ≥3.10 | pura | Continuación de httpx mantenida por Pydantic. Ya llega como dependencia de `mcp` |
 | python-multipart | 0.0.32 | Apache-2.0 | ≥3.10 | pura | Para `UploadFile` y `Form` |
 | pydantic / pydantic-core | 2.14.0 / 2.50.0 | MIT | ≥3.10 | cp312 aarch64 | |
@@ -235,7 +236,7 @@ python-multipart==0.0.32
 pydantic-settings==2.15.0
 ```
 
-Hay versiones muy recientes: fastapi salió ayer y mcp hace 7 días. Conviene fijarlas con un lockfile (`uv lock`) y no subir sin pasar las pruebas.
+Hay versiones muy recientes: fastapi salió ayer y mcp hace 7 días. Conviene fijarlas con un lockfile (`uv lock`) y no subir sin pasar las pruebas. Referencia útil: el `uv.lock` del sdist de `mcp` 2.3.0 prueba el SDK con starlette 1.6.0, uvicorn 0.35.0, pydantic 2.12.5, httpx2 2.10.0 y pyjwt 2.13.0; nuestra lista resuelve starlette 1.7.0 y pydantic 2.14.0 (publicado ayer). Si algo falla en la fase 2, lo primero es bajar a esas versiones.
 
 ---
 
@@ -246,7 +247,7 @@ Hay versiones muy recientes: fastapi salió ayer y mcp hace 7 días. Conviene fi
 * **faster-whisper 1.2.1** (2025-10-31, MIT, Python ≥ 3.9). Dependencias: `ctranslate2>=4.0,<5`, `huggingface-hub`, `tokenizers`, `onnxruntime` (el VAD Silero) y **`av>=11`**.
 * **ctranslate2 4.8.2** (2026-08-31, MIT): ruedas `manylinux_2_27/2_28_aarch64` para cp39 a cp314, de 15-16 MB.
   * En aarch64 se compila **solo para CPU, con OpenBLAS y Ruy** (`python/tools/prepare_build_environment_linux.sh:66-67`). Ruy es el motor int8.
-  * La CUDA (12 + cuDNN 9) solo está en las ruedas x86_64 (README de faster-whisper, nota «latest versions of ctranslate2 only support CUDA 12 and cuDNN 9»).
+  * La CUDA solo está en las ruedas x86_64. **Corregido en la verificación:** la nota del README de faster-whisper 1.2.1 («CUDA 12 and cuDNN 9») está desfasada para ctranslate2 4.8.2. Desde la 4.6.3, Conv1D tiene implementación CUDA propia y cuDNN pasa a ser opcional (`CHANGELOG.md`, #1949), y la rueda x86_64 de la 4.8.2 se compila con CUDA 12.8, `-DWITH_CUDNN=OFF` y `-DCUDA_DYNAMIC_LOADING=ON` (`prepare_build_environment_linux.sh:23-37` y `:69`). En el MSI hacen falta las librerías de CUDA 12 (cuBLAS), pero **no cuDNN**. Que el driver tenga que admitir CUDA 12.8 es una inferencia que se comprueba en la fase 2.
 * Ruedas aarch64 de las demás dependencias: onnxruntime 1.31.0 (MIT, cp311 a cp314), tokenizers 0.23.3 (abi3), numpy 2.5.3 (cp312+) y av 19.0.1 (cp312 abi3).
 * **El Oracle (Neoverse-N1) admite** `asimd`, `asimddp` (dot product) y `atomics`, pero **no SVE ni i8mm** [verificado: `/proc/cpuinfo`]. Ruy usa NEON y dot product [inferencia].
 
@@ -268,11 +269,11 @@ Referencia oficial (README v1.2.1): `small` en CPU con int8 y beam 5 transcribe 
 
 * **Sí tiene variante CPU para arm64:** `ghcr.io/speaches-ai/speaches:latest-cpu` y `:0.8.3-cpu` publican `linux/amd64` y `linux/arm64`, y las `-cuda` también [verificado: índice OCI en GHCR].
   * Última estable: v0.8.3 (2025-09-19). Hay `v0.9.0-rc.3` (2025-12-27).
-* **Licencias, que es el problema:**
-  * `Dockerfile` instala `ffmpeg` con `apt-get` sobre Ubuntu 24.04, compilado con GPL (§5).
-  * `pyproject.toml` incluye `piper-tts>=1.3.0`, que es **GPL-3.0-or-later** (PyPI; repo `OHF-Voice/piper1-gpl`, GPL-3.0). speaches lo importa en `src/speaches/executors/piper.py:11`.
-  * También `kokoro-onnx`, que arrastra `phonemizer` (GPL-3.0+) y `espeakng-loader` (carga eSpeak NG).
-  * Además trae `gradio`, `pyannote-audio` y `aiortc`, que no nos hacen falta.
+* **Licencias, que es el problema** (corregido en la verificación, separando el tag v0.8.3 de la rama `master`):
+  * `Dockerfile` (v0.8.3, líneas 8-11) instala `ffmpeg` con `apt-get` sobre Ubuntu 24.04 (`nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04` por defecto), compilado con GPL (§5).
+  * En la imagen 0.8.3, `uv.lock` fija `kokoro-onnx` 0.4.5, que arrastra `phonemizer-fork` 3.3.1 (**GPL-3.0+**) y `espeakng-loader` 0.2.4. Este último trae la biblioteca compartida de eSpeak NG (**GPL-3.0+**), con ruedas de unos 10 MB por plataforma. También fija `piper-phonemize` 1.2.0, que enlaza eSpeak NG.
+  * En la 0.8.3, `piper-tts` es la 1.2.0, que es **MIT** (rhasspy/piper). La `piper-tts>=1.3.0` **GPL-3.0-or-later** (PyPI; repo `OHF-Voice/piper1-gpl`), importada en `src/speaches/executors/piper.py:11`, solo está en `master` (las v0.9.0-rc).
+  * El `Dockerfile` instala el extra `ui` (`uv sync --extra ui`), que trae `gradio`; `aiortc` es dependencia directa. `pyannote-audio` solo aparece en `master`. Nada de esto nos hace falta.
 
   **Con la regla «nada GPL», no se debe distribuir ni recomendar.**
 
@@ -313,6 +314,8 @@ def transcribir(file: UploadFile = File(...), model: str = Form("whisper"),
 
 La función `def` es síncrona: FastAPI la ejecuta en su pool de hilos y no bloquea el bucle de eventos.
 
+**Descarga de modelos (añadido en la verificación):** `WhisperModel(..., download_root=...)` descarga con `cache_dir` (`transcribe.py:681-687`) y funciona con cualquier `huggingface-hub`. En cambio, `faster_whisper.download_model(..., output_dir=...)` pasa `local_dir_use_symlinks=False` (`utils.py:106-108`), un argumento que `huggingface-hub` 2.2.0 ya no admite (`_snapshot_download.py:123-144`). Como faster-whisper pide `huggingface-hub>=0.21` sin tope, pip instala la 2.2.0, y esa llamada daría `TypeError` [inferencia a partir de las firmas]. Para precargar modelos en la imagen hay que usar `download_root` o `huggingface_hub.snapshot_download(..., local_dir=...)`, y nunca `download_model(output_dir=...)`.
+
 ### 3.5 PyAV sin GPL [verificado: fuentes; receta sin probar]
 
 * `faster_whisper/audio.py:15` hace `import av` al importar el paquete, así que `av` hace falta aunque no se use.
@@ -334,7 +337,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 ENV PATH=/opt/ffmpeg/bin:$PATH LD_LIBRARY_PATH=/opt/ffmpeg/lib PKG_CONFIG_PATH=/opt/ffmpeg/lib/pkgconfig
 
 FROM base AS build
-RUN apt-get update && apt-get install -y --no-install-recommends gcc pkg-config
+# libc6-dev es solo "Recommends" de gcc-14 en Debian trixie: con --no-install-recommends hay que pedirlo
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config
 RUN pip wheel --no-binary av "av==19.0.1" -w /wheels
 
 FROM base
@@ -343,7 +347,7 @@ RUN pip install --no-cache-dir /wheels/av-*.whl faster-whisper==1.2.1 fastapi==0
     uvicorn==0.54.0 python-multipart==0.0.32
 ```
 
-Las herramientas de compilación (gcc) solo están en la etapa `build` y no se distribuyen. Los ficheros de `autobuild-*` de BtbN conviene copiarlos al GitHub privado: no consta cuánto tiempo los conserva el autor [inferencia].
+Las herramientas de compilación (gcc) solo están en la etapa `build` y no se distribuyen. Los ficheros de `autobuild-*` de BtbN **hay que** copiarlos al GitHub privado. Su README tiene una política de retención: guarda los 14 últimos builds diarios y el último de cada mes durante dos años. Por eso `autobuild-2026-10-09-14-16` desaparecerá en unos 14 días, salvo que sea el último de octubre. Alternativa: fijar el último build mensual. Corregido en la verificación: antes ponía que no constaba la retención.
 
 ---
 
@@ -354,7 +358,8 @@ Las herramientas de compilación (gcc) solo están en la etapa `build` y no se d
   * Instalación recomendada:
 
     ```bash
-    pip install opencv-python-headless==4.14.0.94 numpy click platformdirs tqdm
+    # --no-deps no comprueba las restricciones de scenedetect (click!=8.3.0,~=8.0): se repiten a mano
+    pip install opencv-python-headless==4.14.0.94 numpy "click~=8.0,!=8.3.0" platformdirs tqdm
     pip install --no-deps scenedetect==0.7.1
     ```
 
@@ -372,7 +377,7 @@ Las herramientas de compilación (gcc) solo están en la etapa `build` y no se d
 * **BtbN/FFmpeg-Builds** (scripts con licencia MIT) publica versiones `lgpl`. Según su README, son las que no llevan «libraries that are GPL-only. Most prominently libx264 and libx265».
   * La configuración base de LGPL es `--enable-version3` con `COPYING.LGPLv3` (`variants/defaults-lgpl.sh`), así que **la licencia efectiva es LGPL-3.0**, no la LGPL-2.1 que pone el plan (`plan_mvp_cidia_final.tex:810`).
   * Requiere glibc ≥ 2.28 (README). El Oracle tiene 2.31 y `python:3.12-slim` (Debian), más.
-* **URLs.** `latest` se reescribe cada día, así que para producción es mejor fijar un `autobuild-*`:
+* **URLs.** `latest` se reescribe cada día, así que para producción es mejor fijar un `autobuild-*` y copiarlo al GitHub privado, porque BtbN solo guarda los 14 últimos diarios y el último de cada mes durante dos años (README, «Release Retention Policy»):
   * Siempre la última (versión 9.0):
     * `https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-lgpl-9.0.tar.xz` (estática, 138 MB)
     * `https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linuxarm64-lgpl-9.0.tar.xz` (estática, 117 MB)
@@ -398,7 +403,7 @@ Las herramientas de compilación (gcc) solo están en la etapa `build` y no se d
 
 * `POST /v1/chat/completions`: admite **streaming**, `stream_options.include_usage`, JSON mode, `tools`, `reasoning_effort` y `reasoning.effort`, y visión (líneas 211-253).
   * **No admite** `tool_choice`, `logprobs`, `n` ni `logit_bias` (línea 248).
-  * Ollama recibe el JSON con `gin ShouldBindJSON` (`openai/openai.go:366`), así que los campos desconocidos se ignoran sin error [inferencia sobre el comportamiento por defecto de gin].
+  * Ollama recibe el JSON con `c.ShouldBindJSON(&req)` en `ChatMiddleware` (`middleware/openai.go:452`; la referencia anterior a `openai/openai.go:366` era errónea), y `openai.ChatCompletionRequest` no tiene campo `tool_choice`. Por tanto, los campos desconocidos se ignoran sin error [inferencia sobre el comportamiento por defecto de gin, que no activa `DisallowUnknownFields`].
   * **El gateway debe quitar `tool_choice`** o asumir que no se aplica.
 * **Visión:** las imágenes van como partes `image_url` de `content`.
   * El código acepta tanto `{"type":"image_url","image_url":{"url":"data:image/png;base64,…"}}` como la forma de cadena `"image_url":"data:…"` (`openai/openai.go:651-661`).
@@ -406,6 +411,7 @@ Las herramientas de compilación (gcc) solo están en la etapa `build` y no se d
 * **Thinking:** con `reasoning_effort: "none"` se desactiva en los modelos que piensan (qwen3 y qwen3.5) (línea 253). Conviene usarlo en el Oracle para ganar velocidad.
 * `POST /v1/embeddings`: `input` como cadena o lista de cadenas, `encoding_format` y **`dimensions`** (líneas 304-315). `dimensions` sirve para recortar Qwen3-Embedding gracias a MRL.
 * `POST /v1/responses` también existe, pero sin estado.
+* `POST /v1/audio/transcriptions` también existe en la 0.40.2 (`server/routes.go:2345`). **No es Whisper**: `TranscriptionMiddleware` lee un multipart de hasta 25 MB y lo convierte en una petición de chat con el audio para un modelo de Ollama con entrada de audio (`middleware/openai.go:1295-1360`). No sustituye al servicio `asr` (no tiene segmentos con marcas de tiempo), pero conviene saberlo [añadido en la verificación].
 * Ejemplo:
 
 ```bash
@@ -422,12 +428,12 @@ curl -s http://ollama:11434/v1/chat/completions -H "Content-Type: application/js
 
 ### 6.4 Variables que hay que fijar (`docs/faq.mdx`, `docs/context-length.mdx`)
 
-* **`OLLAMA_CONTEXT_LENGTH`**: por defecto **4096** (`faq.mdx:25`). Con GPU de menos de 24 GiB, 4K. Para agentes, la propia documentación recomienda ≥ 64000.
+* **`OLLAMA_CONTEXT_LENGTH`**: por defecto **4096** (`faq.mdx:25`). Con GPU de menos de 24 GiB, 4K. Para agentes, la propia documentación recomienda ≥ 64000. En el código, `ContextLength` vale 0 por defecto (`envconfig/config.go:230`) y el servidor elige 4096, 32768 o 262144 según la VRAM total, con umbrales de 23 y 47 GiB. En CPU o con 12 GB sale 4096 (`server/routes.go:2470-2484`). Un `num_ctx` en el Modelfile del modelo tiene prioridad (`:197-202`).
   * El prompt de sistema de dsh con las herramientas no cabe en 4K [inferencia].
   * **MSI: 32768. Oracle: 16384** (propuesta).
 * `OLLAMA_NUM_PARALLEL`: 1 por defecto. La memoria escala con `NUM_PARALLEL × CONTEXT_LENGTH` (`faq.mdx:335`).
 * `OLLAMA_MAX_LOADED_MODELS`: 3 en CPU (`:334`).
-* `OLLAMA_KV_CACHE_TYPE=q8_0`: la mitad de memoria que `f16` (`:354-364`).
+* `OLLAMA_KV_CACHE_TYPE=q8_0`: la mitad de memoria que `f16` (`:354-364`). Solo actúa con Flash Attention activa (`:350`). En el MSI conviene poner también `OLLAMA_FLASH_ATTENTION=1` y comprobar en el log que se aplica.
 * `OLLAMA_FLASH_ATTENTION`: automático (`:346`).
 * `OLLAMA_KEEP_ALIVE` (`:316`).
 * `OLLAMA_NO_CLOUD`: ya comprobado en el informe 05, §6.5.
@@ -503,7 +509,7 @@ Notas:
 |---|---|---|
 | LLM con visión | `ministral-3:8b` | 6022 MB, Q4_K_M, 8,9 B parámetros, vision + tools, 256K, Apache-2.0. En Hugging Face consta `es` entre los idiomas |
 | Embeddings | `qwen3-embedding:0.6b` | 639 MB, 1024 dimensiones, Apache-2.0 |
-| Voz | faster-whisper `large-v3-turbo` | 1,62 GB en fp16, MIT. En GPU, `compute_type="int8_float16"`. Necesita CUDA 12 y cuDNN 9 (README de faster-whisper) |
+| Voz | faster-whisper `large-v3-turbo` | 1,62 GB en fp16, MIT. En GPU, `compute_type="int8_float16"`. Con ctranslate2 4.8.2 necesita las librerías de CUDA 12 (cuBLAS), pero no cuDNN (§3.1, corregido en la verificación) |
 
 Presupuesto de VRAM [inferencia, a medir con `ollama ps` y `nvidia-smi`]:
 * La KV cache de Ministral 3 8B ocupa 2 × 34 capas × 8 cabezas KV × 128 × 2 bytes = **136 KiB por token** en f16 (`config.json`: `num_hidden_layers 34`, `num_key_value_heads 8`, `head_dim 128`).
@@ -513,20 +519,20 @@ Presupuesto de VRAM [inferencia, a medir con `ollama ps` y `nvidia-smi`]:
   * `OLLAMA_CONTEXT_LENGTH=32768`, `OLLAMA_KV_CACHE_TYPE=q8_0` y `OLLAMA_NUM_PARALLEL=1`. Para dos usuarios: `NUM_PARALLEL=2` con 16K cada uno, que ocupa lo mismo.
   * Whisper **a demanda**: se carga, transcribe y se libera. Si no cabe, `small` en int8 en la CPU del MSI, que según el benchmark oficial hace 13 minutos de audio en unos 1 m 42 s con 8 hilos.
 
-Licencia de NVIDIA: los runtimes de CUDA y cuDNN (dentro de la imagen de Ollama y de las ruedas `nvidia-*`) **no son software libre**, aunque se pueden redistribuir. Hay que anotarlos en la tabla de licencias como excepción de sistema (§9).
+Licencia de NVIDIA: los runtimes de CUDA (dentro de la imagen de Ollama y de las ruedas `nvidia-*`) **no son software libre**, aunque se pueden redistribuir. Con ctranslate2 4.8.2, el servicio `asr` ya no necesita cuDNN, así que basta con cuBLAS y no hace falta una imagen base `-cudnn`. Hay que anotarlos en la tabla de licencias como excepción de sistema (§9).
 
 ---
 
 ## 8. Imágenes multi-arquitectura
 
-Datos de Docker Hub y GHCR del 2026-10-09; los tamaños están comprimidos [verificado].
+Datos de Docker Hub y GHCR del 2026-10-09. Los tamaños están comprimidos y en MiB: Docker Hub da bytes, y por ejemplo ollama arm64 son 2806 × 10⁶ bytes = 2676 MiB [verificado].
 
 | Imagen y tag recomendado | amd64 | arm64 | Tamaño arm64 | Licencia | Nota |
 |---|---|---|---|---|---|
 | `pgvector/pgvector:0.8.7-pg17-bookworm` | ✓ | ✓ | 151 MB | PostgreSQL (pgvector) | Hoy `pg17` = `0.8.7-pg17` = `pg17-bookworm` (mismo digest `sha256:ac08538c…`). Existe también `pg17-trixie`, con otro digest. **Fijar la base Debian y no cambiarla** con datos dentro: el cambio de glibc altera el orden de cotejo de los índices [inferencia] |
 | `qdrant/qdrant:v1.16.2` | ✓ | ✓ | 68 MB | Apache-2.0 | Es la que fija WeKnora 0.8.2 (`docker-compose.yml:657`). La última es la `v1.19.2` (71 MB). El Oracle usa páginas de 4096 bytes, sin el problema de jemalloc con páginas de 64K [verificado: `getconf PAGESIZE`] |
 | `valkey/valkey:8.1-alpine` (8.1.10) | ✓ | ✓ | ~20 MB | BSD-3 | **Recomendada** en lugar de Redis. Compatible a nivel de protocolo. Con WeKnora (go-redis/asynq) **está por probar** [inferencia] |
-| `redis:7.2-alpine` (7.2.12) | ✓ | ✓ | 16 MB | BSD-3 | `LICENSE.txt` de Redis: «Redis Open Source 7.2 and prior releases remain subject to the BSDv3». A partir de la 8, RSALv2, SSPLv1 o AGPLv3 |
+| `redis:7.2-alpine` (7.2.12) | ✓ | ✓ | 16 MB | BSD-3 | `LICENSE.txt` de Redis: «Redis Open Source 7.2 and prior releases remain subject to the BSDv3». A partir de la 8, RSALv2, SSPLv1 o AGPLv3. La 7.4 ya salió con RSALv2/SSPLv1, sin BSD: no usar ninguna 7.4+ [esto último no consta en ese `LICENSE.txt`; procede del cambio de licencia de 2024] |
 | `redis:7.0-alpine` | ✓ | ✓ | 13 MB | BSD-3 | **Última reconstrucción: 2024-09-08**. Sin parches. No usar |
 | `ollama/ollama:0.40.2` | ✓ | ✓ | 2676 MB | MIT | |
 | `python:3.12-slim` | ✓ | ✓ | 42 MB | PSF | Base de gateway, asr y captura |
@@ -534,7 +540,7 @@ Datos de Docker Hub y GHCR del 2026-10-09; los tamaños están comprimidos [veri
 | `ghcr.io/speaches-ai/speaches:0.8.3-cpu` | ✓ | ✓ | — | MIT el código, con **dependencias GPL** | No usar (§3.3) |
 | `paradedb/paradedb:v0.22.6-pg17` | ✓ | ✓ | 478 MB | **AGPL-3.0** (repo `paradedb/paradedb`) | No usar |
 
-**WeKnora sin ParadeDB** [verificado en el código de v0.8.2]: con `RETRIEVE_DRIVER=qdrant`, `internal/container/container.go:809-818` pone `app.skip_embedding=true` en la DSN de las migraciones. Las cuatro migraciones que crean o actualizan `pg_search` (`000002`, `000008`, `000011` y `000099`) empiezan con `IF current_setting('app.skip_embedding', true) = 'true' THEN RETURN`. Por eso basta con `pgvector/pgvector:pg17` (`uuid-ossp` viene en el contrib de la imagen oficial).
+**WeKnora sin ParadeDB** [verificado en el código de v0.8.2]: con `RETRIEVE_DRIVER=qdrant`, `internal/container/container.go:809-818` pone `app.skip_embedding=true` en la DSN de las migraciones. Las cuatro migraciones que crean o actualizan `pg_search` (`000002`, `000008`, `000011` y `000099`) empiezan con `IF current_setting('app.skip_embedding', true) = 'true' THEN RETURN`. Por eso basta con `pgvector/pgvector:pg17` (`uuid-ossp` viene en el contrib de la imagen oficial). Añadido en la verificación: la migración `000041` ejecuta `CREATE EXTENSION IF NOT EXISTS pg_trgm` sin condición (línea 32), y `pg_trgm` también viene en el contrib. Las de vectores posteriores (`000059` y `000095`) comprueban antes que exista la tabla o la extensión `vector`. Con `RETRIEVE_DRIVER=qdrant`, WeKnora no crea la extensión `vector`; si la usa el núcleo de CidIA, la crea nuestra propia migración.
 
 ---
 
@@ -543,7 +549,7 @@ Datos de Docker Hub y GHCR del 2026-10-09; los tamaños están comprimidos [veri
 **Riesgos**
 
 1. **El plan nombra FastMCP**, pero en la 2.x es `MCPServer`. Si alguien instala `mcp` sin fijar versión y copia ejemplos de la 1.x, falla al importar. Hay que fijar `mcp==2.3.0` y corregir el plan y `arquitectura.md`.
-2. **speaches trae GPL** (piper-tts, phonemizer y el ffmpeg de Ubuntu). Hay que sustituirlo por `asr` propio y corregir la tabla de licencias del plan (`:789`, `:808` y `:1408`).
+2. **speaches trae GPL**: en la imagen 0.8.3, phonemizer-fork, eSpeak NG y el ffmpeg de Ubuntu; en `master`, además, piper-tts ≥ 1.3. Hay que sustituirlo por un `asr` propio y corregir la tabla de licencias del plan (`:789`, `:808` y `:1408`).
 3. **Los wheels de PyAV llevan x264 y x265.** Hay que compilar `av` desde fuente contra el FFmpeg LGPL de BtbN (receta del §3.5, sin probar), o que lo valide un asesor.
 4. **psycopg LGPL** dentro del proceso: usar asyncpg. **opencv-headless** lleva FFmpeg LGPL-2.1 dentro del proceso: decidir si se acepta o usar el `scdet` de ffmpeg.
 5. **Contexto de Ollama a 4K por defecto.** Sin `OLLAMA_CONTEXT_LENGTH`, el agente se corta sin avisar.
@@ -580,3 +586,142 @@ Datos de Docker Hub y GHCR del 2026-10-09; los tamaños están comprimidos [veri
 * Docker Hub: `https://hub.docker.com/v2/repositories/<repo>/tags/<tag>`.
 * WeKnora v0.8.2 (clon local): `docker-compose.yml`, `.env.example`, `internal/container/container.go`, `migrations/versioned/*.up.sql`.
 * Servidor Oracle (solo lectura): `uname`, `lscpu`, `/proc/cpuinfo`, `free`, `df`, `ldd --version`, `getconf PAGESIZE`, `docker info`, `docker ps` y `ss -ltn`.
+
+---
+
+## Verificación
+
+Revisión escéptica del 2026-10-09 con las mismas reglas: en el PC no se instala nada, en el Oracle solo hay comandos de lectura y no se toca ningún secreto. Fuentes:
+* PyPI JSON, con el SHA-256 de los artefactos `mcp` 2.3.0 y 2.0.0 contrastado con PyPI;
+* el wheel y el sdist de `mcp` 2.3.0;
+* `app.asar` de la 0.2.0-rc.2 instalada, leído con un lector propio sin extraer la app;
+* el clon `dsh-v0.2.1-alpha.1`;
+* ficheros en bruto de GitHub en los tags `ollama v0.40.2`, `faster-whisper v1.2.1`, `CTranslate2 v4.8.2`, `PyAV v19.0.1`, `speaches v0.8.3`/`master` y `pgvector-python v0.5.1`;
+* los manifiestos de `registry.ollama.ai`, Docker Hub, GHCR, la API de Hugging Face y la página de releases de BtbN;
+* `salsa.debian.org`, `packages.debian.org` y el clon de WeKnora v0.8.2.
+
+Al final no se pudo ejecutar el ejemplo del gateway: en este PC no están FastAPI, Starlette ni pydantic, y no se instalan.
+
+### Confirmado
+
+* **SDK MCP 2.3.0** (2026-10-02, MIT, `>=3.10`):
+  * `mcp/server/fastmcp.py:1-16` lanza `ModuleNotFoundError`;
+  * `MCPServer` y `Context` están en `mcp.server.mcpserver` (`__init__.py:15`, `:28`) y `MCPServer` también en `mcp.server` (`:4`);
+  * el constructor no acepta parámetros de transporte (`server.py:158-186`) y `streamable_http_app()` sí (`:1288-1319`);
+  * `@mcp.tool()` sin paréntesis da `TypeError` (`:719-722`);
+  * `session_manager` solo existe tras `streamable_http_app()` (`:313-323`);
+  * el lifespan de la sub-app es `session_manager.run()` (`lowlevel/server.py:851`);
+  * hay `RuntimeError: Task group is not initialized` (`streamable_http_manager.py:184-185`);
+  * el límite de cuerpo es de 4 MiB (`transport_security.py:15`);
+  * el aviso de que el lifespan de la sub-app no se ejecuta está en `docs/run/asgi.md:62-66`;
+  * `--proxy-headers` (`docs/run/deploy.md:50`, `:185`) y «mismas claves y mismo nombre» con varios workers (`:143-145`, `:188`).
+* **Autenticación:**
+  * `TokenVerifier` (Protocol, `auth/provider.py:124-136`), `AccessToken` con `subject` y `claims` (`:53-60`) y `get_access_token()` (`auth_context.py:13-20`);
+  * `AuthSettings` exige `issuer_url` y `resource_server_url` y avisa si falta `validate_token_resource` (`settings.py:27-69`);
+  * `RequireAuthMiddleware` envuelve la ruta `/mcp` (`lowlevel/server.py:812-824`) y responde 401 con `WWW-Authenticate`;
+  * la ruta de metadatos es `/.well-known/oauth-protected-resource/mcp` (`auth/routes.py:201-216`);
+  * con verificador propio y sin `auth_server_provider`, el `issuer_url` http no se valida (`validate_issuer_url` solo se llama en `create_auth_routes`, `routes.py:83`);
+  * en la ruta moderna, la `Request` de Starlette llega como `request_context` (`_streamable_http_modern.py:458-462`), así que `ctx.headers` (`context.py:288-296`; existe ya en el wheel 2.0.0) y `ctx.request_context.request` funcionan;
+  * en modo JSON, el handler corre en la tarea ASGI (docstring, líneas 1-19).
+* **Era del protocolo:**
+  * `HANDSHAKE_PROTOCOL_VERSIONS` no incluye 2026-07-28 (`mcp_types/version.py:33-38`);
+  * el cliente 2.0.0 de la app manda `server/discover` con `mcp-protocol-version: 2026-07-28` (ver §1.5), así que la app llega por la ruta moderna, sin sesión;
+  * `transport.ts:40-44` y el esquema `headers` (`index.ts:91-92`, `:136`) confirman que `Authorization` viaja desde la configuración del plugin.
+* **Librerías** (versión, fecha, licencia, `requires_python` y ruedas aarch64): todas las de la tabla del §2 coinciden con PyPI. Detalles:
+  * `argon2-cffi-bindings` 26.1.0 tiene `cp310-abi3` aarch64;
+  * `asyncpg` 0.32.0 tiene `cp312 manylinux_2_28_aarch64`;
+  * httpx2 es un proyecto de `pydantic/httpx2` que se presenta como continuación de HTTPX;
+  * `pgvector.sqlalchemy` exporta `VECTOR` y `HALFVEC`, y `register_vector` solo hace falta para arrays (README v0.5.1).
+* **Whisper:**
+  * faster-whisper 1.2.1: dependencias, alias `utils.py:11-30`, `import av` en `audio.py:15` (y `__init__.py:1` lo importa siempre), firmas `transcribe.py:621-634` y `:747-790`, y el salto de `decode_audio` con `np.ndarray` en `:875-876`;
+  * benchmark del README (`small`, int8, 1 m 42 s y 1477 MB, i7-12700K con 8 hilos);
+  * ctranslate2 4.8.2 en aarch64 compila con OpenBLAS + Ruy y sin CUDA (`prepare_build_environment_linux.sh:66-67`);
+  * tamaños de los repos de Hugging Face: 78, 148, 486, 1531 y 1622 MB; el `model.bin` de `small` pesa 484 MB, lo que cuadra con fp16;
+  * la redirección `mobiuslabsgmbh` → `dropbox-dash`;
+  * licencias MIT.
+* **speaches:** `0.8.3-cpu` y `latest-cpu` publican `linux/amd64` y `linux/arm64` (GHCR); v0.8.3 es del 2025-09-19 y v0.9.0-rc.3 del 2025-12-27; el `ffmpeg` se instala con `apt`. La conclusión de no usarlo se mantiene.
+* **PyAV y ffmpeg:**
+  * el README de PyAV 19.0.1 dice «This release supports FFmpeg 9.x» y documenta `--no-binary av`;
+  * `pyav-ffmpeg` añade `--enable-libx265` y `--enable-libx264` (`build-ffmpeg.py:183-186`) y su `patches/ffmpeg.patch` saca libx264 y libx265 de `EXTERNAL_LIBRARY_GPL_LIST`;
+  * BtbN: `defaults-lgpl.sh` usa `--enable-version3` y `COPYING.LGPLv3`, el README pide glibc ≥ 2.28 y la variante `lgpl` es la que va sin x264 ni x265;
+  * `linux-install-shared.sh` copia `lib/*.so`, los `.pc` con `${pcfiledir}` e `include/`;
+  * las 4 URLs de 9.0 y las de 8.1 existen, con los tamaños citados (GitHub los muestra en MiB);
+  * `debian/rules` lleva `--enable-gpl` (línea 30), `--enable-libx265` (`:65`) y `--enable-libx264` (`:177`).
+* **OpenCV y PySceneDetect:**
+  * scenedetect 0.7.1 exige `opencv-python` y la 0.6.7 tenía el extra `opencv-headless`;
+  * opencv-python-headless: la 5.0.0.93 es del 2026-07-02 y la 4.14.0.94 del 2026-07-28, las dos con ruedas abi3 aarch64;
+  * el README de opencv-python dice «All wheels ship with FFmpeg licensed under the LGPLv2.1» (línea 203);
+  * `detect(..., ContentDetector())` está en el README.
+* **Ollama 0.40.2:**
+  * imagen del 2026-10-08, amd64 y arm64, `-rocm` solo amd64, MIT;
+  * tabla de compatibilidad con OpenAI (`openai-compatibility.mdx:211-253`, `:304-316`);
+  * imágenes en `openai/openai.go:651-661` y `:830-861`;
+  * `/api/embed` (`docs/api.md:1666-1684`) devuelve vectores normalizados L2 (`embeddings.mdx:68`);
+  * variables de `faq.mdx` (líneas 25, 316, 334-336, 346 y 350-364);
+  * `context-length.mdx:7-14`;
+  * `OLLAMA_NO_CLOUD` (`envconfig/config.go:238`);
+  * no hay ruta de reranking (`server/routes.go:2302-2348`).
+* **Modelos** (manifiestos de `registry.ollama.ai`):
+  * qwen3:0.6b: 523 MB, Q4_K_M y Apache-2.0;
+  * qwen3.5:0.8b: 1322 MB, que se reparten en 812 MB de modelo Q8_0, 207 MB de proyector y 303 MB de borrador; familia `qwen35` y Apache-2.0;
+  * ministral-3:3b: 2954 MB, Q4_K_M, Apache-2.0; la configuración declara 3,8 B parámetros;
+  * ministral-3:8b: 6022 MB, Q4_K_M, 8,9 B parámetros y Apache-2.0;
+  * qwen3-embedding:0.6b: 639 MB y Q8_0, sin capa de licencia;
+  * granite-embedding:278m: 563 MB y F16;
+  * embeddinggemma: Gemma Terms of Use;
+  * granite4:350m: 708 MB en BF16; smollm2:360m: 726 MB en F16;
+  * capacidades y contextos de ollama.com: qwen3 tools y thinking con 40K; qwen3.5 vision, tools y thinking con 256K; ministral-3 vision y tools con 256K, que necesita Ollama 0.13.1;
+  * Hugging Face: todos Apache-2.0; Ministral 3 incluye `es`; SmolLM2 solo `en`;
+  * `config.json`: Qwen3-Embedding con `hidden_size` 1024 y `max_position_embeddings` 32768, y la tarjeta dice «32 to 1024»; Ministral 3 8B con 34 capas, 8 cabezas KV y `head_dim` 128, de donde salen 136 KiB por token en f16.
+* **Imágenes:**
+  * los `pg17` comparten digest `sha256:ac08538c6f8b…` y `pg17-trixie` tiene otro;
+  * qdrant v1.16.2 y v1.19.2 tienen arm64;
+  * `redis:7.0-alpine` no se actualiza desde el 2024-09-08;
+  * valkey 8.1-alpine y redis 7.2-alpine se actualizaron el 2026-09-21;
+  * las cuatro `weknora-*:v0.8.2` tienen arm64;
+  * licencias: valkey `COPYING` BSD-3, pgvector PostgreSQL, qdrant Apache-2.0 y paradedb AGPL-3.0.
+* **WeKnora:** `docker-compose.yml:553` (`redis:7.0-alpine`) y `:657` (`qdrant v1.16.2`); `container.go:809-825`; guardas `skip_embedding` en `000002`, `000008`, `000011` y `000099`.
+* **Oracle** (ssh de solo lectura, hoy):
+  * `aarch64`, 4 núcleos Neoverse-N1 con `asimd`, `asimddp` y `atomics`, sin `sve` ni `i8mm`;
+  * 23 GiB de RAM con 18 disponibles;
+  * páginas de 4096, glibc 2.31 y Ubuntu 20.04.6;
+  * cgroup v1 (`/sys/fs/cgroup` es `tmpfs`);
+  * Docker 26.1.3 y compose 2.35.1;
+  * 106 GiB libres en `/` según `df -h` (antes ponía 112: varía con el uso).
+* **Plan:** las líneas citadas (`362`, `788`, `789`, `808`, `810`, `1162` y `1408`) dicen lo que el informe afirma. `docs/arquitectura.md:10` y `:66` siguen poniendo FastMCP.
+
+### Corregido en este informe
+
+1. **Rama 1.x del SDK:** la última es la 1.30.0 (2026-09-07), no la 1.29.1. Las dependencias nuevas de la 2.x son solo `mcp-types`, `httpx2` y `opentelemetry-api`; `pyjwt`, `python-multipart`, `sse-starlette`, `starlette` y `uvicorn` ya estaban en la 1.x (§1.1).
+2. **DNS rebinding:** la protección automática depende también del parámetro `host` de `streamable_http_app()`. Con `host="0.0.0.0"` y sin `transport_security` no hay comprobación. Se añaden dos detalles: `nombre:*` exige puerto en `Host`, y un `Origin` presente que no está permitido da `403` (§1.4).
+3. **Enrutado por versión:** sin cabecera `MCP-Protocol-Version` la petición va a la ruta antigua, no a la moderna. Los literales del `app.asar` son `FIRST_MODERN_PROTOCOL_VERSION` y `MODERN_WIRE_REVISION`, con las líneas exactas (§1.5).
+4. **httpx:** sí hay publicaciones desde 2024, pero solo prereleases `1.0.dev1` a `1.0.dev6` (§2).
+5. **cuDNN:** ctranslate2 4.8.2 no lo necesita (Conv1D en CUDA desde la 4.6.3; rueda x86_64 con `-DWITH_CUDNN=OFF`). La nota del README de faster-whisper está desfasada (§3.1, §7.5 y nota de NVIDIA).
+6. **speaches:** la imagen 0.8.3 lleva `piper-tts` 1.2.0, que es MIT. Su GPL viene de `phonemizer-fork` (no `phonemizer`), de eSpeak NG (`espeakng-loader` y `piper-phonemize`) y de `ffmpeg`. `piper-tts>=1.3.0`, `executors/piper.py:11` y `pyannote-audio` son de `master`, y `gradio` entra por `--extra ui` (§0 y §3.3).
+7. **Receta de PyAV:** faltaba `libc6-dev` (en Debian trixie solo es *Recommends* de `gcc-14`): con `--no-install-recommends`, la compilación fallaría (§3.5).
+8. **Retención de BtbN:** sí está documentada (14 builds diarios y el último de cada mes durante dos años). El `autobuild-*` fijado caduca, así que hay que copiarlo al GitHub privado (§3.5 y §5).
+9. **Ruta del `ShouldBindJSON` de Ollama:** es `middleware/openai.go:452` (`ChatMiddleware`), no `openai/openai.go:366` (§6.2).
+10. **Precisiones añadidas:**
+    * `uv.lock` del SDK MCP, con las versiones con las que se probó (§2);
+    * `download_model(output_dir=...)` de faster-whisper, incompatible con `huggingface-hub` 2.x (§3.4);
+    * `click~=8.0,!=8.3.0` en la receta de PySceneDetect (§4);
+    * `/v1/audio/transcriptions` de Ollama, que no es Whisper (§6.2);
+    * lógica de contexto por VRAM y KV `q8_0` solo con Flash Attention (§6.4);
+    * `pg_trgm` sin condición en la migración `000041` de WeKnora (§8);
+    * Redis 7.4 sin BSD (§8);
+    * los tamaños de las imágenes están en MiB (§8).
+
+### Sigue sin confirmar
+
+* El ejemplo del gateway (§1.7), el servicio `asr` (§3.4) y las recetas de PyAV y ffmpeg (§3.5) solo están revisados contra el código y la sintaxis: no se han ejecutado. Para la fase 2:
+  * `curl` sin token debe dar 401;
+  * con token, `tools/list`;
+  * conexión desde la app con `Authorization`;
+  * comprobar que la app no envía `Origin`.
+* Que el `fetch` de Node del host de dsh no envíe `Origin` (inferencia).
+* Que el driver del MSI tenga que admitir CUDA 12.8 para las ruedas de ctranslate2 4.8.2.
+* Que Ollama 0.40.2 en arm64 con CPU cargue `qwen3.5:0.8b` con visión (arquitectura `qwen35` con proyector y borrador).
+* Velocidades en el Oracle y presupuesto de VRAM del MSI: siguen siendo estimaciones.
+* Si WeKnora 0.8.2 (go-redis/asynq) funciona con Valkey 8.1.
+* Que eSpeak NG vaya enlazado dentro de las ruedas de `espeakng-loader`: su descripción dice que carga la biblioteca compartida y las ruedas son binarias de unos 10 MB, pero no se ha abierto la rueda.
+* La compatibilidad del SDK MCP 2.3.0 con starlette 1.7.0 y pydantic 2.14.0, más nuevas que las de su `uv.lock`.

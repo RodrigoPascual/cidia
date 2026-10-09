@@ -1,0 +1,1082 @@
+#!/usr/bin/env bash
+# cidia: herramienta de administración del servidor CidIA.
+#
+# El instalador (instalar-servidor.sh) la enlaza como /usr/local/bin/cidia. Uso habitual:
+#   sudo cidia estado              servicios, salud, recursos y modelos
+#   sudo cidia copia               copia de seguridad de la base de datos y de datos/
+#   sudo cidia ayuda               todas las órdenes
+#
+# Solo actúa sobre el proyecto de Docker Compose «cidia»: nunca para, borra ni limpia
+# contenedores, imágenes o volúmenes de otros proyectos (nada de 'docker system prune').
+# La instalación se busca en: --dir, la variable CIDIA_DIR, la carpeta donde vive este
+# script (<dir>/cidia/servidor/despliegue) o el proyecto cidia en marcha; si no, /opt/cidia.
+
+set -Eeuo pipefail
+# Desde cron el PATH es mínimo: se completa con las rutas del sistema (ip, ss, docker…).
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}
+
+SCRIPT=$(readlink -f "${BASH_SOURCE[0]}")
+DIR_SCRIPT=$(dirname "$SCRIPT")
+PROYECTO=cidia
+ETIQUETA="label=com.docker.compose.project=$PROYECTO"
+UID_DATOS=1000 # usuario con el que corren el gateway y el servicio de voz
+PATRON_COPIA='^cidia-[0-9]{8}-[0-9]{6}$'
+
+# ----------------------------------------------------------------------------- mensajes
+
+if [[ -t 1 && -z ${NO_COLOR:-} && ${TERM:-dumb} != dumb ]]; then
+	C_R=$'\e[0m' C_N=$'\e[1m' C_T=$'\e[2m' C_ROJO=$'\e[31m' C_VERDE=$'\e[32m' C_AMAR=$'\e[33m' C_AZUL=$'\e[34m'
+else
+	C_R='' C_N='' C_T='' C_ROJO='' C_VERDE='' C_AMAR='' C_AZUL=''
+fi
+REGISTRO=${CIDIA_REGISTRO:-} # si está definido, los mensajes se copian también en ese fichero
+
+reg() { if [[ -n $REGISTRO ]]; then printf '%s [cidia] %s\n' "$(date '+%F %T')" "$*" >>"$REGISTRO" 2>/dev/null || true; fi; }
+titulo() {
+	printf '\n%s%s%s\n' "$C_N$C_AZUL" "$*" "$C_R"
+	reg "== $*"
+}
+ok() {
+	printf '  %s✔%s %s\n' "$C_VERDE" "$C_R" "$*"
+	reg "OK    $*"
+}
+info() {
+	printf '  %s•%s %s\n' "$C_AZUL" "$C_R" "$*"
+	reg "INFO  $*"
+}
+aviso() {
+	printf '  %s!%s %s\n' "$C_AMAR" "$C_R" "$*"
+	reg "AVISO $*"
+}
+fallo() {
+	printf '  %s✘%s %s\n' "$C_ROJO" "$C_R" "$*" >&2
+	reg "ERROR $*"
+}
+tenue() { printf '    %s%s%s\n' "$C_T" "$*" "$C_R"; }
+morir() {
+	fallo "$*"
+	exit 1
+}
+# Solo informa de fallos dentro de funciones: si lo que falla es la llamada final a main, el
+# motivo ya se ha mostrado.
+# shellcheck disable=SC2329  # se invoca desde la trampa ERR
+error_inesperado() {
+	((${#FUNCNAME[@]} > 2)) || return 0
+	fallo "Error inesperado en la línea $1: $2"
+}
+trap 'error_inesperado "$LINENO" "$BASH_COMMAND"' ERR
+
+INTERACTIVO=0
+if [[ -t 0 && -t 1 ]]; then INTERACTIVO=1; fi
+SI=0
+
+# confirmar "pregunta" s|n  -> 0 si la respuesta es sí. Con --si responde que sí; sin
+# terminal usa la respuesta por defecto.
+confirmar() {
+	local texto=$1 defecto=${2:-s} resp pista="[S/n]"
+	if [[ $defecto == n ]]; then pista="[s/N]"; fi
+	if ((SI)); then
+		reg "PREGUNTA $texto -> sí (--si)"
+		return 0
+	fi
+	if ((!INTERACTIVO)); then
+		reg "PREGUNTA $texto -> $defecto (sin terminal)"
+		[[ $defecto == s ]]
+		return
+	fi
+	read -r -p "  ? $texto $pista " resp || true
+	resp=${resp:-$defecto}
+	reg "PREGUNTA $texto -> $resp"
+	[[ ${resp,,} == s* || ${resp,,} == y* ]]
+}
+
+# confirmar_palabra PALABRA "texto": para acciones que sustituyen datos.
+confirmar_palabra() {
+	local palabra=$1 texto=$2 resp
+	if ((SI)); then return 0; fi
+	((INTERACTIVO)) || morir "Esta acción necesita confirmación: ejecútala en una terminal o añade --si."
+	printf '  %s%s%s\n' "$C_AMAR" "$texto" "$C_R"
+	read -r -p "  Escribe $palabra para continuar: " resp || true
+	[[ $resp == "$palabra" ]]
+}
+
+# Tamaño en bytes en formato legible (1,2 GB).
+legible() {
+	awk -v b="${1:-0}" 'BEGIN {
+		split("B KB MB GB TB", u, " "); i = 1
+		while (b >= 1000 && i < 5) { b /= 1000; i++ }
+		s = (i == 1) ? sprintf("%d %s", b, u[i]) : sprintf("%.1f %s", b, u[i]); sub(/\./, ",", s); print s }'
+}
+
+# ----------------------------------------------------------------------------- ficheros de entorno
+
+# leer_var FICHERO CLAVE: valor de CLAVE (sin comillas). No imprime nada más.
+leer_var() {
+	[[ -r $1 ]] || return 0
+	local v
+	v=$(grep -E "^[[:space:]]*$2=" "$1" | tail -n1 | cut -d= -f2-) || true
+	v=${v%$'\r'}
+	v=${v#\"}
+	v=${v%\"}
+	v=${v#\'}
+	v=${v%\'}
+	printf '%s' "$v"
+}
+
+tiene_var() { [[ -r $1 ]] && grep -qE "^[[:space:]]*$2=" "$1"; }
+
+# poner_var FICHERO CLAVE VALOR: sustituye la línea (o la añade) conservando dueño y permisos.
+poner_var() {
+	local f=$1 k=$2 v=$3 tmp
+	tmp=$(mktemp "$(dirname "$f")/.cidia-env.XXXXXX")
+	if [[ -f $f ]]; then
+		awk -v k="$k" -v v="$v" '
+			$0 ~ "^[[:space:]]*" k "=" { if (!hecho) print k "=" v; hecho = 1; next }
+			{ print }
+			END { if (!hecho) print k "=" v }' "$f" >"$tmp"
+		chmod --reference="$f" "$tmp"
+		chown --reference="$f" "$tmp" 2>/dev/null || true
+	else
+		printf '%s=%s\n' "$k" "$v" >"$tmp"
+		chmod 600 "$tmp"
+	fi
+	mv -f "$tmp" "$f"
+}
+
+# ----------------------------------------------------------------------------- instalación y Docker
+
+DIR=""
+detectar_dir() {
+	local wd=""
+	if [[ -z $DIR && -n ${CIDIA_DIR:-} ]]; then DIR=$CIDIA_DIR; fi
+	if [[ -z $DIR && -d $DIR_SCRIPT/../../../secretos ]]; then DIR=$(cd "$DIR_SCRIPT/../../.." && pwd); fi
+	if [[ -z $DIR ]] && command -v docker >/dev/null; then
+		wd=$(docker ps -a --filter "$ETIQUETA" --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null | head -n1) || true
+		if [[ -n $wd && -d $wd/../../../secretos ]]; then DIR=$(cd "$wd/../../.." && pwd); fi
+	fi
+	DIR=${DIR:-/opt/cidia}
+	[[ $DIR == /* ]] || DIR=$(pwd)/$DIR
+	DIR=$(readlink -m -- "$DIR") # ruta canónica: sin «..», «.» ni enlaces
+	REPO=$DIR/cidia
+	DIR_DESP=$REPO/servidor/despliegue
+	ENV_FILE=$DIR/secretos/cidia.env
+	COPIAS=$DIR/copias
+}
+
+# Comprueba que se puede leer la configuración y hablar con Docker. Si falta permiso,
+# vuelve a ejecutar la misma orden con sudo.
+preparar_acceso() {
+	local falta=0 extra=()
+	[[ -e $ENV_FILE || -d $DIR/secretos ]] ||
+		morir "No hay ninguna instalación de CidIA en $DIR. Indica la carpeta con --dir o instala con instalar-servidor.sh."
+	[[ -r $ENV_FILE ]] || falta=1
+	docker info >/dev/null 2>&1 || falta=1
+	if ((falta)); then
+		if ((EUID == 0)); then
+			[[ -r $ENV_FILE ]] || morir "Falta $ENV_FILE. Vuelve a ejecutar instalar-servidor.sh para regenerar la configuración."
+			morir "Docker no responde. Compruébalo con: sudo systemctl status docker"
+		fi
+		command -v sudo >/dev/null || morir "Hacen falta permisos de administrador (root) para esta orden."
+		info "Hacen falta permisos de administrador: se usará sudo."
+		if ((SI)); then extra+=(--si); fi
+		exec sudo -- bash "$SCRIPT" --dir "$DIR" "${extra[@]}" "${ORDEN_ORIGINAL[@]}"
+	fi
+	[[ -f $DIR_DESP/docker-compose.yml ]] || morir "No encuentro el código de CidIA en $REPO (falta docker-compose.yml)."
+}
+
+# Ficheros y perfiles de Compose de esta instalación. El instalador los guarda en cidia.env
+# (CIDIA_COMPOSE_FICHEROS=gpu,debug y CIDIA_COMPOSE_PERFILES=weknora,espacio); si no están
+# (instalaciones hechas a mano), se deducen de los contenedores que ya existen.
+DC_ARGS=()
+EXTRAS_COMPOSE=""
+PERFILES_COMPOSE=""
+preparar_compose() {
+	local extras="" perfiles="" cfg="" servicios="" f lista=()
+	if tiene_var "$ENV_FILE" CIDIA_COMPOSE_FICHEROS; then
+		extras=$(leer_var "$ENV_FILE" CIDIA_COMPOSE_FICHEROS)
+	else
+		cfg=$(docker ps -a --filter "$ETIQUETA" --format '{{.Label "com.docker.compose.project.config_files"}}' 2>/dev/null | head -n1) || true
+		if [[ $cfg == *compose.gpu.yml* ]]; then extras+="gpu,"; fi
+		if [[ $cfg == *compose.debug.yml* ]]; then extras+="debug,"; fi
+		if [[ -z $cfg ]] && command -v nvidia-smi >/dev/null && nvidia-smi -L >/dev/null 2>&1 &&
+			docker info --format '{{range $k, $v := .Runtimes}}{{$k}} {{end}}' 2>/dev/null | grep -qw nvidia; then
+			extras+="gpu,"
+		fi
+	fi
+	if tiene_var "$ENV_FILE" CIDIA_COMPOSE_PERFILES; then
+		perfiles=$(leer_var "$ENV_FILE" CIDIA_COMPOSE_PERFILES)
+	else
+		servicios=$(docker ps -a --filter "$ETIQUETA" --format '{{.Label "com.docker.compose.service"}}' 2>/dev/null) || true
+		if grep -qx weknora <<<"$servicios"; then perfiles+="weknora,"; fi
+		if grep -qx espacio-trabajo <<<"$servicios"; then perfiles+="espacio,"; fi
+	fi
+	DC_ARGS=(compose --project-directory "$DIR_DESP" --env-file "$ENV_FILE" -f "$DIR_DESP/docker-compose.yml")
+	IFS=, read -r -a lista <<<"$extras"
+	for f in "${lista[@]}"; do
+		if [[ -n $f && -f $DIR_DESP/compose.$f.yml ]]; then DC_ARGS+=(-f "$DIR_DESP/compose.$f.yml"); fi
+	done
+	IFS=, read -r -a lista <<<"$perfiles"
+	for f in "${lista[@]}"; do
+		if [[ -n $f ]]; then DC_ARGS+=(--profile "$f"); fi
+	done
+	EXTRAS_COMPOSE=${extras%,}
+	PERFILES_COMPOSE=${perfiles%,}
+}
+
+dc() { docker "${DC_ARGS[@]}" "$@"; }
+
+# Identificador del contenedor en marcha de un servicio (vacío si no está en marcha).
+contenedor() { docker ps -q --filter "$ETIQUETA" --filter "label=com.docker.compose.service=$1" 2>/dev/null | head -n1; }
+
+# necesitar SERVICIO: deja en CID el contenedor en marcha del servicio o termina con un mensaje claro.
+CID=""
+necesitar() {
+	CID=$(contenedor "$1")
+	[[ -n $CID ]] || morir "El servicio «$1» no está en marcha. Arráncalo con: sudo cidia arrancar"
+}
+
+ip_principal() {
+	local ip=""
+	ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}') || true
+	if [[ -z $ip ]]; then ip=$(hostname -I 2>/dev/null | awk '{print $1}') || true; fi
+	printf '%s' "${ip:-127.0.0.1}"
+}
+
+# Direcciones de la instalación: URL_LOCAL (para comprobar desde este equipo) y
+# URL_PORTATILES (la que se escribe en el instalador de los portátiles; vacía si solo local).
+calcular_urls() {
+	local host=127.0.0.1 direccion
+	IP_PUB=$(leer_var "$ENV_FILE" CIDIA_IP_PUBLICACION)
+	IP_PUB=${IP_PUB:-127.0.0.1}
+	PUERTO=$(leer_var "$ENV_FILE" CIDIA_PUERTO)
+	PUERTO=${PUERTO:-18700}
+	PUERTO_OLLAMA=$(leer_var "$ENV_FILE" CIDIA_PUERTO_OLLAMA)
+	PUERTO_OLLAMA=${PUERTO_OLLAMA:-18720}
+	PUERTO_ASR=$(leer_var "$ENV_FILE" CIDIA_PUERTO_ASR)
+	PUERTO_ASR=${PUERTO_ASR:-18721}
+	if [[ $IP_PUB != 0.0.0.0 && $IP_PUB != 127.0.0.1 ]]; then host=$IP_PUB; fi
+	URL_LOCAL="http://$host:$PUERTO"
+	direccion=$(leer_var "$ENV_FILE" CIDIA_DIRECCION)
+	if [[ $IP_PUB == 127.0.0.1 ]]; then
+		URL_PORTATILES=""
+	elif [[ $IP_PUB == 0.0.0.0 ]]; then
+		URL_PORTATILES="http://${direccion:-$(ip_principal)}:$PUERTO"
+	else
+		URL_PORTATILES="http://${direccion:-$IP_PUB}:$PUERTO"
+	fi
+}
+
+esperar_salud() {
+	local limite=${1:-240} t0=$SECONDS
+	while ((SECONDS - t0 < limite)); do
+		if curl -fsS -m 4 "$URL_LOCAL/salud" >/dev/null 2>&1; then
+			if ((INTERACTIVO)); then printf '\r\e[K'; fi
+			ok "CidIA responde en $URL_LOCAL ($((SECONDS - t0)) s)"
+			return 0
+		fi
+		if ((INTERACTIVO)); then printf '\r  … esperando a que el gateway responda (%d s)' "$((SECONDS - t0))"; fi
+		sleep 3
+	done
+	if ((INTERACTIVO)); then printf '\r\e[K'; fi
+	fallo "El gateway no responde en $URL_LOCAL/salud tras $limite s."
+	tenue "Últimas líneas del gateway:"
+	dc logs --tail 25 gateway 2>&1 | sed 's/^/    /' || true
+	return 1
+}
+
+# ----------------------------------------------------------------------------- modelos
+
+# Ollama muestra «modelo:latest» cuando no se indica etiqueta.
+normalizar_modelo() { awk 'NF { if ($0 !~ /:/) print $0 ":latest"; else print }'; }
+
+modelos_del_perfil() {
+	local perfil fich m
+	perfil=$(leer_var "$ENV_FILE" CIDIA_PERFIL)
+	fich=$DIR_DESP/perfiles/${perfil:-oracle}.env
+	for m in CIDIA_LLM_MODELO_CHAT CIDIA_LLM_MODELO_EMBEDDINGS CIDIA_LLM_MODELO_VISION; do
+		leer_var "$fich" "$m"
+		echo
+	done | { grep -E '^[A-Za-z0-9._/:-]+$' || true; } | normalizar_modelo | sort -u
+}
+
+# Modelos que necesita esta instalación: los del perfil y los locales permitidos en la app.
+modelos_necesarios() {
+	local cid
+	cid=$(contenedor postgres)
+	{
+		modelos_del_perfil
+		if [[ -n $cid ]]; then
+			docker exec "$cid" psql -U cidia -d cidia -tAc \
+				"SELECT DISTINCT ref FROM modelos_ia WHERE permitido AND ubicacion = 'local'
+				 AND coalesce(proveedor, 'ollama') = 'ollama' AND tipo IN ('chat', 'embeddings', 'vision')" 2>/dev/null || true
+		fi
+	} | sed 's/[[:space:]]//g' | { grep -E '^[A-Za-z0-9._/:-]+$' || true; } | normalizar_modelo | sort -u
+}
+
+# Modelos descargados: «nombre<TAB>tamaño».
+modelos_descargados() { docker exec "$1" ollama list 2>/dev/null | awk 'NR > 1 && NF >= 4 { print $1 "\t" $3 " " $4 }' || true; }
+
+orden_modelos() {
+	local sub=${1:-listar}
+	if (($#)); then shift; fi
+	necesitar ollama
+	case $sub in
+	listar | lista | ls) modelos_listar ;;
+	descargar | pull) modelos_descargar "$@" ;;
+	borrar | rm) modelos_borrar "$@" ;;
+	*) morir "Uso: cidia modelos [listar | descargar [modelo…] | borrar <modelo> [--forzar]]" ;;
+	esac
+}
+
+modelos_listar() {
+	local descargados necesarios perfil nombre tam marca
+	titulo "Modelos de IA"
+	descargados=$(modelos_descargados "$CID")
+	necesarios=$(modelos_necesarios)
+	perfil=$(modelos_del_perfil)
+	if [[ -z $descargados ]]; then
+		aviso "No hay ningún modelo descargado."
+	else
+		while IFS=$'\t' read -r nombre tam; do
+			marca="no lo usa CidIA"
+			if grep -qxF "$nombre" <<<"$perfil"; then
+				marca="perfil"
+			elif grep -qxF "$nombre" <<<"$necesarios"; then
+				marca="permitido en la app"
+			fi
+			ok "$(printf '%-28s %10s   %s' "$nombre" "$tam" "$marca")"
+		done <<<"$descargados"
+	fi
+	while read -r nombre; do
+		if [[ -n $nombre ]] && ! grep -q "^$nombre"$'\t' <<<"$descargados"; then
+			fallo "Falta $nombre. Descárgalo con: sudo cidia modelos descargar"
+		fi
+	done <<<"$necesarios"
+	return 0
+}
+
+modelos_descargar() {
+	local lista=("$@") m fallidos=0 descargados
+	if ((${#lista[@]} == 0)); then
+		descargados=$(modelos_descargados "$CID")
+		while read -r m; do
+			if [[ -n $m ]] && ! grep -q "^$m"$'\t' <<<"$descargados"; then lista+=("$m"); fi
+		done < <(modelos_necesarios)
+		if ((${#lista[@]} == 0)); then
+			ok "Todos los modelos que necesita CidIA ya están descargados."
+			return 0
+		fi
+	fi
+	for m in "${lista[@]}"; do
+		[[ $m =~ ^[A-Za-z0-9._/:-]+$ ]] || morir "Nombre de modelo no válido: $m"
+		info "Descargando $m (puede tardar varios minutos)…"
+		if ((INTERACTIVO)); then
+			docker exec -it "$CID" ollama pull "$m" || fallidos=$((fallidos + 1))
+		elif [[ -n $REGISTRO ]]; then
+			docker exec "$CID" ollama pull "$m" >>"$REGISTRO" 2>&1 || fallidos=$((fallidos + 1))
+		else
+			docker exec "$CID" ollama pull "$m" >/dev/null 2>&1 || fallidos=$((fallidos + 1))
+		fi
+		if docker exec "$CID" ollama show "$m" >/dev/null 2>&1; then
+			ok "$m descargado"
+		else
+			fallo "No se ha podido descargar $m"
+		fi
+	done
+	((fallidos == 0)) || morir "Han fallado $fallidos descargas. Comprueba la conexión a Internet y el espacio en disco."
+}
+
+modelos_borrar() {
+	local m=${1:-} forzar=0
+	if [[ ${2:-} == --forzar ]]; then forzar=1; fi
+	[[ -n $m ]] || morir "Indica el modelo: sudo cidia modelos borrar <modelo>"
+	[[ $m =~ ^[A-Za-z0-9._/:-]+$ ]] || morir "Nombre de modelo no válido: $m"
+	m=$(normalizar_modelo <<<"$m")
+	if ((!forzar)) && modelos_necesarios | grep -qxF "$m"; then
+		morir "CidIA usa $m (perfil o modelos permitidos en la app). Si aun así quieres borrarlo, añade --forzar."
+	fi
+	if ! confirmar "¿Borrar el modelo $m del servidor?" n; then
+		info "No se ha borrado nada."
+		return 0
+	fi
+	docker exec "$CID" ollama rm "$m" >/dev/null 2>&1 || morir "Ollama no ha podido borrar $m (¿está descargado? Compruébalo con: sudo cidia modelos)."
+	ok "Modelo $m borrado."
+}
+
+# ----------------------------------------------------------------------------- estado
+
+orden_estado() {
+	local perfil version cid servicios t0 ms nombre estado detalle tam necesarios modelos ids gid
+	local libre total datos_t copias_t ultima
+	calcular_urls
+	perfil=$(leer_var "$ENV_FILE" CIDIA_PERFIL)
+	printf '%sCidIA · estado del servidor%s  %s(%s)%s\n' "$C_N" "$C_R" "$C_T" "$DIR" "$C_R"
+
+	titulo "Instalación"
+	info "Perfil: ${perfil:-oracle} · modelos: $(modelos_del_perfil | paste -sd ' ' | sed 's/ / · /g')"
+	info "Compose: docker-compose.yml${EXTRAS_COMPOSE:+ + $EXTRAS_COMPOSE}${PERFILES_COMPOSE:+ · perfiles: $PERFILES_COMPOSE}"
+	if [[ ,$PERFILES_COMPOSE, == *,espacio,* && -e /var/run/docker.sock ]]; then
+		gid=$(leer_var "$ENV_FILE" CIDIA_DOCKER_GID)
+		if [[ ${gid:-120} != "$(stat -c %g /var/run/docker.sock)" ]]; then
+			aviso "El espacio de trabajo no podrá usar Docker: CIDIA_DOCKER_GID=${gid:-120} y el socket es del grupo $(stat -c %g /var/run/docker.sock)."
+			tenue "Corrígelo en $ENV_FILE (o vuelve a ejecutar el instalador) y aplica con: sudo cidia arrancar"
+		fi
+	fi
+	if [[ -n $URL_PORTATILES ]]; then
+		info "Publicado en la red local ($IP_PUB:$PUERTO)"
+		info "Dirección para los portátiles: $C_N$URL_PORTATILES$C_R"
+		info "Navegador: $URL_PORTATILES/app/"
+	else
+		info "Solo local (127.0.0.1:$PUERTO): los portátiles no llegan. Para publicarlo: sudo cidia abrir-puerto"
+	fi
+	if [[ -d $REPO/.git ]] && command -v git >/dev/null; then
+		version=$(git -c safe.directory="$REPO" -C "$REPO" log -1 --format='%h · %cd' --date=format:'%d/%m/%Y %H:%M' 2>/dev/null) || true
+		if [[ -n $version ]]; then info "Código: commit $version"; fi
+	fi
+
+	titulo "Servicios"
+	servicios=$(docker ps -a --filter "$ETIQUETA" --format '{{.Label "com.docker.compose.service"}}\t{{.State}}\t{{.Status}}' | sort) || true
+	if [[ -z $servicios ]]; then
+		fallo "No hay contenedores de CidIA. Arráncalos con: sudo cidia arrancar"
+	else
+		while IFS=$'\t' read -r nombre estado detalle; do
+			if [[ $estado == running && $detalle != *unhealthy* ]]; then
+				ok "$(printf '%-16s %s' "$nombre" "$detalle")"
+			elif [[ $estado == running ]]; then
+				aviso "$(printf '%-16s %s' "$nombre" "$detalle")"
+			else
+				fallo "$(printf '%-16s %s' "$nombre" "$detalle")"
+			fi
+		done <<<"$servicios"
+	fi
+
+	titulo "Salud"
+	t0=$(date +%s%N)
+	if curl -fsS -m 5 "$URL_LOCAL/salud" >/dev/null 2>&1; then
+		ms=$((($(date +%s%N) - t0) / 1000000))
+		version=$(curl -fsS -m 5 "$URL_LOCAL/api/sistema/info" 2>/dev/null | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p') || true
+		ok "Gateway: responde en $ms ms${version:+ · CidIA $version}"
+	else
+		fallo "Gateway: no responde en $URL_LOCAL/salud. Mira los registros: sudo cidia registros gateway"
+	fi
+	if version=$(curl -fsS -m 5 "http://127.0.0.1:$PUERTO_OLLAMA/api/version" 2>/dev/null); then
+		ok "Modelos (Ollama): responde · versión $(sed -n 's/.*"version":"\([^"]*\)".*/\1/p' <<<"$version")"
+	else
+		fallo "Modelos (Ollama): no responde en 127.0.0.1:$PUERTO_OLLAMA"
+	fi
+	if version=$(curl -fsS -m 5 "http://127.0.0.1:$PUERTO_ASR/health" 2>/dev/null); then
+		ok "Voz (asr): responde · modelo $(sed -n 's/.*"modelo":"\([^"]*\)".*/\1/p' <<<"$version")"
+	else
+		aviso "Voz (asr): no responde en 127.0.0.1:$PUERTO_ASR"
+	fi
+	cid=$(contenedor postgres)
+	if [[ -n $cid ]] && docker exec "$cid" pg_isready -U cidia -d cidia >/dev/null 2>&1; then
+		ok "Base de datos: acepta conexiones"
+	else
+		fallo "Base de datos: no acepta conexiones"
+	fi
+
+	titulo "Recursos"
+	ids=$(docker ps -q --filter "$ETIQUETA" | paste -sd ' ') || true
+	if [[ -n $ids ]]; then
+		# shellcheck disable=SC2086  # lista de identificadores separados por espacios
+		docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}' $ids 2>/dev/null | sort |
+			awk -F'\t' 'BEGIN { printf "    %-22s %8s   %-24s %7s\n", "CONTENEDOR", "CPU", "MEMORIA (uso / límite)", "%" }
+				{ printf "    %-22s %8s   %-24s %7s\n", $1, $2, $3, $4 }' || true
+	fi
+	read -r libre total < <(df -P -B1 "$DIR" | awk 'NR == 2 { print $4, $2 }')
+	datos_t=$(du -sb "$DIR/datos" 2>/dev/null | cut -f1) || true
+	copias_t=$(du -sb "$COPIAS" 2>/dev/null | cut -f1) || true
+	info "Disco ($DIR): $(legible "$libre") libres de $(legible "$total") · datos $(legible "${datos_t:-0}") · copias $(legible "${copias_t:-0}")"
+	info "Memoria del equipo: $(LC_ALL=C free -b | awk '/^Mem/ { printf "%.1f GB disponibles de %.1f GB", $7 / 1e9, $2 / 1e9 }' | sed 's/\./,/g')"
+	if command -v nvidia-smi >/dev/null && nvidia-smi -L >/dev/null 2>&1; then
+		nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits |
+			while IFS=, read -r nombre usada total uso temp; do
+				info "GPU: $nombre · memoria ${usada// /} / ${total// /} MiB · uso ${uso// /} % · ${temp// /} °C"
+			done
+	fi
+
+	titulo "Modelos"
+	cid=$(contenedor ollama)
+	if [[ -z $cid ]]; then
+		fallo "Ollama no está en marcha."
+	else
+		modelos=$(modelos_descargados "$cid")
+		necesarios=$(modelos_necesarios)
+		if [[ -n $modelos ]]; then
+			while IFS=$'\t' read -r nombre tam; do
+				if grep -qxF "$nombre" <<<"$necesarios"; then
+					ok "$(printf '%-28s %10s' "$nombre" "$tam")"
+				else
+					info "$(printf '%-28s %10s   (no lo usa CidIA)' "$nombre" "$tam")"
+				fi
+			done <<<"$modelos"
+		fi
+		while read -r nombre; do
+			if [[ -n $nombre ]] && ! grep -q "^$nombre"$'\t' <<<"$modelos"; then
+				fallo "Falta $nombre → sudo cidia modelos descargar"
+			fi
+		done <<<"$necesarios"
+		# ollama ps: NOMBRE ID TAMAÑO(2) PROCESADOR(2) …  -> «modelo (100% GPU)»
+		modelos=$(docker exec "$cid" ollama ps 2>/dev/null | awk 'NR > 1 && NF >= 6 { print $1 " (" $5 " " $6 ")" }' | paste -sd ',' | sed 's/,/, /g') || true
+		if [[ -n $modelos ]]; then tenue "Cargados ahora: $modelos"; else tenue "Ningún modelo cargado en memoria ahora mismo."; fi
+	fi
+
+	titulo "Copias de seguridad"
+	ultima=$(listar_copias | tail -n1)
+	if [[ -n $ultima ]]; then
+		info "Última copia: $ultima ($(du -sh "$COPIAS/$ultima" 2>/dev/null | cut -f1)) · copias guardadas: $(listar_copias | wc -l)"
+	else
+		aviso "Todavía no hay copias. Haz una con: sudo cidia copia"
+	fi
+	return 0
+}
+
+# ----------------------------------------------------------------------------- operaciones
+
+orden_registros() {
+	local seguir=() lineas=200 servicio=() con_lineas=0
+	while (($#)); do
+		case $1 in
+		-f | --seguir) seguir=(-f) ;;
+		-n | --lineas)
+			lineas=${2:?falta el número de líneas}
+			con_lineas=1
+			shift
+			;;
+		-*) morir "Opción desconocida: $1" ;;
+		*) servicio+=("$1") ;;
+		esac
+		shift
+	done
+	[[ $lineas =~ ^[0-9]+$ ]] || morir "El número de líneas no es válido."
+	# De todos los servicios a la vez, 200 líneas de cada uno serían demasiadas para leer.
+	if ((${#servicio[@]} == 0 && !con_lineas && lineas > 60)); then lineas=60; fi
+	dc logs --tail "$lineas" --timestamps "${seguir[@]}" "${servicio[@]}"
+}
+
+orden_reiniciar() {
+	titulo "Reiniciando ${1:-todos los servicios}"
+	dc restart "$@"
+	calcular_urls
+	esperar_salud 180 || exit 1
+}
+
+orden_parar() {
+	confirmar "Los portátiles no podrán usar CidIA hasta que lo vuelvas a arrancar. ¿Parar los servicios?" s || return 0
+	titulo "Parando CidIA"
+	dc stop
+	ok "Servicios parados (los datos se conservan). Para arrancar: sudo cidia arrancar"
+}
+
+orden_arrancar() {
+	titulo "Arrancando CidIA"
+	dc up -d
+	calcular_urls
+	esperar_salud 240 || exit 1
+	if [[ -n $URL_PORTATILES ]]; then info "Dirección para los portátiles: $URL_PORTATILES"; fi
+	return 0
+}
+
+orden_actualizar() {
+	local sin_copia=0 antes despues ayuda_pull
+	if [[ ${1:-} == --sin-copia ]]; then sin_copia=1; fi
+	titulo "Actualizar CidIA"
+	if [[ -d $REPO/.git ]]; then
+		command -v git >/dev/null || morir "Falta git: sudo apt-get install -y git"
+		antes=$(git -c safe.directory="$REPO" -C "$REPO" rev-parse --short HEAD)
+		info "Descargando cambios del repositorio…"
+		git -c safe.directory="$REPO" -C "$REPO" pull --ff-only ||
+			morir "No se ha podido actualizar el código (¿cambios locales o sin acceso al repositorio?). Revisa: git -C $REPO status"
+		despues=$(git -c safe.directory="$REPO" -C "$REPO" rev-parse --short HEAD)
+		if [[ $antes == "$despues" ]]; then info "El código ya estaba al día ($despues)."; else ok "Código actualizado: $antes → $despues"; fi
+	else
+		aviso "$REPO no es un repositorio git: no se descargan cambios."
+		tenue "Para traer una versión nueva, cópiala encima (por ejemplo, con su instalar-servidor.sh y --dir $DIR)."
+		confirmar "¿Reconstruir y reiniciar CidIA con el código que hay ahora?" s || return 0
+	fi
+	if ((!sin_copia)) && confirmar "¿Hacer antes una copia de seguridad? (recomendado)" s; then
+		orden_copia
+	fi
+	chmod +x "$DIR_DESP/cidia" "$DIR_DESP/instalar-servidor.sh" "$DIR_DESP"/postgres/initdb/*.sh 2>/dev/null || true
+	titulo "Descargando imágenes y reconstruyendo"
+	ayuda_pull=$(dc pull --help 2>/dev/null) || true
+	if grep -q -- --ignore-buildable <<<"$ayuda_pull"; then
+		dc pull --ignore-buildable
+	else
+		dc pull --ignore-pull-failures || true
+	fi
+	dc build --pull
+	titulo "Aplicando la nueva versión"
+	dc up -d
+	calcular_urls
+	esperar_salud 300 || exit 1
+	if [[ -n $(contenedor ollama) ]]; then orden_modelos listar; fi
+}
+
+# ----------------------------------------------------------------------------- copias de seguridad
+#
+# Cada copia es una carpeta copias/cidia-AAAAMMDD-HHMMSS con cidia.dump (pg_dump), weknora.dump
+# (si existe esa base), datos.tar.gz, configuracion.tar.gz (secretos y perfil local), info.txt y
+# SHA256SUMS. Contienen secretos: la carpeta copias/ es solo para root (700).
+
+listar_copias() {
+	[[ -d $COPIAS ]] || return 0
+	find "$COPIAS" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | { grep -E "$PATRON_COPIA" || true; } | sort
+}
+
+COPIA_PARCIAL=""
+# shellcheck disable=SC2329  # se invoca desde la trampa EXIT
+borrar_parcial() { if [[ -n $COPIA_PARCIAL && -d $COPIA_PARCIAL ]]; then rm -rf -- "$COPIA_PARCIAL"; fi; }
+
+orden_copia() {
+	local conservar="" nombre tam_bd tam_datos libre rc conf=() todas=() sobran i umask_previa perfil f
+	while (($#)); do
+		case $1 in
+		--conservar)
+			conservar=${2:?falta el número de copias}
+			shift
+			;;
+		*) morir "Opción desconocida: $1" ;;
+		esac
+		shift
+	done
+	[[ -z $conservar || $conservar =~ ^[1-9][0-9]*$ ]] || morir "--conservar necesita un número mayor que 0."
+	necesitar postgres
+	nombre="cidia-$(date +%Y%m%d-%H%M%S)"
+	titulo "Copia de seguridad $nombre"
+	mkdir -p "$COPIAS"
+	chmod 700 "$COPIAS"
+
+	tam_bd=$(docker exec "$CID" psql -U cidia -d postgres -tAc \
+		"SELECT coalesce(sum(pg_database_size(datname)), 0) FROM pg_database WHERE datname IN ('cidia', 'weknora')" 2>/dev/null | tr -d '[:space:]') || true
+	tam_datos=$(du -sb "$DIR/datos" 2>/dev/null | cut -f1) || true
+	libre=$(df -P -B1 "$COPIAS" | awk 'NR == 2 { print $4 }')
+	[[ $tam_bd =~ ^[0-9]+$ ]] || tam_bd=0
+	[[ $tam_datos =~ ^[0-9]+$ ]] || tam_datos=0
+	if ((tam_bd + tam_datos > libre)); then
+		morir "No hay espacio en $COPIAS: hacen falta hasta $(legible $((tam_bd + tam_datos))) y quedan $(legible "$libre")."
+	fi
+
+	COPIA_PARCIAL="$COPIAS/.$nombre.parcial"
+	trap borrar_parcial EXIT # si algo falla, solo se borra la carpeta parcial de esta copia
+	mkdir -m 700 "$COPIA_PARCIAL"
+	umask_previa=$(umask)
+	umask 077
+	docker exec "$CID" pg_dump -U cidia -d cidia -Fc >"$COPIA_PARCIAL/cidia.dump" ||
+		morir "pg_dump de la base «cidia» ha fallado."
+	ok "Base de datos cidia ($(legible "$(stat -c %s "$COPIA_PARCIAL/cidia.dump")"))"
+	if [[ $(docker exec "$CID" psql -U cidia -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'weknora'" 2>/dev/null) == 1 ]]; then
+		docker exec "$CID" pg_dump -U cidia -d weknora -Fc >"$COPIA_PARCIAL/weknora.dump" ||
+			morir "pg_dump de la base «weknora» ha fallado."
+		ok "Base de datos weknora ($(legible "$(stat -c %s "$COPIA_PARCIAL/weknora.dump")"))"
+	fi
+	rc=0
+	tar -C "$DIR" --warning=no-file-changed -czf "$COPIA_PARCIAL/datos.tar.gz" datos || rc=$?
+	((rc <= 1)) || morir "No se ha podido empaquetar $DIR/datos."
+	ok "Ficheros de datos/ ($(legible "$(stat -c %s "$COPIA_PARCIAL/datos.tar.gz")"))"
+	conf=(secretos)
+	perfil=$(leer_var "$ENV_FILE" CIDIA_PERFIL)
+	for f in generico "$perfil"; do
+		if [[ -n $f && -f $DIR_DESP/perfiles/$f.env && ! " ${conf[*]} " == *" cidia/servidor/despliegue/perfiles/$f.env "* ]]; then
+			conf+=("cidia/servidor/despliegue/perfiles/$f.env")
+		fi
+	done
+	tar -C "$DIR" --exclude=secretos/admin-inicial.txt -czf "$COPIA_PARCIAL/configuracion.tar.gz" "${conf[@]}" ||
+		morir "No se ha podido empaquetar la configuración."
+	ok "Configuración y secretos"
+	calcular_urls
+	{
+		echo "# Copia de seguridad de CidIA"
+		echo "fecha=$(date '+%F %T %z')"
+		echo "equipo=$(hostname)"
+		echo "instalacion=$DIR"
+		echo "perfil=$(leer_var "$ENV_FILE" CIDIA_PERFIL)"
+		echo "version=$(curl -fsS -m 4 "$URL_LOCAL/api/sistema/info" 2>/dev/null | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+		if [[ -d $REPO/.git ]]; then echo "commit=$(git -c safe.directory="$REPO" -C "$REPO" rev-parse --short HEAD 2>/dev/null)"; fi
+	} >"$COPIA_PARCIAL/info.txt"
+	(cd "$COPIA_PARCIAL" && sha256sum -- *.dump *.tar.gz info.txt >SHA256SUMS)
+	umask "$umask_previa"
+	mv "$COPIA_PARCIAL" "$COPIAS/$nombre"
+	COPIA_PARCIAL=""
+	trap - EXIT
+	ok "Copia guardada en $COPIAS/$nombre ($(du -sh "$COPIAS/$nombre" | cut -f1))"
+	tenue "Contiene secretos: guárdala también fuera de este equipo (disco USB cifrado o NAS de la empresa)."
+
+	if [[ -n $conservar ]]; then
+		mapfile -t todas < <(listar_copias)
+		sobran=$((${#todas[@]} - conservar))
+		for ((i = 0; i < sobran; i++)); do
+			if [[ ${todas[i]} =~ $PATRON_COPIA ]]; then
+				rm -rf -- "${COPIAS:?}/${todas[i]}"
+				info "Copia antigua eliminada: ${todas[i]}"
+			fi
+		done
+	fi
+	return 0
+}
+
+orden_copias() {
+	local c n=0
+	titulo "Copias de seguridad en $COPIAS"
+	while read -r c; do
+		if [[ -z $c ]]; then continue; fi
+		n=$((n + 1))
+		info "$(printf '%-24s %8s' "$c" "$(du -sh "$COPIAS/$c" 2>/dev/null | cut -f1)")"
+	done < <(listar_copias)
+	if ((n == 0)); then aviso "No hay copias. Haz una con: sudo cidia copia"; fi
+	return 0
+}
+
+# Restaura una base en una base temporal y, solo si sale bien, sustituye la original.
+restaurar_bd() {
+	local bd=$1 fichero=$2 dueno=$3 tmpbd="${1}_restaurando"
+	docker exec "$CID" psql -v ON_ERROR_STOP=1 -U cidia -d postgres -q \
+		-c "DROP DATABASE IF EXISTS $tmpbd WITH (FORCE)" -c "CREATE DATABASE $tmpbd OWNER $dueno" >/dev/null
+	if ! docker exec -i "$CID" pg_restore -U cidia -d "$tmpbd" --single-transaction --exit-on-error <"$fichero"; then
+		docker exec "$CID" psql -U cidia -d postgres -q -c "DROP DATABASE IF EXISTS $tmpbd WITH (FORCE)" >/dev/null 2>&1 || true
+		return 1
+	fi
+	docker exec "$CID" psql -v ON_ERROR_STOP=1 -U cidia -d postgres -q \
+		-c "DROP DATABASE IF EXISTS $bd WITH (FORCE)" -c "ALTER DATABASE $tmpbd RENAME TO $bd" >/dev/null
+}
+
+orden_restaurar() {
+	local arg="" sin_copia=0 copia fecha="" parar=(gateway) l
+	while (($#)); do
+		case $1 in
+		--sin-copia) sin_copia=1 ;;
+		-*) morir "Opción desconocida: $1" ;;
+		*) arg=$1 ;;
+		esac
+		shift
+	done
+	if [[ -z $arg ]]; then
+		orden_copias
+		tenue "Uso: sudo cidia restaurar <copia>   (por ejemplo: sudo cidia restaurar $(listar_copias | tail -n1))"
+		return 0
+	fi
+	if [[ -d $arg ]]; then
+		copia=$(readlink -f "$arg")
+	elif [[ -d $COPIAS/$arg ]]; then
+		copia=$COPIAS/$arg
+	else
+		morir "No encuentro la copia «$arg». Lista las copias con: sudo cidia copias"
+	fi
+	[[ -f $copia/cidia.dump ]] || morir "$copia no parece una copia de CidIA (falta cidia.dump)."
+	titulo "Restaurar la copia $(basename "$copia")"
+	if [[ -f $copia/SHA256SUMS ]]; then
+		(cd "$copia" && sha256sum -c --quiet SHA256SUMS) || morir "La copia está dañada: las sumas de comprobación no coinciden."
+		ok "Copia íntegra (sumas SHA-256 correctas)"
+	fi
+	if [[ -f $copia/info.txt ]]; then
+		while read -r l; do tenue "$l"; done < <(sed -n 's/^\(fecha\|equipo\|perfil\|version\|commit\)=/\1: /p' "$copia/info.txt")
+	fi
+	if ! confirmar_palabra RESTAURAR "Se sustituirán la base de datos y la carpeta datos/ actuales por las de la copia."; then
+		info "No se ha cambiado nada."
+		return 0
+	fi
+	if ((!sin_copia)); then
+		info "Primero, una copia del estado actual por si hay que deshacer:"
+		orden_copia
+	fi
+
+	titulo "Restaurando"
+	if [[ -n $(contenedor weknora) ]]; then parar+=(weknora); fi
+	if [[ -n $(contenedor espacio-trabajo) ]]; then parar+=(espacio-trabajo); fi
+	dc stop "${parar[@]}"
+	dc up -d postgres
+	necesitar postgres
+	for _ in $(seq 1 30); do
+		if docker exec "$CID" pg_isready -U cidia -d postgres >/dev/null 2>&1; then break; fi
+		sleep 2
+	done
+	if ! restaurar_bd cidia "$copia/cidia.dump" cidia; then
+		dc up -d
+		morir "La restauración de la base «cidia» ha fallado; la base actual sigue intacta."
+	fi
+	ok "Base de datos cidia restaurada"
+	if [[ -f $copia/weknora.dump ]]; then
+		if [[ $(docker exec "$CID" psql -U cidia -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'weknora'") != 1 ]]; then
+			aviso "La copia trae la base de WeKnora, pero este servidor no tiene WeKnora instalado: se omite."
+		elif restaurar_bd weknora "$copia/weknora.dump" weknora; then
+			ok "Base de datos weknora restaurada"
+		else
+			aviso "No se ha podido restaurar la base de WeKnora; la actual sigue intacta."
+		fi
+	fi
+	if [[ -f $copia/datos.tar.gz ]]; then
+		fecha=$(date +%Y%m%d-%H%M%S)
+		if [[ -d $DIR/datos ]]; then mv "$DIR/datos" "$DIR/datos.previo-$fecha"; fi
+		tar -C "$DIR" -xzf "$copia/datos.tar.gz" datos
+		if ((EUID == 0)); then chown -R "$UID_DATOS:$UID_DATOS" "$DIR/datos"; fi
+		ok "Carpeta datos/ restaurada (la anterior queda en $DIR/datos.previo-$fecha)"
+	fi
+	dc up -d
+	calcular_urls
+	esperar_salud 240 || exit 1
+	ok "Restauración terminada."
+	tenue "Las sesiones abiertas se cierran: cada persona tendrá que volver a entrar."
+	if [[ -n $fecha ]]; then tenue "Cuando compruebes que todo está bien, puedes borrar $DIR/datos.previo-$fecha"; fi
+	return 0
+}
+
+# ----------------------------------------------------------------------------- administrador
+
+# Código que se ejecuta dentro del gateway para crear o restablecer la cuenta de administración.
+# La contraseña llega por la entrada estándar (nunca como argumento ni variable de entorno).
+read -r -d '' PY_ADMIN <<'PY' || true
+import sys
+
+from sqlalchemy import select, update
+
+from cidia import xapi
+from cidia.config import ajustes
+from cidia.db import sesion_bd
+from cidia.modelos import Nivel, Sesion, Usuario
+from cidia.seguridad import hash_contrasena
+
+modo = sys.argv[1]
+nombre = sys.argv[2] if len(sys.argv) > 2 else ""
+clave = sys.stdin.readline().strip()
+if len(clave) < 12:
+    print("RESULTADO ERROR La contraseña generada no es válida.")
+    sys.exit(1)
+
+with sesion_bd() as bd:
+    if nombre:
+        u = bd.scalar(select(Usuario).where(Usuario.usuario == nombre))
+        if u is None:
+            print(f"RESULTADO ERROR No existe la cuenta «{nombre}».")
+            sys.exit(2)
+        if u.rol != "admin":
+            print(f"RESULTADO ERROR «{nombre}» no es una cuenta de administración: cambia su contraseña desde la app.")
+            sys.exit(2)
+    else:
+        u = bd.scalar(select(Usuario).where(Usuario.rol == "admin").order_by(Usuario.activo.desc(), Usuario.id))
+    if modo == "crear" and u is not None:
+        print(f"RESULTADO EXISTE {u.usuario}")
+        sys.exit(0)
+    creado = u is None
+    if creado:
+        usuario = ajustes().admin_usuario
+        if bd.scalar(select(Usuario).where(Usuario.usuario == usuario)) is not None:
+            print(f"RESULTADO ERROR Ya existe una cuenta «{usuario}» que no es de administración.")
+            sys.exit(2)
+        nivel = bd.scalar(select(Nivel).order_by(Nivel.orden.desc()))
+        u = Usuario(usuario=usuario, nombre="Administración", rol="admin", nivel_id=nivel.id if nivel else None)
+        bd.add(u)
+    elif u.origen_identidad != "local":
+        print(f"RESULTADO ERROR La cuenta «{u.usuario}» se valida en el directorio de la empresa: cambia su contraseña allí.")
+        sys.exit(2)
+    u.hash_contrasena = hash_contrasena(clave)
+    u.activo = True
+    bd.flush()
+    if not creado:
+        bd.execute(update(Sesion).where(Sesion.usuario_id == u.id).values(revocada=True))
+    xapi.auditar(bd, None, "crear_administrador" if creado else "restablecer_contrasena", "usuario", u.id,
+                 {"usuario": u.usuario, "origen": "herramienta cidia del servidor"})
+    print(f"RESULTADO {'CREADO' if creado else 'RESTABLECIDO'} {u.usuario}")
+PY
+
+# Contraseña legible de 16 caracteres sin letras ambiguas (0/O, 1/l/I), en grupos de 4.
+generar_contrasena() {
+	local s=""
+	while ((${#s} < 16)); do
+		s+=$(head -c 48 /dev/urandom | base64 -w0 | tr -dc 'A-HJ-NP-Za-km-z2-9')
+	done
+	printf '%s-%s-%s-%s' "${s:0:4}" "${s:4:4}" "${s:8:4}" "${s:12:4}"
+}
+
+# ejecutar_admin MODO USUARIO CLAVE: deja en RES_ADMIN «CREADO|EXISTE|RESTABLECIDO usuario».
+RES_ADMIN=""
+ejecutar_admin() {
+	local salida="" errores mensaje
+	necesitar gateway
+	errores=$(mktemp)
+	if ! salida=$(printf '%s\n' "$3" | docker exec -i "$CID" python -c "$PY_ADMIN" "$1" "$2" 2>"$errores"); then
+		mensaje=$(grep '^RESULTADO ERROR' <<<"$salida" | sed 's/^RESULTADO ERROR //') || true
+		if [[ -z $mensaje ]]; then mensaje=$(tail -n 3 "$errores"); fi
+		if [[ -n $REGISTRO ]]; then cat "$errores" >>"$REGISTRO"; fi
+		rm -f "$errores"
+		morir "${mensaje:-No se ha podido cambiar la cuenta de administración.}"
+	fi
+	rm -f "$errores"
+	RES_ADMIN=$(grep '^RESULTADO ' <<<"$salida" | tail -n1 | sed 's/^RESULTADO //') || true
+	[[ -n $RES_ADMIN ]] || morir "Respuesta inesperada del gateway al cambiar la cuenta de administración."
+}
+
+orden_admin_restablecer() {
+	local usuario=${1:-} clave
+	titulo "Nueva contraseña de administración"
+	if ! confirmar "Se generará una contraseña nueva para ${usuario:-la cuenta de administración} y se cerrarán sus sesiones abiertas. ¿Continuar?" s; then
+		info "No se ha cambiado nada."
+		return 0
+	fi
+	clave=$(generar_contrasena)
+	ejecutar_admin restablecer "$usuario" "$clave"
+	if [[ $RES_ADMIN == CREADO* ]]; then
+		ok "No había ninguna cuenta de administración: se ha creado «${RES_ADMIN#* }»."
+	else
+		ok "Contraseña restablecida para «${RES_ADMIN#* }» (queda anotado en la auditoría)."
+	fi
+	printf '\n    Usuario:     %s%s%s\n    Contraseña:  %s%s%s\n\n' "$C_N" "${RES_ADMIN#* }" "$C_R" "$C_N" "$clave" "$C_R"
+	tenue "Se muestra solo esta vez. Cámbiala al entrar (menú de tu cuenta, «Cambiar contraseña»)."
+}
+
+# Uso interno del instalador: crea la cuenta de administración si no existe y deja la
+# contraseña en FICHERO (permisos 600). Imprime «CREADO usuario» o «EXISTE usuario».
+orden_admin_inicial() {
+	local fichero=${1:?falta el fichero} clave
+	clave=$(generar_contrasena)
+	ejecutar_admin crear "" "$clave"
+	if [[ $RES_ADMIN == CREADO* ]]; then
+		(
+			umask 077
+			cat >"$fichero" <<EOF
+Administrador inicial de CidIA (creado el $(date '+%d/%m/%Y a las %H:%M'))
+Usuario: ${RES_ADMIN#* }
+Contraseña: $clave
+
+Cámbiala al entrar por primera vez y después borra este fichero:
+  sudo rm $fichero
+EOF
+		)
+		chmod 600 "$fichero"
+	fi
+	printf '%s\n' "$RES_ADMIN"
+}
+
+# ----------------------------------------------------------------------------- red local
+
+orden_abrir_puerto() {
+	local ip=${1:-0.0.0.0} direccion perfil_local
+	[[ $ip == 0.0.0.0 || $ip =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || morir "Dirección de escucha no válida: $ip (usa 0.0.0.0 o una IPv4 de este equipo)."
+	if [[ $ip != 0.0.0.0 ]] && ! ip -4 -o addr show | grep -q " inet $ip/"; then
+		morir "La dirección $ip no pertenece a este equipo."
+	fi
+	calcular_urls
+	titulo "Publicar CidIA en la red local"
+	aviso "Cualquier equipo de la red podrá llegar a la pantalla de inicio de sesión de CidIA (puerto $PUERTO)."
+	tenue "Ollama, la voz y la base de datos siguen solo en este equipo. Limita el acceso a la red de la"
+	tenue "empresa con el cortafuegos (docs/manual-servidor.md, «Cortafuegos») y no lo abras nunca a Internet."
+	confirmar "¿Publicar el puerto $PUERTO en $ip?" s || return 0
+	poner_var "$ENV_FILE" CIDIA_IP_PUBLICACION "$ip"
+	direccion=$(leer_var "$ENV_FILE" CIDIA_DIRECCION)
+	if [[ -z $direccion || $direccion == 127.0.0.1 || $direccion == localhost ]]; then
+		if [[ $ip == 0.0.0.0 ]]; then direccion=$(ip_principal); else direccion=$ip; fi
+		poner_var "$ENV_FILE" CIDIA_DIRECCION "$direccion"
+	fi
+	calcular_urls
+	# La URL pública (registro de actividad) debe ser la misma que usan los portátiles.
+	poner_var "$ENV_FILE" CIDIA_URL_PUBLICA "$URL_PORTATILES"
+	perfil_local=$DIR_DESP/perfiles/generico.env
+	if [[ $(leer_var "$ENV_FILE" CIDIA_PERFIL) == generico && -f $perfil_local ]]; then poner_var "$perfil_local" CIDIA_URL_PUBLICA "$URL_PORTATILES"; fi
+	dc up -d gateway
+	calcular_urls
+	esperar_salud 180 || exit 1
+	ok "Publicado. Dirección para los portátiles: $C_N$URL_PORTATILES$C_R"
+}
+
+orden_cerrar_puerto() {
+	calcular_urls
+	titulo "Dejar CidIA solo en este equipo"
+	confirmar "Los portátiles dejarán de llegar al servidor. ¿Continuar?" s || return 0
+	poner_var "$ENV_FILE" CIDIA_IP_PUBLICACION 127.0.0.1
+	dc up -d gateway
+	calcular_urls
+	esperar_salud 180 || exit 1
+	ok "CidIA escucha solo en 127.0.0.1:$PUERTO (desde este equipo o por túnel SSH)."
+}
+
+# ----------------------------------------------------------------------------- ayuda y arranque
+
+uso() {
+	cat <<EOF
+${C_N}cidia${C_R}: administración del servidor CidIA (instalación en ${DIR:-/opt/cidia})
+
+Uso: sudo cidia [--dir CARPETA] [--si] <orden> [argumentos]
+
+  estado                           servicios, salud, recursos, modelos y última copia
+  registros [servicio] [-f] [-n N] registros (gateway, postgres, ollama, asr…); -f los sigue
+  reiniciar [servicio]             reinicia todos los servicios o uno
+  parar | arrancar                 para o arranca CidIA (los datos se conservan)
+  actualizar [--sin-copia]         git pull, construir y aplicar (con copia previa)
+  modelos [listar]                 modelos descargados y los que faltan
+  modelos descargar [modelo…]      descarga los que faltan (o los indicados)
+  modelos borrar <modelo> [--forzar]
+  copia [--conservar N]            copia de la base y de datos/ en copias/cidia-FECHA
+  copias                           lista las copias
+  restaurar <copia> [--sin-copia]  vuelve a una copia (antes guarda el estado actual)
+  admin-restablecer [usuario]      nueva contraseña para la cuenta de administración
+  abrir-puerto [IP]                publica CidIA en la red local (0.0.0.0 o una IP del equipo)
+  cerrar-puerto                    deja CidIA solo en este equipo (127.0.0.1)
+
+Opciones: --dir CARPETA (o la variable CIDIA_DIR) · --si responde que sí a las preguntas.
+Manual: docs/manual-servidor.md
+EOF
+}
+
+ORDEN_ORIGINAL=()
+main() {
+	local args=() orden
+	while (($#)); do
+		case $1 in
+		--dir)
+			DIR=${2:?falta la carpeta tras --dir}
+			shift
+			;;
+		--dir=*) DIR=${1#--dir=} ;;
+		--si | -y) SI=1 ;;
+		*) args+=("$1") ;;
+		esac
+		shift
+	done
+	ORDEN_ORIGINAL=("${args[@]}")
+	orden=${args[0]:-ayuda}
+	args=("${args[@]:1}")
+	detectar_dir
+	case $orden in
+	ayuda | -h | --ayuda | --help | help)
+		uso
+		return 0
+		;;
+	estado | status | registros | logs | reiniciar | restart | parar | stop | arrancar | start | actualizar | modelos) ;;
+	copia | backup | copias | restaurar | admin-restablecer | _admin-inicial | abrir-puerto | cerrar-puerto) ;;
+	*)
+		# Una orden mal escrita se rechaza antes de pedir sudo o hablar con Docker.
+		fallo "Orden desconocida: $orden"
+		uso
+		exit 2
+		;;
+	esac
+	command -v docker >/dev/null || morir "Docker no está instalado. Instala CidIA con instalar-servidor.sh."
+	preparar_acceso
+	preparar_compose
+	reg "orden: $orden ${args[*]}"
+	case $orden in
+	estado | status) orden_estado ;;
+	registros | logs) orden_registros "${args[@]}" ;;
+	reiniciar | restart) orden_reiniciar "${args[@]}" ;;
+	parar | stop) orden_parar ;;
+	arrancar | start) orden_arrancar ;;
+	actualizar) orden_actualizar "${args[@]}" ;;
+	modelos) orden_modelos "${args[@]}" ;;
+	copia | backup) orden_copia "${args[@]}" ;;
+	copias) orden_copias ;;
+	restaurar) orden_restaurar "${args[@]}" ;;
+	admin-restablecer) orden_admin_restablecer "${args[@]}" ;;
+	_admin-inicial) orden_admin_inicial "${args[@]}" ;;
+	abrir-puerto) orden_abrir_puerto "${args[@]}" ;;
+	cerrar-puerto) orden_cerrar_puerto ;;
+	*)
+		fallo "Orden desconocida: $orden"
+		uso
+		exit 2
+		;;
+	esac
+}
+
+# Todo el programa está dentro de main y la última línea llama a main y sale en la misma orden:
+# así, actualizar el propio script (git pull) no afecta a la ejecución en curso.
+main "$@"; exit $?

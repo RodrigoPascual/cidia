@@ -606,3 +606,51 @@ ffmpeg de BtbN (añadido en la verificación): la versión `latest` va cambiando
 * `/home/ubuntu/rclone-pcloud.log` ocupa unos 816 MB y crece; el journal, 4,0 GB. No es urgente con 112 GB libres, pero conviene saberlo.
 * Escuchan en `0.0.0.0` servicios que quizá no deberían estar expuestos: uvicorn en 8000, node en 4001-4005, cupsd en 631 y rpcbind en 111. Que sean accesibles desde fuera depende de la *security list* de Oracle, que no se ve desde dentro. CidIA no añade nada expuesto.
 * `unattended-upgrades` está activo y `live-restore` desactivado: una actualización de `docker.io` reinicia todos los contenedores. [Verificación: en la práctica no la hará `unattended-upgrades`, porque `docker.io` viene de `focal-updates`, que no está en `Allowed-Origins`, y no hay Ubuntu Pro. El riesgo es un `apt upgrade` manual.]
+
+---
+
+## Verificación
+
+Revisión escéptica del 9 de octubre de 2026, con las mismas reglas de solo lectura: en el servidor solo se usaron consultas (`uname`, `lscpu`, `free`, `docker info/ps/inspect/network inspect/system df`, `ss`, `sshd -T`, `iptables -S`, `apt-cache policy`, `pro status`) y `docker compose -f - config/ps` leyendo de la entrada estándar, sin escribir ficheros. Las fuentes se descargaron de nuevo de los repositorios oficiales: Ollama `v0.40.2` (commit `b061384d`), moby `v26.1.3`, speaches `v0.8.3`, postgres `REL_17_STABLE`, docker-library/postgres y pgvector. Para WeKnora se usó el clon `v0.8.2`. Tamaños, arquitecturas y licencias se consultaron en Docker Hub, ghcr.io, `registry.ollama.ai`, Hugging Face y PyPI.
+
+### Confirmado
+
+* **Sistema:** Ubuntu 20.04.6 con kernel `5.15.0-1081-oracle` aarch64 y 4 Neoverse-N1 a un hilo por núcleo, sin `sve`, `i8mm` ni `bf16` en `Features`. Memoria total de 23 989 MiB, sin swap. `/` con 112 GB libres. cgroups v1 híbrido (`cgroup2` solo en `/sys/fs/cgroup/unified`). PSI a 0 y ningún OOM-kill en 30 días.
+* **Docker:** 26.1.3 con `cgroupfs` y cgroups v1, `live-restore=false`, solo `runc` 1.1.12 y sin `/etc/docker/daemon.json`. Compose v2.35.1 y buildx v0.23.0. `ubuntu` está en el grupo `docker` y el socket es `root:docker 660`. LocalAI tiene 9 GiB, 3 CPU y 512 pids. Docker Hub da `ratelimit-limit: 100;w=3600` a la IP.
+* **Contenedores, redes y puertos:** 12 contenedores en marcha y los 4 `temporal*` (proyecto postiz) parados. Redes 172.17-172.23/16, y ninguna ruta ni red en 172.29. Ningún contenedor, red ni volumen tiene «cidia» en el nombre, y `/home/ubuntu/CidIA` está vacío. Los puertos en escucha coinciden con la tabla 3.1. El bloque 18700-18799 está libre en el servidor y en el PC.
+* **Cortafuegos y SSH:** `ufw` inactivo; `INPUT` con política ACCEPT y las 5 reglas citadas; `DOCKER-USER` con solo `RETURN`; reglas `MASQUERADE` antiguas de 172.30/16 y 192.168.144-160/20. `sshd -T`: `allowtcpforwarding yes`, `gatewayports no` y `permitopen any`.
+* **Host:** ffmpeg 4.2.7 con `--enable-gpl --enable-libx264`, python3 3.8.10, python3.10.13 y el miniconda del usuario. No están uv, psql, redis-cli, sqlite3 ni ollama.
+* **Ollama 0.40.2:** `discover/cpu_linux.go:15-20` y `:64-74` solo leen `memory.max` y `memory.current` de cgroup v2. `envconfig/config.go`: `OLLAMA_CONTEXT_LENGTH` en `:230`, `OLLAMA_NO_CLOUD` en `:238` (con `NoCloud()` en `:443-449`, que desactiva el proxy de modelos `:cloud`, `server/cloud_proxy.go`), `OLLAMA_NUM_PARALLEL=1` en `:277` y `OLLAMA_MAX_LOADED_MODELS` en `:279`. `-t` solo se pasa si `NumThread > 0` (`llm/llama_server.go:415-419`).
+* **moby 26.1.3:** `bridge_linux.go:1262-1263` y `default_gateway.go:177-187` dicen lo que el informe cita. Lo refuerzan `endpoint.go:609-611` (no programa la conectividad externa en redes internas) y `default_gateway.go:125`.
+* **WeKnora v0.8.2:** `skip_embedding` (`container.go:809-823`); los `container_name` de `docker-compose.yml:14, 44, 414, 533, 554, 658`; ParadeDB en `:532` y Qdrant v1.16.2 en `:657`; `go.mod:50` con go-client v1.18.1; `Dockerfile.app:137`; `APP_HOST`, `APP_PORT` y `APP_SCHEME` en `frontend/nginx.conf:78-205`, con `APP_HOST=app` por defecto en `frontend/docker-entrypoint.sh:33`. Existen todas las variables del borrador (`DB_*`, `RETRIEVE_DRIVER`, `QDRANT_HOST/PORT`, `REDIS_ADDR`, `DOCREADER_ADDR`, `OLLAMA_BASE_URL`, `WEKNORA_SANDBOX_DOCKER_ENABLED`, `DOCREADER_GRPC_MAX_WORKERS`). El almacenamiento por defecto es `local` en `/data/files`.
+* **Imágenes arm64 y tamaños** (Docker Hub y ghcr.io): weknora-app 546 MB, ui 32 MB, docreader 1520 MB, qdrant 1.16.2 71 MB y 1.18.2 69 MB, ollama 0.40.2 2806 MB, pgvector pg17 158 MB, redis 7-alpine (arm64 v8), python 3.12-slim-bookworm (arm64 v8) y ParadeDB 502 MB. speaches `0.8.3-cpu` y `latest-cpu` tienen el mismo digest `sha256:21e3df06…` con amd64 y arm64. BtbN `ffmpeg-n8.1-latest-linuxarm64-lgpl-8.1.tar.xz` pesa 116 MB.
+* **Modelos** (manifiestos de `registry.ollama.ai`): qwen3:0.6b 523 MB, granite4:350m 708 MB, qwen3-embedding:0.6b 639 MB, ministral-3:3b 2954 MB y ministral-3:8b 6022 MB. Las capas de licencia de qwen3, granite4 y ministral-3 son Apache-2.0; la de gemma3 son los *Gemma Terms of Use*. ollama.com indica *vision* y *tools* para ministral-3.
+* **PyPI:** versiones, `requires_python ≥ 3.10` de `mcp` y `fastapi`, y ruedas `aarch64` o `py3-none-any` de todas las piezas citadas.
+* **Licencias:** Qdrant Apache-2.0, Ollama MIT, speaches MIT, ParadeDB AGPL-3.0, WeKnora MIT más terceros, y pgvector con PostgreSQL License (antes era inferencia).
+* **El borrador de compose** se volvió a validar en el servidor, ya corregido, con `--profile weknora --profile voz config`. `--profile '*'` activa los 9 servicios en compose v2.35.1. La suma de límites (3,5 / 6,3 / 7,8 / 8,3 GiB) y el peor caso de 12,8 GiB salen bien.
+
+### Corregido en el informe
+
+1. **Memoria de Ollama (6.5).** «Caben en 2,5 GiB con contexto 8192» era falso con alta probabilidad. La caché KV de cada Qwen3 0.6B ocupa unos 896 MiB con 8192 (fórmula de `llm/llama_server.go:2804`, y `num_ctx` por defecto en `api/types.go:1195`). El borrador pasa a `OLLAMA_CONTEXT_LENGTH=4096`, con un alias `cidia-embed` de `num_ctx 2048`.
+2. **Qué pasa con un OOM bajo cgroups v1 (1).** Normalmente el OOM-killer mata el subproceso `llama-server`, no el contenedor [inferencia]. Ollama tiene su propio rechazo («model is too large for system memory»), pero no salta porque cree tener 23 GiB.
+3. **`SYSTEM_AES_KEY` (6.1).** Debe medir exactamente 32 bytes (`openssl rand -hex 16`). Con `-hex 32`, WeKnora **desactiva el cifrado** sin fallar.
+4. **`REDIS_PASSWORD` faltaba** en la configuración de WeKnora, aunque Redis lleva `--requirepass`. Se añade al borrador interpolada desde `CIDIA_REDIS_PASSWORD`.
+5. **Secuencia de despliegue (6.8).** `docker compose exec/ps` sin `--env-file` fallan por las variables obligatorias; ahora todas las órdenes usan `$DC`. La «validación» de 6.4 se hizo con `env_file` y `required: false`: con la forma corta, `config` falla hasta que existan los ficheros.
+6. **Borrador:** *healthcheck* de docreader y de weknora (los mismos que usa WeKnora), `depends_on` de weknora-ui con `service_healthy` (su nginx resuelve `APP_HOST` al arrancar [inferencia]), `STORAGE_TYPE=local` y `GIN_MODE=release`.
+7. **Licencias de las dependencias del gateway (1).** `psycopg`/`psycopg-binary` son **LGPL-3.0-only** y ya están en `servidor/gateway/pyproject.toml`. Las ruedas de `opencv-python(-headless)` llevan FFmpeg LGPL-2.1. `scenedetect 0.7.1` depende de `opencv-python`, no de la variante *headless* (necesita `libGL` y trae Qt LGPL-3.0). Hay alternativas (`pg8000` BSD-3 o `asyncpg` Apache-2.0; detección de escenas con el ffmpeg externo) o hay que decidir aceptarlas.
+8. **Programas GPL en imágenes de terceros (6.4).** El `ffmpeg` de Ubuntu dentro de speaches es GPL (`debian/rules:30`), y docreader trae `antiword` (GPL) y `openjdk`. Solo importa si el instalador redistribuye las imágenes.
+9. **Licencia de `qwen3-embedding:0.6b`.** Su manifiesto en Ollama no tiene capa de licencia; Apache-2.0 se ha verificado en Hugging Face.
+10. **Protección de las migraciones de WeKnora.** `000059` y `000095` comprueban si existen la tabla o la extensión, no la variable, y `000008` también está protegida. *Trusted* de `pg_trgm` y `uuid-ossp`: ahora verificado.
+11. **`unattended-upgrades`.** No actualizará `docker.io`: viene de `focal-updates`, fuera de `Allowed-Origins`, y no hay Ubuntu Pro. El riesgo queda en un `apt upgrade` manual.
+12. **Docker rootless con cgroups v1:** ahora verificado en la documentación de Docker (antes era inferencia).
+13. **Añadidos:** el fallo de puertos en *loopback* que Docker 28.0.0 corrige (moby#49325), que lleva a pedir Docker ≥ 28 en el MSI; el SSRF de WeKnora con modelos remotos (`SSRF_WHITELIST=gateway`); la retención de las versiones de BtbN (fijar una compilación mensual y su SHA-256); y que `10-weknora.sh` debe ser ejecutable.
+
+### Sigue sin confirmar
+
+* Que las migraciones de WeKnora terminen con un rol que no sea superusuario. El análisis estático es favorable, pero no se ha ejecutado.
+* El consumo real de Ollama: si el runner de embeddings reserva la caché KV completa de `num_ctx`, los búferes de cálculo, la velocidad en Neoverse-N1 y si `PARAMETER num_thread` se acepta en un Modelfile (no está en la tabla de la documentación).
+* Que docreader arranque sin salida a Internet en `cidia-interna`. Su `CMD` es `uv run -m docreader.main` y el `pyproject.toml` no tiene grupo `dev`, así que no debería necesitar red [inferencia], pero no se ha probado.
+* La compatibilidad del servidor Qdrant 1.16.2 con go-client 1.18.1.
+* Lo que abre la *security list* de la VCN de OCI, y si el fallo de los puertos en *loopback* de Docker 26 se puede explotar dentro de una VCN.
+* El ahorro de una sola instancia de PostgreSQL frente a dos (150-250 MiB) y el reparto final de memoria. Todo debe medirse al levantar la fase 2.
+* La lectura legal de las LGPL y GPL dentro de imágenes y ruedas: aquí solo se describe qué contiene cada pieza; la decisión es del equipo.

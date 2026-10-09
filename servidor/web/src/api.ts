@@ -204,7 +204,7 @@ export async function* flujo(ruta: string, cuerpo: unknown, senal?: AbortSignal)
 
 /** Formatea fechas ISO en castellano. */
 export function fecha(iso?: string | null, conHora = false): string {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const d = new Date(iso)
   return d.toLocaleString('es-ES', conHora
     ? { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }

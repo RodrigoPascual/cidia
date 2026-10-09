@@ -50,6 +50,15 @@ class MotorConocimiento(ABC):
     def salud(self) -> dict[str, Any]:
         return {"ok": True}
 
+    def reetiquetar(self, bd: Session, doc: Documento) -> bool:
+        """Actualiza las etiquetas de permisos de un documento ya indexado. El motor propio
+        filtra por SQL y no necesita nada; un motor externo debe reetiquetar o reindexar."""
+        return True
+
+    def ambitos(self, bd: Session, alcance: Alcance) -> list[dict[str, Any]] | None:
+        """Bases y etiquetas del motor externo que corresponden a un alcance (depuración)."""
+        return None
+
 
 def fusion_rrf(listas: list[list[Any]], clave: Any, k: int = 60) -> dict[Any, float]:
     """Reciprocal Rank Fusion: suma 1/(k + posición) de cada elemento en cada lista."""

@@ -34,6 +34,13 @@ VERBOS: dict[str, tuple[str, str]] = {
     "certifico": (CIDIA + "nivel-iluo", "alcanzó el nivel"),
     "subio": (CIDIA + "subio", "subió"),
     "fotografio": (CIDIA + "fotografio", "fotografió"),
+    "valoro": (CIDIA + "valoro", "valoró"),
+    "configuro": (CIDIA + "configuro", "configuró"),
+    "borro": (CIDIA + "borro", "borró"),
+    "uso_modelo": (CIDIA + "uso-modelo", "usó el modelo"),
+    "probo_busqueda": (CIDIA + "probo-busqueda", "probó la búsqueda"),
+    "retiro": (CIDIA + "retiro", "retiró"),
+    "asigno": (CIDIA + "asigno", "asignó"),
 }
 
 

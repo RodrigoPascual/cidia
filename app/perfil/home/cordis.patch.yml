@@ -1,0 +1,116 @@
+# Capa home de CidIA ($DSH_HOME/cordis.patch.yml).
+#
+# La app la aplica después del patch del perfil y la interfaz NO puede cambiar lo que fija
+# (Ajustes rechaza esas escrituras). Es la configuración del producto: telemetría apagada,
+# servicios de DeepSeek apagados, un único proveedor de modelos (el servidor CidIA), modo de
+# agente sin herramientas locales, marca e idioma.
+#
+# Plantilla: el instalador sustituye {{GATEWAY_URL}}, {{MODELO}}, {{MODELO_NOMBRE}} y
+# {{CONTEXTO}}. Las direcciones se leen de $DSH_HOME/.env (CIDIA_*), con la del instalador
+# como respaldo: para cambiar de servidor basta con editar el .env y reiniciar CidIA.
+
+# --- Telemetría y analítica de producto -------------------------------------------------
+- id: session-telemetry-otel
+  disabled: true
+- id: desktop-product-telemetry
+  disabled: true
+- id: product-analytics
+  disabled: true
+
+# --- Servicios de DeepSeek ----------------------------------------------------------------
+- id: llm-deepseek
+  disabled: true
+- id: llm-deepseek-account
+  disabled: true
+- id: web-search-deepseek
+  disabled: true
+
+# --- Modos de agente con herramientas locales (preset-cidia lo inserta el bundle CidIA) ----
+- id: preset-standard
+  disabled: true
+- id: preset-ptc
+  disabled: true
+- id: preset-minimal
+  disabled: true
+- id: preset-cordis
+  disabled: true
+- id: agent-preset-registry
+  config:
+    default: cidia
+
+# --- Paneles que actúan sobre el PC -------------------------------------------------------
+- id: terminal-controller
+  disabled: true
+- id: ui-sidebar-terminal
+  disabled: true
+- id: ui-sidebar-files
+  disabled: true
+- id: ui-sidebar-browser
+  disabled: true
+- id: open-in-app
+  disabled: true
+- id: ui-open-in-app
+  disabled: true
+- id: cordis-host-runner
+  disabled: true
+- id: cordis-inspect-providers
+  disabled: true
+- id: ui-cordis
+  disabled: true
+
+# --- Ajustes que permitirían reconfigurar la app ------------------------------------------
+- id: ui-plugin-manager
+  disabled: true
+- id: ui-settings-plugins
+  disabled: true
+- id: ui-settings-plugin-inventory
+  disabled: true
+- id: ui-settings-shell
+  disabled: true
+- id: ui-settings-models
+  disabled: true
+- id: ui-settings-account
+  disabled: true
+
+# --- Servidor web local de la app ----------------------------------------------------------
+# La 0.2.0-rc.2 fija el puerto 19387 para su servidor local: con una DeepSeek Harness abierta en
+# el mismo equipo, CidIA no podría arrancar. Puerto 0 = el que asigne el sistema (la app lee el
+# real tras escuchar). Un patch con config sustituye la de la fila entera: se repite el resto.
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: 0
+    compression: gzip
+    compressionLevel: 1
+    compressionThresholdBytes: 1024
+
+# --- Marca e idioma ------------------------------------------------------------------------
+- id: ui-brand-official
+  disabled: true
+- id: locale
+  config:
+    preference: es
+
+# --- Servidor CidIA: plugin, proveedor de modelos único y modelo por defecto ----------------
+- id: cidia
+  config:
+    gatewayUrl: !!js "process.env.CIDIA_GATEWAY_URL || '{{GATEWAY_URL}}'"
+- id: llm-pi-ai
+  config:
+    providers:
+      cidia:
+        displayName: CidIA
+        api: openai-completions
+        baseURL: !!js "process.env.CIDIA_LLM_URL || '{{GATEWAY_URL}}/v1'"
+        apiKeyEnv: CIDIA_GATEWAY_TOKEN
+        compat:
+          supportsDeveloperRole: false
+          maxTokensField: max_tokens
+        models:
+          - id: '{{MODELO}}'
+            name: '{{MODELO_NOMBRE}}'
+            contextWindow: {{CONTEXTO}}
+- id: agent-default-model
+  config:
+    provider: cidia
+    model: '{{MODELO}}'

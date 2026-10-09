@@ -1,0 +1,7 @@
+{
+  "descripcion": "Servidor de pruebas (Oracle ARM) a través del túnel SSH local.",
+  "servidor": "http://127.0.0.1:18700",
+  "modelo": "qwen3:0.6b",
+  "modelo_nombre": "Qwen3 0.6B (pruebas)",
+  "contexto": 8192
+}

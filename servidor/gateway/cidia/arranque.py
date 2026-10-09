@@ -69,6 +69,10 @@ def preparar() -> None:
     valores_por_defecto()
     administrador_inicial()
     trabajos.marcar_interrumpidos()
+    from cidia.servicios.documentos import marcar_interrumpidos as documentos_interrumpidos
+
+    with sesion_bd() as bd:
+        documentos_interrumpidos(bd)
     if ajustes().crear_semilla:
         try:
             from cidia.semilla import sembrar_si_vacio

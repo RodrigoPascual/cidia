@@ -24,6 +24,7 @@ RUN set -eux; \
 # 3) Servicio
 FROM python:3.12-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 COPY --from=ffmpeg /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /usr/local/bin/
 COPY --from=ffmpeg /opt/ffmpeg/LICENSE.txt /usr/share/doc/ffmpeg-lgpl/LICENSE.txt
 WORKDIR /srv/cidia

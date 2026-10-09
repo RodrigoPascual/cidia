@@ -44,7 +44,7 @@ function Protegida({ servicio, children }: { servicio?: string; children: ReactN
 }
 
 function Rutas() {
-  const { perfil, cargando } = useSesion()
+  const { perfil, cargando, puede } = useSesion()
   if (cargando) return <Cargando texto="Conectando con CidIA…" />
   const p = (servicio: string | undefined, el: ReactNode) => <Protegida servicio={servicio}>{el}</Protegida>
   return (
@@ -73,7 +73,7 @@ function Rutas() {
           <Route path="instrucciones/:id" element={p('instrucciones', <EditorInstruccion />)} />
           <Route path="documentos" element={p('documentos', <Documentos />)} />
           <Route path="admin/organizacion" element={p('organizacion', <Organizacion />)} />
-          <Route path="admin/empleados" element={p('empleados', <Empleados />)} />
+          <Route path="admin/empleados" element={p(puede('empleados') ? 'empleados' : 'equipo', <Empleados />)} />
           <Route path="admin/modelos" element={p('modelos', <Modelos />)} />
           <Route path="admin/registro" element={p('registro', <Registro />)} />
           <Route path="admin/sistema" element={p('sistema', <Sistema />)} />
@@ -86,7 +86,7 @@ function Rutas() {
 
 export default function App() {
   return (
-    <BrowserRouter basename={BASE_APP}>
+    <BrowserRouter basename={BASE_APP} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Rutas />
     </BrowserRouter>
   )

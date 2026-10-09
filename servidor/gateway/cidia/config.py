@@ -47,9 +47,9 @@ class Ajustes(BaseSettings):
 
     # Conocimiento
     motor_conocimiento: str = "pgvector"  # pgvector | weknora
-    weknora_url: str = "http://weknora-app:8080/api/v1"
+    weknora_url: str = "http://weknora:8080/api/v1"
     weknora_api_key: str = ""
-    umbral_respaldo: float = 0.30  # similitud mínima para considerar que hay respaldo
+    umbral_respaldo: float = 0.40  # similitud mínima (qwen3-embedding: lo ajeno ronda 0,35 y lo relevante 0,6-0,8)
     fragmentos_por_consulta: int = 6
 
     # Espacio de trabajo del agente
@@ -63,6 +63,7 @@ class Ajustes(BaseSettings):
     crear_semilla: bool = False
     admin_usuario: str = "admin"
     admin_contrasena: str = ""  # si se define y no hay administrador, se crea
+    demo_contrasena: str = ""  # contraseña de los usuarios sintéticos de la semilla
     cors_origenes: list[str] = ["*"]
 
     @property

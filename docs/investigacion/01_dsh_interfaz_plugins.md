@@ -31,6 +31,7 @@ Investigación técnica: cómo construir los paneles de CidIA dentro de la app d
    - **`<webview>`:** Electron lo bloquea salvo que se use el navegador lateral oficial.
 6. **`fetch()` directo del renderer a otro origen es posible**, pero exige CORS en el gateway para el origen `dsh-app://app` y deja el token en el renderer. No lo recomendamos.
 7. **Recomendación: opción (a).** Paneles React en el cliente del plugin, que llaman a rutas `/cidia/*` del Host del mismo plugin; el Host hace de proxy autenticado hacia el gateway y guarda el token de sesión. Para casos puntuales sirve la pestaña «Navegador» del panel derecho (por ejemplo, la administración de WeKnora o un vídeo del servidor).
+   - **Límite de la pestaña «Navegador»** (corregido en la verificación): `openTab` **lanza error** si no hay una conversación en pantalla, y la hay solo cuando el área central muestra el chat. Desde un panel de CidIA hay que volver antes al chat (`selectPanel(null)`) con una conversación seleccionada. La alternativa simple es `window.open(url)`, que abre el navegador del sistema (§2.5).
    - Hay un **esqueleto probado** (Host + cliente) en el §8, con dos bancos de pruebas superados.
 
 ---
@@ -57,7 +58,7 @@ Investigación técnica: cómo construir los paneles de CidIA dentro de la app d
 ```
 
 - **En la rc.2 instalada:** la misma tabla aparece literalmente en `rc2:dsh-web-frontend/dist/assets/index-5SrrfWpU.js`, en la función que devuelve `{react:…, "react/jsx-runtime":…, …, "@deepseek-ai/dsh-client-ui-dockkit":…}`.
-- **Versión de React:** dsh declara `react ^18.2.0` (`packages/client/ui-schedule/package.json`). En la app es React 18 **[inferencia: 18.3.x]**.
+- **Versión de React:** dsh declara `react ^18.2.0` (`packages/client/ui-schedule/package.json`) y el lockfile fija `react@18.3.1` (`pnpm-lock.yaml:21042`). En la app es **React 18.3.1**, verificado en `rc2:dsh-web-frontend/dist/assets/index-5SrrfWpU.js` (`version:"18.3.1"`, `reconcilerVersion:"18.3.1-next-…"`).
 
 ### 1.3 Componentes reutilizables (ui-primitives)
 
@@ -73,7 +74,10 @@ Investigación técnica: cómo construir los paneles de CidIA dentro de la app d
 
 **Estilo:** se usan los tokens de tema `--dsw-alias-*`, los mismos que la app (`docs/web-styling.md:9,18`). Ejemplos: `--dsw-alias-bg-base`, `--dsw-alias-bg-layer-1`, `--dsw-alias-label-primary`, `--dsw-alias-label-tertiary`, `--dsw-alias-state-error-primary`, `--dsw-alias-border-l2`. Con ellos los paneles siguen solos el modo claro u oscuro.
 
-**CSS propio sin bundler:** un `<style>` creado **dentro del factory** queda etiquetado con `data-plugin=<id>`, y el cargador lo elimina al desactivar el plugin. Esto se ha verificado en `packages/client/modules/src/client/system.ts:67-86` (`untaggedStyles` y `claimStyles`) y en `entry-lifecycle.ts:23-28` (`removeOwnedStyles`).
+**CSS propio sin bundler:** un `<style>` creado **dentro del factory** queda etiquetado con `data-plugin=<id>`, y el cargador lo elimina cuando el módulo sale del grafo o se recarga. Esto se ha verificado en `packages/client/modules/src/client/system.ts:67-86` (`untaggedStyles` y `claimStyles`) y en `entry-lifecycle.ts:23-28` (`removeOwnedStyles`).
+
+- **Cuándo se borra:** al podar el módulo del grafo (`system.ts:461-466`, que además invalida la caché del factory), al recargarlo (`entries.ts:127,182`) o si el factory falla (`system.ts:316-317`).
+- **Si el `<style>` se crea fuera del factory**, por ejemplo en `apply`, no queda etiquetado y no se retira.
 
 ### 1.4 Comparación con `cidia-proveedores` (el plugin que ya funciona)
 
@@ -129,7 +133,9 @@ Cada slot tiene un tipo (*kind*) y un ámbito (*scope*):
 
 El ámbito es `root`, `session-maybe` o `session` (`slots.md:48-62`).
 
-**Opciones de registro:** `name`, `key` o `id`, `order`, `label` (texto o función: `ui-slots/src/index.ts:758`), `priority`, `locale`, `inject` y `children` (`ui-slots/src/index.ts:771-779`).
+**Opciones de registro:** `name`, `key` o `id`, `order`, `label` (texto o función: `ui-slots/src/index.ts:758`), `priority`, `locale`, `inject` y `children` (`ui-slots/src/index.ts:771-792`).
+
+**`priority` en `single`, `list` y `keyed`:** es un rango de sombreado, ascendente y con valor por defecto 0; se pinta la más baja (`index.ts:787-792`; `docs/subsystems/slots.md:62`). Un segundo registro en la misma celda y con la **misma** prioridad **lanza error** (`index.ts:1211-1231`).
 
 **Datos para los componentes:** se pasan con `inject: () => ({ …, hooks: { x: {getSnapshot, subscribe} } })`. El renderizador convierte cada clave de `hooks` en la prop `useX(selector)` (`slots.md:105`; nombre generado por `standardHookPropName`, `ui-slots/src/renderer.ts:42-44`). Los componentes no reciben `ctx` (`slots.md:79`).
 
@@ -175,7 +181,11 @@ El ámbito es `root`, `session-maybe` o `session` (`slots.md:48-62`).
 
 **Paneles según permisos.** Como la barra lateral se suscribe a los cambios del slot, se pueden **registrar y retirar paneles en vivo** al iniciar o cerrar sesión. El esqueleto del §8 lo hace y está probado. `ctx.slots.register` se envuelve solo en `ctx.effect` y devuelve un disposer (`ui-renderer/src/client/registry.ts:740-746`). `ctx.slots.inject(key, cb)` acepta que el callback devuelva un disposer o un iterable de disposers (`registry.ts:117, 194-209`).
 
-**Cabecera de los paneles.** Los paneles oficiales ponen `padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px))` y el atributo `data-window-drag` en la cabecera, para que se pueda arrastrar la ventana con la barra de título oculta de Windows (`ui-plugin-manager/src/client/PluginManagerPage.tsx:1420`, `PluginManagerPage.module.css:39`). El esqueleto hace lo mismo.
+**Cabecera de los paneles** (corregido en la verificación). Los paneles oficiales usan `padding-top: 28px` en todas las plataformas. **Solo en macOS** suman el margen del marco: `[data-platform='darwin'] .pageHead { padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px)) }` (`ui-plugin-manager/src/client/PluginManagerPage.module.css:23-40`; igual en `ui-schedule/.../TaskManagerPage.module.css:55-64`).
+
+- **Por qué:** en Windows, el marco ya deja libre la barra de título superpuesta mediante su propio relleno (`ui-layout/src/client/AppFrame.module.css:93-97`). Si se suma `--dsh-frame-top-clearance` también en Windows, el espacio superior queda duplicado.
+- **`data-window-drag`** se pone en la cabecera (`PluginManagerPage.tsx:1420`), pero solo hace efecto en macOS: `html[data-platform='darwin'] [data-window-drag] { -webkit-app-region: drag }` (`packages/client/web/src/base.css:55-57`). En Windows, el arrastre lo da la barra `titleBarOverlay` de Electron (`apps/desktop/src/main.ts:214-215`).
+- **El esqueleto del §8.4** se ha corregido para hacer lo mismo.
 
 ### 2.5 Panel derecho (`sidebar.right.pane.tab`)
 
@@ -190,11 +200,25 @@ ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sid
 
 **Limitación:** el ámbito es `session`, así que estas pestañas solo existen con una conversación abierta (`sidebar-right.md`, «All tabs require a foreground Session»). Sirven para acompañar al chat («qué paso toca», «evidencias»), no para las vistas principales.
 
+**Precisión de la verificación: «conversación en pantalla» significa que el área central muestra el chat.**
+
+- **Sin conversación en pantalla:** cuando hay un panel `main` activo (por ejemplo, `cidia.admin`), el servicio publica que no hay ninguna conversación en pantalla (`ui-sidebar-right/src/client/index.ts:136-149`). Además, el panel derecho se oculta (`shell/RightbarRoot.tsx:35`).
+- **Efecto en `openTab`:** en ese estado, `ctx.sidebarRight.openTab(...)` **lanza** `sidebarRight: no session surface is mounted` (`service.ts:332-335, 723-733`).
+- **Desde un panel de CidIA:** primero `ctx.layout.selectPanel(null)` (con una conversación ya seleccionada) y después `openTab`. Para algo externo y puntual es más sencillo `window.open(url)`: `setWindowOpenHandler` lo abre en el navegador del sistema (`main.ts:239-242`).
+
 ### 2.6 Marca (logo)
 
-- **Logo oficial:** `ui-brand-official` registra `sidebar.brand.mark` y `sidebar.brand.name` con prioridad 0 (`packages/client/ui-brand-official/src/client/index.ts:16-23`). En la rc.2 se registra siempre: `rc2:dsh-client-ui-brand-official/lib/client.js:36-37`.
-- **Cómo imponer el de CidIA:** registrar con `priority: -10` en los slots `single`; gana la prioridad más baja (`ui-slots/src/index.ts:771`). Sin ningún ocupante, la barra lateral pinta el pez `FishLogo` (`SidebarRoot.tsx:189, 225`).
-- **Título de la ventana:** viene de la compilación (`ui-layout/src/client/DocumentTitle.tsx`, prop `productTitle`) y del `<title>DeepSeek Harness</title>` de `dsh-web-frontend/dist/index.html`. **Un plugin no lo cambia**; se cubre en el rebrand compilado de la fase 4.
+- **Logo oficial:** `ui-brand-official` registra `sidebar.brand.mark` y `sidebar.brand.name` con prioridad 0 (`packages/client/ui-brand-official/src/client/index.ts:16-23`).
+  - **En el código fuente** solo lo hace si `process.env.DSH_CLIENT_BUILD_PROFILE === 'official'` (`index.ts:17`).
+  - **En la rc.2**, que es compilación oficial, la condición está eliminada y se registra siempre: `rc2:dsh-client-ui-brand-official/lib/client.js:35-40`.
+- **Cómo imponer el de CidIA** (dos vías verificadas):
+  - registrar con `priority: -10` en los slots `single`, porque gana la prioridad más baja (`ui-slots/src/index.ts:787-792`);
+  - o desactivar la fila oficial en el patch del perfil. En la rc.2 su id es `ui-brand-official` (`rc2:web-app.patch.yml:317-319`), y se desactiva con `- id: ui-brand-official` + `disabled: true`, el mismo formato que `rc2:web-app.patch.yml:447-448`.
+  - Sin ningún ocupante, la barra lateral pinta el pez `FishLogo` (`SidebarRoot.tsx:189, 225`) y el texto `t('brand.localBuild')` = «DSH Local Build» (`SidebarRoot.tsx:228-230`; `packages/client/locale/src/locales/en.ts:36`). Por eso hay que registrar siempre la marca CidIA.
+- **Título de la ventana:**
+  - **Origen:** `productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')` (`ui-layout/src/client/AppFrame.tsx:233`). En la rc.2 es la constante `"DeepSeek Harness"` (`rc2:dsh-client-ui-layout/lib/client.js:298`), y además está el `<title>DeepSeek Harness</title>` de `dsh-web-frontend/dist/index.html`.
+  - **Con un plugin:** no hay API para cambiarlo. Electron no fija el título: `main.ts` no tiene `page-title-updated`, así que la ventana sigue a `document.title`. Un plugin podría reescribirlo con un `MutationObserver`, pero `DocumentTitle` lo repone en cada cambio de conversación **[inferencia; no recomendado]**.
+  - **Se cubre en el rebrand compilado de la fase 4:** compilar con `DSH_CLIENT_TITLE=CidIA`.
 
 ### 2.7 Otras formas de ocupar toda la pantalla
 
@@ -219,7 +243,7 @@ ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sid
 
   En consecuencia, no hay `frame-src`, `connect-src` ni `default-src` que restrinjan.
 - **CSP que sí existen en el código, ninguna afecta a CidIA:**
-  - ventanas internas de Electron: `apps/desktop/renderer/*.html:6`;
+  - ventanas internas de Electron: `apps/desktop/renderer/*.html`, en la línea 6 (u 11 en `policy-login-loading.html`);
   - vista previa de HTML del panel derecho, con un `frame-src 'none'` que se aplica **dentro de su iframe**: `ui-sidebar-documentpreview/src/client/html/basic-document.ts:18-19`;
   - respuestas de medios: `api/session-controller/src/media-references.ts:19`.
 - **`session.webRequest` del `defaultSession`:** solo reescribe las cabeceras de `ws://127.0.0.1/*` hacia el Host (`apps/desktop/src/main.ts:710-721`). No añade CSP ni bloquea otros orígenes.
@@ -245,9 +269,9 @@ ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sid
 
 | Técnica | ¿Funciona? | Detalle |
 |---|---|---|
-| `<iframe src="http://srv:8080/…">` en un panel del plugin | **Sí, técnicamente** [inferencia: no probado en la app] | Sin CSP y sin contenido mixto. Pero: (1) el destino no debe enviar `X-Frame-Options` ni `frame-ancestors` restrictivos (el frontal de WeKnora envía `X-Frame-Options "SAMEORIGIN"`, `WeKnora/frontend/nginx.conf:33`); (2) las cookies del servidor son de terceros en el iframe: con `SameSite=Lax` (el valor por defecto) no se envían, y `SameSite=None` exige `Secure`, o sea HTTPS; (3) no hereda tema, fuente ni atajos, y obliga a un segundo inicio de sesión. |
+| `<iframe src="http://srv:8080/…">` en un panel del plugin | **Sí, técnicamente** [inferencia: no probado en la app] | Sin CSP y sin contenido mixto. Pero: (1) el destino no debe enviar `X-Frame-Options` ni `frame-ancestors` restrictivos. El frontal de WeKnora 0.8.2 envía `X-Frame-Options "SAMEORIGIN"` (`WeKnora/frontend/nginx.conf:33, 96, 107`). Sus páginas de widget `/embed/*` usan en su lugar un `frame-ancestors` configurable por canal (`nginx.conf:60-73`), pero solo admite orígenes `http(s)` o `*` (`internal/embedpolicy/origin.go:11-27`), así que no se puede autorizar `dsh-app://app`; **[inferencia]** `*` tampoco lo cubriría, porque en CSP3 `*` no coincide con esquemas que no sean HTTP(S). (2) Las cookies del servidor son de terceros en el iframe: con `SameSite=Lax` (el valor por defecto) no se envían, y `SameSite=None` exige `Secure`, o sea HTTPS. (3) No hereda tema, fuente ni atajos, y obliga a un segundo inicio de sesión. (4) El micrófono no funciona dentro de un iframe: el permiso exige el marco principal (`microphone-permissions.ts:25`). |
 | `<webview>` propio | **No** | `webviewTag` está activo, pero `will-attach-webview` cancela cualquier `webview` sin un *lease* que se pide por IPC al puente interno `dshDesktop.browser` (`apps/desktop/src/browser-guests.ts:72-93`). Usar ese puente desde un plugin es usar una API interna no documentada. |
-| Pestaña «Navegador» oficial del panel derecho | **Sí** | `ctx.sidebarRight.openTab('browser', { params: { url } })`: el tipo `browser` admite `params.url` (`ui-sidebar-browser/src/client/index.ts:33-36`; `definition.tsx:9`; `rc2:dsh-client-ui-sidebar-browser/lib/client.js:1430`). En escritorio usa un `webview` aislado: partición propia, permisos denegados, sin descargas, y solo bloquea el puerto del Host local (`browser-guests.ts:141-169`). Muestra la barra de direcciones y requiere una conversación abierta. Sirve para abrir la administración de WeKnora o un vídeo, no como interfaz principal. |
+| Pestaña «Navegador» oficial del panel derecho | **Sí** | `ctx.sidebarRight.openTab('browser', { params: { url } })`: el tipo `browser` admite `params.url` (`ui-sidebar-browser/src/client/index.ts:33-36`; `definition.tsx:9`; `rc2:dsh-client-ui-sidebar-browser/lib/client.js:1430`). En escritorio usa un `webview` aislado: partición propia, permisos denegados, sin descargas, y solo bloquea el puerto del Host local (`browser-guests.ts:141-169`). Muestra la barra de direcciones y requiere una conversación **en pantalla**. Con un panel `main` de CidIA activo, `openTab` lanza error (§2.5). Solo existe en escritorio: en `dsh web` la fila está desactivada (`rc2:web-app.patch.yml:277-280`). Sirve para abrir la administración de WeKnora o un vídeo, no como interfaz principal. |
 | Navegar toda la ventana a la SPA | **No** | `will-navigate` lo impide y lo abre fuera (`main.ts:303-311`). |
 
 ---
@@ -260,6 +284,10 @@ ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sid
   - El gateway tendría que responder `Access-Control-Allow-Origin: dsh-app://app` y atender los *preflight* de `POST` JSON.
 - **Permisos de Chromium:** el `defaultSession` concede todos los permisos que no son de medios: `if (permission !== 'media') { callback(true) }` (`apps/desktop/src/microphone-permissions.ts:23-24`).
   - **[inferencia]** Si Electron 44 pidiera permiso de *Local Network Access* para IPs privadas, se concedería sin preguntar.
+  - **Medios (añadido en la verificación):** el permiso `media` solo se concede si se pide **exactamente** `['audio']` desde el marco principal `dsh-app://app` (`microphone-permissions.ts:23-30`; igual en `rc2:lib/main.js:6279-6295`).
+    - **Cámara:** `getUserMedia({ video })` se **deniega** en el renderer.
+    - **Pantalla:** el `defaultSession` no tiene `setDisplayMediaRequestHandler`; solo lo tiene la sesión del navegador lateral (`browser-guests.ts:145`). **[inferencia]** `getDisplayMedia` fallará.
+    - **Consecuencia para «Captura»:** el plugin puede grabar audio, pero el vídeo tiene que llegar como fichero (subida desde otro dispositivo) o capturarse en el Host con `ffmpeg` como programa externo.
   - Hay un indicio de que funciona: la app ya abre su WebSocket desde `dsh-app://app` contra `ws://127.0.0.1` (`main.ts:689, 710-721`).
 - **Conclusión:** es posible, pero hay que configurar CORS para un origen no estándar y **el token del gateway quedaría en el renderer**. Además se duplicaría la lógica de URL y reconexión. **No lo recomendamos** si el Host del plugin puede hacer de proxy (§5 y §6).
 
@@ -290,14 +318,15 @@ Host      http://127.0.0.1:<puerto aleatorio>  (apps/desktop-host/src/index.ts:3
 |---|---|---|---|---|---|
 | **Ruta HTTP propia** (recomendada) | `ctx.webServer.register({ kind: 'prefix', path: '/cidia', handler(req, res) })` | `fetch('cidia/…')` | La comprueba el plugin con `ctx.connection.requestRejection(req)` (Host de loopback, Origin y cookie) | Cualquier método, streaming, subidas, descargas, SSE | `packages/host/webserver` (`web-server.md:111-124`); `rc2:dsh-host-webserver/lib/index.js:177-187`; `rc2:dsh-client-connection/lib/index.js:586-589`; valla en `api-request-trust.ts:91-121` |
 | **Canal RPC propio** | `ctx.connection.rpc.handle('/cidia-rpc', async (endpoint, payload, signal) => ({ ok: true, value }))` | `ctx.connection.rpc.call('/cidia-rpc', 'endpoint', payload, signal)` → `{ ok, value }` o `{ ok:false, error }` | La hace Connection (`admit`) | Solo `POST` JSON, con búfer | `packages/client/connection/src/rpc-host.ts:84-90, 170-195`; cliente en `client/rpc.ts:34-70`; `rc2:…/lib/index.js:573-578, 641-657` y `rc2:…/lib/client.js:1212-1224` |
-| Ruta Fetch exacta bajo `/api` | `ctx.connection.fetch.register({ path: '/api/cidia/x', methods: ['GET','POST'], requestBody: 'buffered', fetch: async (request) => Response })` | `fetch('api/cidia/x')` | La hace Connection | Ruta **exacta**, sin prefijo | `rpc.ts:137-163`; `rpc-host.ts:96-101, 152-168`; `rc2:…/lib/index.js:581-584, 625-639` |
-| `ctx.remote.<ns>` (`@Remote` / Typert) | Exige generar código en tiempo de compilación | — | — | — | **No sirve para plugins de terceros**: el cliente solo monta lo que incluye `@deepseek-ai/dsh-api-remotes` (`docs/api-gateway.md:78`; `docs/cookbook/adding-a-remote-api.md:92, 105`). |
+| Ruta Fetch exacta bajo `/api` | `ctx.connection.fetch.register({ path: '/api/cidia/x', methods: ['GET','POST'], requestBody: 'buffered', fetch: async (request) => Response })` | `fetch('api/cidia/x')` | La hace Connection | Ruta **exacta**, sin prefijo; solo `GET`, `HEAD` y `POST` (`rpc.ts:138`) | `rpc.ts:137-163`; `rpc-host.ts:96-101, 152-168`; `rc2:…/lib/index.js:581-584, 625-639` |
+| `ctx.remote.<ns>` (`@Remote` / Typert) | Exige generar código en tiempo de compilación | `ctx.remote.$mount(contribución)` | La hace Connection (`/api`) | RPC tipado | **Posible, pero poco práctico para CidIA** (corregido en la verificación). Un plugin de cliente fuera del ensamblado `@deepseek-ai/dsh-api-remotes` puede montar su propia contribución con `ctx.remote.$mount(...)`: `api/gateway/src/client/index.ts:202-210`, presente en `rc2:dsh-api-gateway/lib/client.js:1636`. Lo hace el plugin experimental `client-ui-voice-input` (`src/client/mount.ts:61`). Pero exige `typert.host.js` y `typert.remote-client.js` generados con la cadena de compilación del monorepo dsh (`docs/cookbook/adding-a-remote-api.md:92-105`; `docs/api-gateway.md:78`). |
 | Ajustes como buzón (el truco actual) | `ctx.settings.update` + sondeo | `remote.settings.mutate` | — | Valores en `cordis.patch.yml` de `~/.dsh` | `cidia-proveedores/suscripcion/index.js:6-11, 76-79`. Funciona, pero escribe en el perfil y tiene latencia. |
 
 **Detalles verificados:**
 
 - **Registro de rutas:** `ctx.webServer.register` **no** se ata solo al ciclo de vida del plugin (`rc2:dsh-host-webserver/lib/index.js:177-187` devuelve un disposer sin más). Hay que envolverlo en `ctx.effect(...)`. `rpc.handle` y `fetch.register` sí usan `owner.effect` internamente (`rc2:…/connection/lib/index.js:625-657`).
-- **Interceptor de `/api`:** `ctx.connection.rpc.intercept('/api', …)` **no está disponible**. Solo admite un interceptor por canal y lo ocupa el gateway Typert (`rpc-host.ts:197-217`).
+- **Interceptor de `/api`:** `ctx.connection.rpc.intercept('/api', …)` **no está disponible**. Solo admite un interceptor por canal (`rpc-host.ts:197-219`) y lo ocupa el gateway Typert (`packages/api/gateway/src/index.ts:234`).
+- **`rpc.handle` usa internamente `owner.webServer.register`** (`rpc-host.ts:191-194`; `rc2:…/connection/lib/index.js:656`). Además, el canal debe cumplir `/^\/[A-Za-z0-9._~-]+$/` y no puede ser `/api` (`rc2:…/lib/index.js:549, 756`). **[Recomendación, no probado]** En la variante RPC, declarar `inject: ['connection', 'webServer']` para que el plugin espere a ambos servicios.
 - **Rutas con nombre:** las rutas `exact` y `prefix` tienen prioridad sobre el fallback de la SPA (`web-server.md:27`). `/cidia` no choca con nada de dsh.
 
 ### 5.3 Ejemplo mínimo verificado (ruta HTTP)
@@ -350,7 +379,9 @@ const result = await ctx.connection.rpc.call('/cidia-rpc', 'ping', { n: 1 })   /
 - **Entorno de ejecución:** el Host corre en el Node 24 de la app (`resources/runtime/primary-runtime/runtime.json`: `"node": "24.21.0"`), que trae `fetch`, `AbortSignal.timeout`, `Readable.fromWeb` y `toWeb`. `cidia-proveedores/suscripcion` ya ejecuta código de red en el Host a través de `ctx.authorization`.
 - **Proxy corporativo:** dsh instala una política global para el `fetch` de Node a partir de `HTTP(S)_PROXY` y `NO_PROXY`. El tráfico de loopback va directo (`packages/util/http-proxy/README.md:12, 32`; `src/policy.ts:33`).
   - **Consecuencia:** en una empresa con proxy, el instalador debe añadir el host del gateway a `NO_PROXY`.
-- **Probado (§8.4):** la versión completa del proxy, con JSON, cuerpo `POST`, SSE en streaming, propagación de cancelación, 401 y gateway caído.
+- **Probado (§8.5):** la versión completa del proxy, con JSON, cuerpo `POST`, SSE en streaming, 401 y gateway caído.
+  - **Corrección de la verificación:** la propagación de cancelación (`res.on('close')` → `abort`) **está en el código pero no la cubre** `test-host.mjs`; queda sin probar.
+  - **Proxy en Escritorio:** el `runProfile` del Host de escritorio (`apps/desktop-host/src/index.ts:25`) es el de `apps/cli/src/profile-boot.ts`, que importa `installProxyFromEnvironment` (`profile-boot.ts:36`). La política sale de **variables de entorno** (`install.ts:95`). En el paquete no hay código que lea el proxy del sistema de Windows (WinINET/WinHTTP). Por tanto, el instalador debe definir `HTTP(S)_PROXY` y `NO_PROXY` cuando la empresa use proxy.
 
 ---
 
@@ -372,6 +403,9 @@ const result = await ctx.connection.rpc.call('/cidia-rpc', 'ping', { n: 1 })   /
 **Decisión: (a).** Cumple «interfaces claras, bonitas y muy fluidas» porque usa los componentes y el tema de la propia app. Encaja con «cada servicio es un plugin de la app» y «la administración va dentro de la misma app». Y mantiene el gateway como única fuente de verdad sin exponer tokens.
 
 **Complemento (c′).** Para pantallas de terceros que ya existen y solo usa un administrador, como la consola de WeKnora, basta abrir la pestaña oficial del navegador del panel derecho: `ctx.sidebarRight.openTab('browser', { params: { url } })`. No hace falta un iframe propio.
+
+- **Matiz de la verificación:** solo funciona con el chat en pantalla (§2.5) y solo en escritorio.
+- **Desde el panel «Administración»,** lo más directo es `window.open(url)`, que abre el navegador del sistema.
 
 ### 7.2 Arquitectura propuesta
 
@@ -577,7 +611,8 @@ window.__ModuleLoader__.load({
     const style = document.createElement('style')
     style.textContent = `
       .cidia-page { height: 100%; overflow: auto; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); }
-      .cidia-head { padding: calc(28px + var(--dsh-frame-top-clearance, 0px)) clamp(24px, 5vw, 48px) 16px; }
+      .cidia-head { padding: 28px clamp(24px, 5vw, 48px) 16px; }
+      [data-platform='darwin'] .cidia-head { padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px)); }
       .cidia-head h1 { margin: 0; font-size: 22px; font-weight: 600; }
       .cidia-body { max-width: 960px; padding: 0 clamp(24px, 5vw, 48px) 48px; }
       .cidia-card { padding: 16px 20px; border-radius: 16px; background: var(--dsw-alias-bg-layer-1); margin-bottom: 12px; }
@@ -761,6 +796,10 @@ En este PC, con Node 22.23.2, sin instalar nada y sin tocar la app ni `~/.dsh`:
     - con permiso `admin` aparece «Administración»;
     - al cerrar sesión quedan solo los paneles públicos;
     - `renderToStaticMarkup` de todas las vistas, con `useCidia` generado como lo hace dsh, sin avisos de React.
+- **Repetición en la verificación (2026-10-09):** las dos pruebas se han vuelto a ejecutar y pasan.
+  - **Entorno:** Node 22.23.2 y React/react-dom 18.3.1, leídos en solo lectura de `Desktop/01_PROYECTOS_PERSONALES/Estrat2025-main/node_modules`.
+  - **Código probado:** el de este informe, que ya incluye la corrección del CSS de cabecera del §2.4. Sin contar los comentarios de cabecera, coincide línea a línea con `scratchpad/test-cidia-ui/plugin/{index,client}.js`.
+  - **No cubierto:** la cancelación hacia el gateway.
 - **No probado:** la carga dentro de la app real, porque esta fase no permite tocar `~/.dsh`. **Es el primer paso de la fase siguiente:** instalar `cidia-ui` en un perfil de pruebas como se instaló `cidia-proveedores` y comprobar `fetch('cidia/session')` con DevTools (`devTools: true`, `main.ts:236`).
 
 ---
@@ -773,6 +812,121 @@ En este PC, con Node 22.23.2, sin instalar nada y sin tocar la app ni `~/.dsh`:
 4. **El gateway viaja por HTTP en la LAN**, incluidas las credenciales del login. Para la fase con empresa: TLS en el gateway, o al menos red aislada, y `NO_PROXY` en entornos con proxy.
 5. **Subidas grandes (vídeo de captura).** Con (a) el fichero pasa por renderer → Electron → Host → gateway. Funciona en streaming, pero si el vídeo se graba en local es mejor que el Host lo suba **directamente desde disco**, en otra ruta `/cidia/subir`, con progreso por SSE.
 6. **La API REST de paneles del gateway está por definir.** El esqueleto usa rutas de ejemplo.
-7. **El rebrand completo no se consigue solo con plugins.** El título de la ventana (`productTitle`, `<title>` de `dsh-web-frontend`), el instalador y los textos de dsh en inglés y chino requieren el rebrand compilado (fase 4) o parches del frontal; queda fuera de este informe. Los slots de marca sí cubren el logo y el nombre de la barra lateral y del estado vacío del chat.
-8. **La interfaz de dsh no tiene castellano** (`ctx.locale.register` con `zh` y `en`). Los textos de CidIA van en castellano directamente en el plugin. Hay que decidir si se aporta un diccionario `es` a los espacios de nombres de dsh.
-9. **Las secciones oficiales «Plugins» y «Tareas»** seguirán en la barra lateral salvo que el patch de perfil las desactive (`disabled: true` en `ui-plugin-manager` y `ui-schedule`). Hay que decidir qué ve un trabajador frente a un administrador.
+7. **El rebrand completo no se consigue solo con plugins.** El título de la ventana (`productTitle`, `<title>` de `dsh-web-frontend`), el instalador y los textos de dsh en inglés y chino requieren el rebrand compilado (fase 4) o parches del frontal; queda fuera de este informe. Los slots de marca sí cubren el logo y el nombre de la barra lateral, y el **logo** del estado vacío del chat.
+
+- **`conversation.hero.brand.mark`:** recibe `{ size, className }` (`ui-conversation/src/client/contract/slots.ts:445-450`). El titular «Into the Unknown» y la etiqueta de vista previa salen de `ui-conversation/src/client/locales.ts:453`.
+- **Textos de dsh:** se pueden sustituir con el paquete de idioma del punto 8.
+8. **La interfaz de dsh no trae castellano** (`LOCALE_IDS = ['zh', 'en']`, `packages/client/locale/src/locale-settings.ts:15`). Los textos de CidIA van en castellano directamente en el plugin.
+   - **Corrección de la verificación:** dsh **sí admite paquetes de idioma externos sin recompilar**. Un plugin de cliente con `inject: ['locale']` hace `ctx.locale.addLanguage({ id: 'es', label: 'Español', fallback: 'en' })` y `ctx.locale.register('<ns>', 'es', { … })` por cada espacio de nombres.
+   - **Comportamiento:** lo que no esté traducido cae clave a clave al inglés. Está documentado en `packages/client/locale/README.md:44-61, 94` y presente en la rc.2 (`rc2:dsh-client-locale/lib/client.js:1297` y `1387`).
+   - **También sirve para el rebrand de textos:** las cadenas en inglés con «DeepSeek» (unas 40 en `ui-settings-account`, `ui-settings-models`, `ui-settings-web-search`, `ui-plugin-manager`… según `grep` en sus `locales.ts`) se pueden sobrescribir en el diccionario `es`.
+   - **Lo que no cubre:** los menús y diálogos del proceso principal de Electron (`main.ts`, `locale.messages.*`).
+9. **Las secciones oficiales «Plugins» y «Tareas»** seguirán en la barra lateral salvo que el patch de perfil las desactive. Hay que decidir qué ve un trabajador frente a un administrador.
+   - **Ids verificados:** «Plugins» es la fila `ui-plugin-manager` (`rc2:web-app.patch.yml:300-301`). «Tareas» (`ui-schedule`) solo aparece si el perfil incluye el bundle experimental `dsh-experimental-schedule-bundle` (su `cordis.patch.yml` inserta `time-context`, `schedule` y `ui-schedule`), que no forma parte de la composición web por defecto.
+   - **Desactivar una fila:** `- id: <fila>` + `disabled: true`.
+10. **Captura de vídeo desde la app** (añadido en la verificación): el renderer solo puede pedir **audio** (§4), así que el servicio de captura no puede usar la cámara ni grabar la pantalla desde el panel.
+
+---
+
+## Verificación
+
+Revisión escéptica hecha el 2026-10-09 sobre:
+
+- el clon `dsh-v0.2.1-alpha.1`;
+- los ficheros de la 0.2.0-rc.2 extraídos en solo lectura de `app.asar` (`scratchpad/rc2/…` y `asar.mjs`);
+- `runtime.json` y `version` de la app instalada;
+- el clon de WeKnora v0.8.2;
+- el código de Chromium `main` en googlesource.
+
+No se ha modificado la app, `~/.dsh` ni nada del sistema. **No se ha accedido al servidor Oracle**, porque este informe no hace afirmaciones sobre él. Solo se han reejecutado, con Node local, los dos bancos de pruebas del §8.
+
+### Confirmado
+
+- **Secciones de la app.** Una sección necesita `sidebar.panellist` (list · root · `{size, active}`) y `main` (keyed · root) con el mismo id:
+  - `ui-sidebar/src/client/contract/slots.ts:31-35, 69-75`;
+  - `ui-layout/src/client/index.ts:69-73`;
+  - `AppFrame.tsx:42`;
+  - en la rc.2: `dsh-client-ui-sidebar/lib/client.js:487-521` y `dsh-client-ui-layout/lib/client.js:601-620`.
+
+  `selectPanel` lanza error si falta `main` (`service.ts:72-77`; `rc2 …/ui-layout/lib/client.js:463`). Al retirar el panel activo se vuelve al chat (`stores.ts:97-101`).
+- **Carga de módulos de cliente:**
+  - `__ModuleLoader__.load({id, factory})` (`manifest.ts:316-327`);
+  - tabla base (`platform.ts:8-14`);
+  - envoltorio de compilación (`tsdown.client.ts:615-622`);
+  - semántica de `dsh.client.immediately` e `inject` (`packages/client/AGENTS.md:144`);
+  - `ctx.slots.inject` con disposer o iterable (`ui-renderer/src/client/registry.ts:117, 194-209`) y `register` envuelto en `ctx.effect` (`registry.ts:740-746`).
+- **Ruta HTTP propia del plugin:**
+  - **Registro:** `ctx.webServer.register({kind:'prefix', path, handler(req,res)})` devuelve un disposer **no** atado al ciclo de vida y lanza error si la ruta está duplicada (`webserver/src/index.ts:166-173`; `rc2 …/dsh-host-webserver/lib/index.js:177-184`).
+  - **El handler recibe `req.url` completo:** el prefijo no se recorta (`index.ts:225-228, 319-325`). Las respuestas SSE no se comprimen con gzip (`index.ts:97`).
+  - **Autenticación:** `requestRejection` devuelve `401 | 403 | undefined` (`rpc.ts:104`; `rpc-host.ts:104-107`; `rc2 …/connection/lib/index.js:586-589`). La valla de Host, `sec-fetch-site` y Origin está en `api-request-trust.ts:91-121`.
+- **Reenvío de Electron:**
+  - **Servido en local:** solo `/`, `/index.html`, `/assets/*`, `/favicon.svg` y `/manifest.webmanifest` (`main.ts:662-676`).
+  - **Todo lo demás va al Host:** `forwardWebRequest` quita `host`, `origin`, `cookie` y `sec-fetch-site`, pone la cookie del Host, mantiene el streaming (`duplex: 'half'`) y no devuelve `set-cookie` (`web-document.ts:77-93`).
+  - **En la rc.2:** idéntico (`rc2:lib/main.js:11542-11551, 7462-7476`).
+- **Ruta relativa `fetch('cidia/…')`:** el documento siempre es `dsh-app://app/`. No hay `pushState` en los paquetes de cliente ni `<base>` en el `index.html` de la rc.2. dsh usa el mismo patrón (`connection/src/client/rpc.ts:48`).
+- **Sin CSP en el documento principal**, ni en el código fuente ni en la rc.2. Chromium solo aplica la regla de contenido mixto con `https`: `ShouldTreatURLSchemeAsRestrictingMixedContent` devuelve `scheme == "https"` (`scheme_registry.cc`, rama `main`).
+- **Electron y entorno de ejecución:**
+  - **`webPreferences`:** `contextIsolation`, `sandbox`, `webSecurity: true` y `devTools: true` (`main.ts:229-237`).
+  - **Esquema `dsh-app`:** `standard`, `secure`, `supportFetchAPI`, `corsEnabled`, `stream` y `codeCache` (`main.ts:132-142`).
+  - **Navegación y ventanas nuevas:** `will-navigate` en `main.ts:303-311`; `setWindowOpenHandler` en `main.ts:239-242`.
+  - **`<webview>`:** bloqueado sin *lease* (`browser-guests.ts:71-92`).
+  - **Permisos:** los que no son de medios se conceden (`microphone-permissions.ts:23-24`).
+  - **Versiones:** Node `24.21.0` (`runtime.json`) y Electron `44.0.0` (fichero `version`).
+- **Proxy saliente:** `fetch` de Node con política global a partir de `HTTP(S)_PROXY` y `NO_PROXY`, con *loopback* siempre directo (`http-proxy/README.md:12, 28, 32`; `policy.ts:33`).
+- **Interceptor de `/api`:** solo admite uno, y lo ocupa el gateway Typert (`rpc-host.ts:197-219`; `api/gateway/src/index.ts:234`). `docs/subsystems/web-server.md:5` está desfasado.
+- **Primitivas y tema de la rc.2:**
+  - **Exports:** existen todos los que usa el esqueleto. `Button` aplica `type="button"` **antes** de `...rest`, así que `type:'submit'` y `form:'cidia-login'` llegan al `<button>` (`rc2 …/ui-primitives/lib/index.js:3216-3227`). Las props de `Modal` y `data-modal-autofocus` están en `index.js:5191-5262`, y el reenvío de props de `Input` en `index.js:3529-3541`.
+  - **Tokens CSS:** existen todos los `--dsw-alias-*` del esqueleto, también el de nombre raro `--dsw-alias-brand-primary-new-colorprimary-new-color` (`rc2 dsh-web-frontend/dist/assets/index-BPHePDI_.css` y `dsh-client-ui-theme/lib/client.js`).
+- **Comparación con `cidia-proveedores`:** confirmada. El `index.js` está vacío, `suscripcion/index.js:4` tiene `inject: ['settings','authorization']` y `suscripcion/index.js:76-79` sondea con `setInterval` cada 1500 ms; el `package.json` tiene `immediately: true`.
+- **WeKnora:** envía `X-Frame-Options "SAMEORIGIN"` (`frontend/nginx.conf:33`).
+- **Bancos de pruebas:** reejecutados con resultado `test-host.mjs` 10/10 y `test-client.cjs` OK. El código del §8 coincide con los ficheros probados.
+
+### Corregido
+
+1. **`ctx.remote` y `@Remote`.** El informe decía «no sirve para plugins de terceros». En realidad es **posible con `ctx.remote.$mount(contribución)`**: existe en la rc.2 y lo usa `client-ui-voice-input`. Pero es poco práctico, porque requiere el código generado por Typert con la cadena del monorepo (§5.2). La recomendación no cambia.
+2. **Cabecera de los paneles.** El margen `--dsh-frame-top-clearance` y `data-window-drag` **solo actúan en macOS**. En Windows, el marco ya deja libre la barra de título. El CSS del esqueleto lo sumaba en todas las plataformas, lo que duplicaba el espacio superior en Windows. Corregido en el §2.4, en el §8.4 y en el fichero probado; las pruebas se han vuelto a pasar.
+3. **Pestaña «Navegador».** `openTab` **lanza error** con un panel `main` de CidIA activo, porque entonces no hay conversación en pantalla. Además, no existe en `dsh web`. Añadida la alternativa `window.open(url)` (§0, §2.5, §3.3 y §7.1).
+4. **Cancelación.** El §6 afirmaba que la propagación de cancelación estaba probada; **no lo está**. También se ha corregido la referencia «§8.4», que debía ser «§8.5».
+5. **Castellano.** «La interfaz no tiene castellano» se ha matizado: dsh admite **paquetes de idioma externos** (`ctx.locale.addLanguage` y `register(ns, 'es', …)`) con retroceso al inglés. Esto también sirve para sustituir textos con «DeepSeek» sin recompilar (§9.8).
+6. **Versión de React.** Era una inferencia; ahora está **verificada: 18.3.1**.
+7. **Marca.**
+   - **Precisado:** en el código fuente la marca oficial solo se registra si `DSH_CLIENT_BUILD_PROFILE === 'official'`.
+   - **Alternativa:** desactivar la fila `ui-brand-official` en el perfil.
+   - **Título de la ventana:** viene de `DSH_CLIENT_TITLE ?? t('brand.localBuild')`, una pista útil para la fase 4.
+   - **Prioridad repetida:** dos registros con la misma `priority` en una celda lanzan error.
+8. **WeKnora `/embed/*`.** Se ha añadido que admite `frame-ancestors` configurable, pero solo para orígenes `http(s)`, así que no puede autorizar `dsh-app://app`.
+9. **«Tareas».** Depende del bundle experimental de schedule; no está en la composición por defecto.
+10. **Nuevo riesgo:** el renderer solo obtiene permiso de **audio**. La cámara se deniega y no hay manejador de captura de pantalla (§4, riesgo 10).
+11. **Citas de líneas ajustadas:**
+    - prioridad de slots: `index.ts:787-792`, antes `:771`;
+    - CSP de `policy-login-loading.html`: línea 11;
+    - interceptor: `rpc-host.ts:197-219`;
+    - registro de la marca oficial en la rc.2: `client.js:35-40`.
+
+### Sigue sin confirmar
+
+- **Carga de `cidia-ui` en la app real**, con `fetch('cidia/session')` visto en DevTools. Requiere tocar un perfil de pruebas, lo que no está permitido en esta fase.
+- **Iframe:** su comportamiento y el de las cookies `SameSite`, *Local Network Access* y contenido mixto en la versión exacta de Chromium de Electron 44. Se ha comprobado en Chromium `main`, no en esa versión.
+- **SSE a través de `protocol.handle` en la app:** por el código va en streaming, pero no se ha medido.
+- **Propagación de cancelación** del renderer al gateway.
+- **Variante RPC** (`rpc.handle`/`rpc.call`): no se ha ejecutado. También queda por probar la recomendación de declarar `webServer` en su `inject`.
+- **`getDisplayMedia`:** que falle sin manejador en el `defaultSession` es inferencia.
+- **`ctx.credentials`** para persistir la sesión desde un plugin de terceros.
+- **Truco de `document.title`** con un `MutationObserver`.
+- **Que `frame-ancestors *` no case con `dsh-app://app`:** se deduce de la especificación CSP3, sin probar.
+
+### Compatibilidad arm64 y licencias
+
+- **Plugin `cidia-ui`:** es JS puro (Host ESM + factory de cliente) y no depende de la arquitectura.
+- **App de escritorio de dsh:** solo se empaqueta para **`mac-arm64`, `mac-x64` y `win-x64`** (`apps/desktop/scripts/package-target.ts:50`; `apps/desktop/package.json:29-41`).
+  - No hay app de escritorio para Linux ni compilación nativa para Windows ARM. **[inferencia, sin probar]** En Windows ARM funcionaría bajo emulación x64.
+  - Los equipos de los trabajadores deben ser Windows x64 o macOS.
+  - El servidor Oracle ARM no ejecuta la app. Solo aloja el gateway, al que el Host del plugin llega por HTTP, así que no afecta a este diseño.
+- **Licencia de dsh:** MIT, «Copyright (c) 2026 DeepSeek» (`LICENSE:1-3`). Hay que conservar el aviso.
+- **Uso de la marca:** `BRAND_GUIDELINES.md:7-10` permite decir «basado en DeepSeek Harness», pero pide no usar «DeepSeek Harness» en el nombre del producto ni materiales oficiales de marca que sugieran respaldo. Esto refuerza que CidIA no use `FishLogo` ni `BrandWordmark` y que haga el rebrand completo.
+- **Piezas de la app de dsh para la tabla de licencias del proyecto** (no son código de CidIA):
+  - **Fuente Montserrat**, con licencia **SIL OFL 1.1** (`dsh-client-ui-theme/lib/styles/Montserrat-OFL.txt` en el asar). Permite incluirla en software comercial.
+  - **`ffmpeg.dll` de Electron y Chromium**, con aviso LGPL en `LICENSES.chromium.html` y enlazada dinámicamente.
+  - **7-Zip del instalador**, con licencia LGPL-2.1 (`7zip-installer-COPYING.txt`).
+
+  Hay que decidir si la regla «LGPL solo como programa externo» acepta estas piezas en la app compilada de la fase 4. Según `THIRD_PARTY_NOTICES.md:262`, el LGPL y el MPL del repositorio de dsh son solo herramientas de desarrollo.

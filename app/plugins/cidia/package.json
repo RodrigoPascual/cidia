@@ -1,0 +1,41 @@
+{
+  "name": "cidia",
+  "version": "0.1.0",
+  "description": "CidIA en la app de escritorio: paneles de servicios, sesión con el servidor de la empresa, marca e idioma.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "idioma/*.json"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node --test \"pruebas/*.test.*\""
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "*",
+    "@deepseek-ai/dsh-mcp-client": "0.2.0-rc.2"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

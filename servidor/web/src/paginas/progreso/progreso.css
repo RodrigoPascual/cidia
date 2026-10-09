@@ -1,0 +1,185 @@
+/* Progreso: pasaporte de habilidades (pp-) y matriz ILUO del equipo (mz-). */
+
+.pp-tinta { color: var(--tinta); }
+.esqueleto.redondo { border-radius: 50%; flex-shrink: 0; }
+
+/* ----------------------------------------------------------- cabecera del pasaporte */
+
+.pp-cabecera { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.pp-cabecera h2 { font-size: 22px; }
+.pp-contadores { display: flex; gap: 8px; flex-wrap: wrap; }
+.pp-contador {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px;
+  background: var(--papel); border: 1px solid var(--linea-suave); min-width: 128px;
+}
+.pp-contador .valor { font-size: 20px; font-weight: 700; line-height: 1.1; }
+
+/* ----------------------------------------------------------- filas de tareas */
+
+.pp-rejilla { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
+@media (max-width: 1100px) { .pp-rejilla { grid-template-columns: 1fr; } }
+
+.pp-fila {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  padding: 14px 14px 14px 16px; border-radius: var(--radio-g); cursor: pointer;
+  background: var(--blanco); border: 1px solid var(--linea-suave); box-shadow: var(--sombra-1);
+  font: inherit; color: inherit;
+  transition: border-color var(--transicion), box-shadow var(--transicion), transform var(--transicion);
+}
+.pp-fila:hover { border-color: var(--linea); box-shadow: var(--sombra-2); }
+.pp-fila.activa { border-color: var(--acento); box-shadow: 0 0 0 3px rgba(242, 194, 0, 0.22), var(--sombra-1); }
+.pp-fila-iluo { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; width: 40px; }
+.pp-fila-iluo span { font-weight: 700; font-size: 13px; line-height: 1; color: var(--tinta-2); }
+.pp-fila-iluo span.caducado { color: var(--alerta); }
+.pp-fila-flecha { color: var(--pizarra-2); flex-shrink: 0; transition: transform var(--transicion); }
+.pp-fila.activa .pp-fila-flecha { color: var(--acento-oscuro); transform: translateX(2px); }
+.pp-icono-aviso { color: var(--aviso); flex-shrink: 0; }
+.pp-icono-alerta { color: var(--alerta); flex-shrink: 0; }
+.pp-icono-formador { color: var(--acento-oscuro); flex-shrink: 0; }
+.pp-texto-alerta { color: var(--alerta); }
+
+/* ----------------------------------------------------------- detalle de una tarea */
+
+.pp-detalle { min-width: 0; }
+.pp-detalle-cabecera { display: flex; gap: 18px; align-items: flex-start; }
+.pp-detalle-titulo { font-size: 20px; margin-top: 2px; }
+.pp-iluo-grande { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+.pp-iluo-grande span { font-weight: 800; font-size: 18px; line-height: 1; }
+
+.pp-siguiente {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: var(--radio); background: var(--acento-suave); border: 1px solid #f5e3a0;
+  color: #6b5400; font-size: 14px;
+}
+.pp-siguiente-etiqueta {
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  background: var(--acento); color: var(--tinta); border-radius: 6px; padding: 2px 7px;
+}
+
+.pp-camino { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .pp-camino { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .pp-camino { grid-template-columns: 1fr; } }
+.pp-camino-nivel {
+  border: 1px solid var(--linea-suave); border-radius: 12px; padding: 10px 10px 8px; background: #fcfcfd;
+}
+.pp-camino-nivel.alcanzado { background: var(--verde-suave); border-color: #c2e6d9; }
+.pp-camino-nivel.siguiente { border-color: var(--acento); background: #fffdf3; box-shadow: 0 0 0 2px rgba(242, 194, 0, 0.18); }
+.pp-camino-nivel ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.pp-camino-nivel li { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; color: var(--pizarra); line-height: 1.35; }
+.pp-camino-nivel li svg { flex-shrink: 0; margin-top: 1px; color: var(--pizarra-2); }
+.pp-camino-nivel li.cumplido { color: var(--tinta-2); }
+.pp-camino-nivel li.cumplido svg { color: var(--verde); }
+.pp-ok { color: var(--verde); flex-shrink: 0; }
+
+/* ----------------------------------------------------------- línea de tiempo de evidencias */
+
+.pp-linea-tiempo { list-style: none; margin: 0; padding: 0; position: relative; }
+.pp-linea-tiempo::before {
+  content: ''; position: absolute; left: 15px; top: 8px; bottom: 8px; width: 2px; background: var(--linea-suave);
+}
+.pp-linea-tiempo li { display: flex; gap: 12px; padding: 7px 0; position: relative; }
+.pp-hito-icono {
+  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0;
+  background: var(--papel); color: var(--pizarra); border: 2px solid var(--blanco); position: relative;
+}
+.pp-hito-icono svg { width: 15px; height: 15px; }
+.pp-linea-tiempo li.verde .pp-hito-icono { background: var(--verde-suave); color: var(--verde); }
+.pp-linea-tiempo li.roja .pp-hito-icono { background: var(--alerta-suave); color: var(--alerta); }
+.pp-linea-tiempo li.amarilla .pp-hito-icono { background: var(--aviso-suave); color: var(--aviso); }
+
+/* ----------------------------------------------------------- curva de autonomía */
+
+.pp-curva { position: relative; width: 100%; overflow: hidden; }
+.pp-curva svg { display: block; touch-action: pan-y; }
+.pp-curva-rejilla { stroke: var(--linea-suave); stroke-width: 1; }
+.pp-curva-eje { fill: var(--pizarra); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.pp-curva-area { fill: var(--verde); opacity: 0.1; }
+.pp-curva-linea { fill: none; stroke: var(--verde); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pp-curva-guia { stroke: var(--pizarra-2); stroke-width: 1; }
+.pp-curva-punto { cursor: pointer; outline: none; }
+.pp-curva-punto circle:last-child { fill: var(--verde); stroke: var(--blanco); stroke-width: 2; transition: r 120ms; }
+.pp-curva-punto circle.critico { fill: var(--alerta); }
+.pp-curva-punto:focus-visible circle:last-child { stroke: var(--acento); stroke-width: 3; }
+.pp-curva-tooltip {
+  position: absolute; transform: translateX(-50%); pointer-events: none; z-index: 2;
+  background: var(--blanco); border: 1px solid var(--linea); border-radius: 10px; box-shadow: var(--sombra-2);
+  padding: 8px 11px; font-size: 13px; min-width: 150px; white-space: nowrap;
+}
+.pp-curva-fila { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.pp-curva-fila .clave, .clave-linea { display: inline-block; width: 14px; height: 2px; border-radius: 1px; background: var(--verde); }
+.pp-curva-fila .clave.roja { background: var(--alerta); }
+.clave-punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--verde); }
+.clave-punto.critico { background: var(--alerta); }
+
+/* ----------------------------------------------------------- matriz ILUO */
+
+.mz-envoltorio {
+  overflow: auto; max-height: min(70vh, 720px); border-bottom: 1px solid var(--linea-suave);
+  -webkit-overflow-scrolling: touch;
+}
+.mz-tabla { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 14px; }
+.mz-tabla thead th {
+  position: sticky; top: 0; z-index: 2; background: #fafbfc; border-bottom: 1px solid var(--linea);
+  padding: 10px 8px; text-align: center; vertical-align: bottom; font-weight: 600;
+}
+.mz-tabla .mz-esquina {
+  left: 0; z-index: 3; text-align: left; padding-left: 16px; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--pizarra); min-width: 210px;
+}
+.mz-tarea { min-width: 108px; max-width: 140px; }
+.mz-tarea-codigo { font-family: var(--mono); font-size: 11.5px; color: var(--acento-oscuro); }
+.mz-tarea-nombre {
+  font-size: 12.5px; line-height: 1.25; color: var(--tinta-2); display: -webkit-box; -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px;
+}
+.mz-cobertura { font-size: 11px; font-weight: 500; color: var(--verde); margin-top: 4px; white-space: nowrap; }
+.mz-cobertura.riesgo { color: var(--alerta); }
+
+.mz-tabla tbody th.mz-persona {
+  position: sticky; left: 0; z-index: 1; background: var(--blanco); text-align: left; font-weight: 400;
+  border-bottom: 1px solid var(--linea-suave); border-right: 1px solid var(--linea-suave); padding: 0;
+}
+.mz-persona button {
+  display: flex; align-items: center; gap: 10px; width: 100%; max-width: 260px; padding: 8px 12px 8px 16px;
+  background: none; border: none; cursor: pointer; font: inherit; color: var(--tinta); text-align: left;
+}
+.mz-persona button:hover { background: var(--papel); }
+.mz-formacion { color: var(--info); font-weight: 600; }
+.mz-tabla tbody td { text-align: center; padding: 4px; border-bottom: 1px solid var(--linea-suave); }
+.mz-tabla tbody tr:hover td, .mz-tabla tbody tr:hover th.mz-persona { background: #fafbfc; }
+
+.mz-celda {
+  position: relative; width: 48px; height: 44px; border-radius: 10px; border: 1px solid transparent;
+  background: none; cursor: pointer; display: inline-grid; place-items: center;
+  transition: background var(--transicion), border-color var(--transicion), transform 80ms;
+}
+.mz-celda:hover { background: var(--acento-suave); border-color: #f0dc95; }
+.mz-celda:active { transform: scale(0.96); }
+.mz-celda.vacia .iluo { opacity: 0.55; }
+.mz-marca {
+  position: absolute; top: 4px; right: 5px; width: 9px; height: 9px; border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--blanco);
+}
+.mz-marca.reevaluacion { background: var(--aviso); }
+.mz-marca.estatica { position: static; display: inline-block; }
+.mz-marca-formador { position: absolute; bottom: 3px; right: 4px; color: var(--acento-oscuro); }
+
+.mz-leyenda {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 20px; font-size: 12.5px; color: var(--pizarra);
+}
+
+.mz-aviso {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 10px;
+  background: none; border: none; cursor: pointer; font: inherit; color: inherit; text-align: left;
+}
+.mz-aviso:hover { background: var(--papel); }
+.mz-dep-activo td { background: var(--acento-suave) !important; }
+.mz-ajuste .campo { margin-bottom: 10px; }
+.mz-pasaporte-modal .pp-rejilla { grid-template-columns: 1fr; }
+
+@media (max-width: 760px) {
+  .mz-tabla .mz-esquina { min-width: 150px; }
+  .mz-persona button { max-width: 170px; padding-left: 10px; }
+  .pp-detalle-cabecera { gap: 12px; }
+  .pp-contador { min-width: 0; flex: 1 1 120px; }
+}

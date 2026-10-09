@@ -1,0 +1,189 @@
+/* Evaluación: cuestionarios, revisión de preguntas y observación en el puesto (ev-). */
+
+.ev-estrecho { max-width: 780px; margin: 0 auto; width: 100%; }
+.ev-tinta { color: var(--tinta); }
+.ev-seccion { font-size: 15px; margin-bottom: 10px; }
+.ev-solo-movil { display: none; }
+
+/* ----------------------------------------------------------- mis cuestionarios */
+
+.ev-cuestionario { display: flex; flex-direction: column; }
+.ev-cuestionario .tarjeta-cuerpo { display: flex; flex-direction: column; flex: 1; }
+.ev-cuestionario .tarjeta-cuerpo > .mt-2:last-child { margin-top: auto; padding-top: 14px; }
+.ev-cuestionario.pendiente { border-color: #f0dc95; }
+.ev-cuestionario-icono {
+  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0;
+  background: var(--acento-suave); color: var(--acento-oscuro);
+}
+.ev-cuestionario-icono svg { width: 20px; height: 20px; }
+
+/* ----------------------------------------------------------- presentación y resultado */
+
+.ev-intro { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 18px 8px 8px; }
+.ev-intro h2 { font-size: 24px; }
+.ev-intro p { max-width: 520px; margin: 0; }
+.ev-intro .aviso { text-align: left; width: 100%; max-width: 480px; }
+.ev-intro-icono {
+  width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; margin-bottom: 6px;
+  background: var(--acento-suave); color: var(--acento-oscuro);
+}
+.ev-intro-icono svg { width: 30px; height: 30px; }
+.ev-intro-icono.verde { background: var(--verde-suave); color: var(--verde); }
+.ev-intro-icono.roja { background: var(--alerta-suave); color: var(--alerta); }
+
+.ev-resultado { display: flex; align-items: center; gap: 22px; margin-bottom: 14px; flex-wrap: wrap; }
+.ev-resultado h2 { font-size: 22px; }
+.ev-nota {
+  --color-nota: var(--verde);
+  width: 112px; height: 112px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+  background: conic-gradient(var(--color-nota) var(--pct), var(--linea-suave) 0);
+}
+.ev-nota.suspenso { --color-nota: var(--alerta); }
+.ev-nota > div {
+  width: 88px; height: 88px; border-radius: 50%; background: var(--blanco);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
+}
+.ev-nota strong { font-size: 24px; }
+.ev-nota span { font-size: 12px; color: var(--pizarra); }
+
+.ev-siguiente {
+  display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radio);
+  background: var(--acento-suave); border: 1px solid #f5e3a0; color: #6b5400;
+}
+.ev-siguiente svg { flex-shrink: 0; margin-top: 2px; }
+
+.ev-fallo { padding: 12px 14px; border-radius: var(--radio); border: 1px solid var(--linea-suave); background: #fcfcfd; }
+.ev-respuesta { display: flex; align-items: flex-start; gap: 7px; margin-top: 6px; font-size: 14px; }
+.ev-respuesta svg { flex-shrink: 0; margin-top: 3px; }
+.ev-respuesta.mal { color: var(--alerta); }
+.ev-respuesta.bien { color: var(--verde); font-weight: 600; }
+.ev-acierto { display: flex; gap: 8px; align-items: flex-start; color: var(--verde); }
+.ev-acierto svg { flex-shrink: 0; margin-top: 3px; }
+.ev-acierto > div { color: var(--tinta); }
+
+/* ----------------------------------------------------------- una pregunta por pantalla */
+
+.ev-pregunta .tarjeta-cuerpo { padding: 24px 26px; }
+.ev-enunciado { font-size: 22px; line-height: 1.35; margin-bottom: 18px; }
+.ev-opciones { display: flex; flex-direction: column; gap: 10px; }
+.ev-opcion {
+  display: flex; align-items: center; gap: 14px; width: 100%; min-height: 60px; padding: 12px 16px;
+  border-radius: 14px; border: 2px solid var(--linea); background: var(--blanco); cursor: pointer;
+  font: inherit; font-size: 16.5px; color: var(--tinta); text-align: left;
+  transition: border-color var(--transicion), background var(--transicion), transform 80ms;
+}
+.ev-opcion:hover { border-color: var(--pizarra-2); background: #fbfbfc; }
+.ev-opcion:active { transform: scale(0.995); }
+.ev-opcion.elegida { border-color: var(--acento); background: var(--acento-suave); }
+.ev-letra {
+  width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0;
+  background: var(--papel); font-weight: 700; font-size: 14px; color: var(--pizarra);
+}
+.ev-opcion.elegida .ev-letra { background: var(--acento); color: var(--tinta); }
+
+/* ----------------------------------------------------------- revisión de preguntas */
+
+.ev-revision { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
+.ev-lista-instrucciones { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 16px; }
+.ev-instruccion {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--linea-suave); background: var(--blanco); cursor: pointer; text-align: left;
+  font: inherit; color: inherit; transition: border-color var(--transicion), box-shadow var(--transicion);
+}
+.ev-instruccion:hover { border-color: var(--linea); }
+.ev-instruccion.activa { border-color: var(--acento); box-shadow: 0 0 0 3px rgba(242, 194, 0, 0.2); }
+.ev-contador {
+  min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--acento);
+  color: var(--tinta); font-size: 12px; font-weight: 700; display: grid; place-items: center;
+}
+.ev-generando {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radio);
+  background: var(--info-suave); color: #1e4f8c; font-size: 14px;
+}
+
+.ev-editable { border-left: 4px solid var(--linea); }
+.ev-editable.propuesta { border-left-color: var(--acento); }
+.ev-editable.aprobada { border-left-color: var(--verde); }
+.ev-editable.descartada { border-left-color: var(--linea); opacity: 0.8; }
+.ev-editable.nueva { border-left-color: var(--info); }
+.ev-selector-paso { height: 32px; font-size: 13px; max-width: 280px; }
+.ev-campo-enunciado { font-weight: 600; font-size: 16px; min-height: 64px; }
+.ev-opcion-editable { display: flex; align-items: center; gap: 8px; }
+.ev-opcion-editable .entrada { flex: 1; }
+.ev-opcion-editable.correcta .entrada { border-color: #9fd6c4; background: #f7fcfa; }
+.ev-marca-correcta {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  border: 2px solid var(--linea); background: var(--blanco); color: var(--pizarra);
+  font-weight: 700; font-size: 13px; display: grid; place-items: center;
+  transition: background var(--transicion), border-color var(--transicion);
+}
+.ev-marca-correcta:hover { border-color: var(--verde); color: var(--verde); }
+.ev-opcion-editable.correcta .ev-marca-correcta { background: var(--verde); border-color: var(--verde); color: #fff; }
+
+/* ----------------------------------------------------------- observación en el puesto */
+
+.ev-sugerencia {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 10px; border: none;
+  background: none; cursor: pointer; text-align: left; font: inherit; color: inherit;
+}
+.ev-sugerencia:hover { background: var(--papel); }
+
+.ev-observacion { display: flex; flex-direction: column; gap: 14px; max-width: 900px; margin: 0 auto; }
+.ev-paso {
+  background: var(--blanco); border: 1px solid var(--linea-suave); border-left: 5px solid var(--linea);
+  border-radius: var(--radio-g); box-shadow: var(--sombra-1); padding: 16px 16px 14px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 16px; align-items: center;
+  transition: border-color var(--transicion), background var(--transicion);
+}
+.ev-paso.critico { border-left-color: var(--alerta); background: #fffafa; }
+.ev-paso.bien { border-left-color: var(--verde); }
+.ev-paso.mal { border-left-color: var(--alerta); background: var(--alerta-suave); }
+.ev-paso-cuerpo { display: flex; gap: 14px; align-items: flex-start; min-width: 0; }
+.ev-paso-numero {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+  background: var(--papel); font-weight: 700; font-size: 16px;
+}
+.ev-paso.critico .ev-paso-numero { background: var(--alerta-suave); color: var(--alerta); }
+.ev-paso.bien .ev-paso-numero { background: var(--verde); color: #fff; }
+.ev-paso-titulo { font-size: 17px; font-weight: 600; line-height: 1.3; }
+.ev-paso.critico .ev-paso-titulo { color: #8f2c1c; }
+.ev-paso-acciones { display: flex; gap: 8px; align-items: center; }
+.ev-boton-marca {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-width: 104px; height: 56px; padding: 0 16px; border-radius: 14px; cursor: pointer;
+  border: 2px solid var(--linea); background: var(--blanco); font: inherit; font-size: 16px; font-weight: 600;
+  color: var(--tinta-2); transition: background var(--transicion), border-color var(--transicion), transform 80ms;
+}
+.ev-boton-marca svg { width: 20px; height: 20px; }
+.ev-boton-marca:active { transform: scale(0.97); }
+.ev-boton-marca.bien:hover { border-color: var(--verde); color: var(--verde); }
+.ev-boton-marca.mal:hover { border-color: var(--alerta); color: var(--alerta); }
+.ev-boton-marca.bien.activo { background: var(--verde); border-color: var(--verde); color: #fff; }
+.ev-boton-marca.mal.activo { background: var(--alerta); border-color: var(--alerta); color: #fff; }
+.ev-boton-nota {
+  width: 48px; height: 56px; border-radius: 14px; border: 2px dashed var(--linea); background: none; cursor: pointer;
+  color: var(--pizarra); display: grid; place-items: center;
+}
+.ev-boton-nota:hover { border-color: var(--pizarra-2); color: var(--tinta); }
+.ev-nota-paso { grid-column: 1 / -1; min-height: 56px; }
+.ev-botones-finales { display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; }
+.ev-botones-finales .boton { min-width: 180px; }
+
+/* ----------------------------------------------------------- pantallas estrechas */
+
+@media (max-width: 900px) {
+  .ev-revision { grid-template-columns: 1fr; }
+  .ev-lista-instrucciones { display: none; }
+  .ev-solo-movil { display: block; }
+}
+@media (max-width: 680px) {
+  .ev-ocultar-movil { display: none; }
+  .ev-enunciado { font-size: 19px; }
+  .ev-pregunta .tarjeta-cuerpo { padding: 18px 16px; }
+  .ev-paso { grid-template-columns: 1fr; }
+  .ev-paso-acciones { width: 100%; }
+  .ev-boton-marca { flex: 1; }
+  .ev-botones-finales .boton { flex: 1; min-width: 0; }
+  .ev-nota { width: 96px; height: 96px; }
+  .ev-nota > div { width: 76px; height: 76px; }
+}

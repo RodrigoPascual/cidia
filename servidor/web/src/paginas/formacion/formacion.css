@@ -1,0 +1,198 @@
+/* ==========================================================================
+   Formación: itinerario (fm-), página de tarea (ft-), micro-lecciones (fl-) y tutor (tu-).
+   Usa las variables de estilos.css.
+   ========================================================================== */
+
+/* ----------------------------------------------------------- itinerario */
+
+.fm-seccion { margin-top: 28px; }
+.fm-seccion-titulo {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; color: var(--pizarra);
+}
+.fm-seccion-titulo svg { width: 16px; height: 16px; }
+.fm-lista { display: flex; flex-direction: column; gap: 10px; }
+
+.fm-item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px; align-items: center;
+  background: var(--blanco); border: 1px solid var(--linea-suave); border-radius: var(--radio-g); box-shadow: var(--sombra-1);
+  padding: 16px 20px; cursor: pointer;
+  transition: box-shadow var(--transicion), transform var(--transicion), border-color var(--transicion);
+}
+.fm-item:hover { box-shadow: var(--sombra-2); transform: translateY(-1px); border-color: var(--linea); }
+.fm-item.sin-instruccion { background: #fbfbfc; }
+.fm-iluo { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 52px; }
+.fm-iluo .letra { font-size: 12px; font-weight: 700; color: var(--pizarra); }
+.fm-titulo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fm-nombre { font-size: 16.5px; font-weight: 600; }
+.fm-codigo { font-family: var(--mono); font-size: 12.5px; color: var(--pizarra); }
+.fm-avance { display: flex; align-items: center; gap: 10px; margin-top: 8px; max-width: 520px; }
+.fm-avance .barra-progreso { flex: 1; }
+.fm-avance span { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 38px; text-align: right; }
+.fm-siguiente { display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; font-size: 14px; color: var(--tinta-2); }
+.fm-siguiente svg { width: 16px; height: 16px; margin-top: 2px; color: var(--acento-oscuro); flex-shrink: 0; }
+.fm-hitos { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12.5px; color: var(--pizarra); }
+.fm-hito { display: inline-flex; align-items: center; gap: 5px; }
+.fm-hito svg { width: 14px; height: 14px; }
+.fm-hito.ok { color: var(--verde); font-weight: 600; }
+
+.fm-formacion {
+  border: 1px solid #f5e3a0; border-left: 5px solid var(--acento); background: linear-gradient(180deg, var(--acento-suave), #fffdf5 60%);
+  border-radius: var(--radio-g); padding: 18px 20px; margin-top: 28px;
+}
+.fm-formacion-cabecera { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.fm-formacion-icono {
+  width: 44px; height: 44px; border-radius: 12px; background: var(--acento); color: var(--tinta);
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.fm-formacion-icono svg { width: 22px; height: 22px; }
+.fm-formacion h2 { font-size: 18px; }
+.fm-formacion .fm-avance { margin-top: 6px; min-width: 200px; }
+
+@media (max-width: 680px) {
+  .fm-item { grid-template-columns: auto minmax(0, 1fr); padding: 14px; gap: 12px; }
+  .fm-item > .boton { grid-column: 1 / -1; width: 100%; }
+}
+
+/* ----------------------------------------------------------- página de tarea */
+
+.ft-volver { margin: -6px 0 8px -8px; }
+.ft-estado {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 22px; align-items: center;
+  padding: 18px 22px; margin-bottom: 20px;
+}
+.ft-estado-nivel { display: flex; align-items: center; gap: 12px; }
+.ft-letra { font-size: 18px; font-weight: 700; line-height: 1.2; }
+.ft-hitos { display: grid; grid-template-columns: repeat(2, minmax(150px, auto)); gap: 8px 18px; }
+.ft-hito { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }
+.ft-hito .icono {
+  width: 30px; height: 30px; border-radius: 9px; background: var(--papel); color: var(--pizarra);
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.ft-hito .icono svg { width: 16px; height: 16px; }
+.ft-hito.ok .icono { background: var(--verde-suave); color: var(--verde); }
+.ft-hito .valor { font-weight: 600; display: block; line-height: 1.2; }
+.ft-hito .texto { color: var(--pizarra); font-size: 12px; }
+@media (max-width: 980px) {
+  .ft-estado { grid-template-columns: 1fr; }
+}
+
+.ft-rejilla { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 20px; align-items: start; }
+.ft-lateral { display: flex; flex-direction: column; gap: 16px; }
+@media (max-width: 1060px) { .ft-rejilla { grid-template-columns: 1fr; } }
+
+.ft-ficha { display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--papel); font-size: 14px; margin-top: 10px; }
+.ft-ficha svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; color: var(--pizarra); }
+.ft-ficha strong { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--pizarra); }
+.ft-ficha.roja { background: var(--alerta-suave); color: #6f2416; }
+.ft-ficha.roja svg, .ft-ficha.roja strong { color: var(--alerta); }
+.ft-pasos { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ft-pasos li { display: flex; align-items: center; gap: 10px; padding: 6px 4px; font-size: 14px; border-radius: 8px; }
+.ft-pasos li .n {
+  width: 24px; height: 24px; border-radius: 7px; background: var(--papel); display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.ft-pasos li.critico .n { background: var(--alerta-suave); color: var(--alerta); }
+.ft-pasos li svg { width: 15px; height: 15px; flex-shrink: 0; }
+.ft-pasos li .critico-icono { color: var(--alerta); }
+.ft-pasos li .seguridad-icono { color: var(--aviso); }
+
+/* ----------------------------------------------------------- micro-lecciones */
+
+.fl-leccion { overflow: hidden; }
+.fl-cabecera {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 14px 22px; border-bottom: 1px solid var(--linea-suave); background: #fbfbfc;
+}
+.fl-num { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: var(--acento-oscuro); }
+.fl-puntos { display: flex; gap: 6px; }
+.fl-punto {
+  width: 26px; height: 8px; border-radius: 4px; border: none; background: var(--linea); cursor: pointer; padding: 0;
+  transition: background var(--transicion), width var(--transicion);
+}
+.fl-punto.vista { background: var(--verde); }
+.fl-punto.actual { width: 40px; background: var(--tinta); }
+.fl-punto.actual.vista { background: var(--verde-hover); }
+.fl-cuerpo { padding: 22px 26px 8px; animation: fl-entrar 220ms ease-out; }
+@keyframes fl-entrar { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.fl-cuerpo h2 { font-size: 22px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fl-cuerpo .formato { font-size: 16px; }
+.fl-clave {
+  display: flex; gap: 12px; margin-top: 16px; padding: 14px 16px; border-radius: 12px;
+  background: var(--acento-suave); border: 1px solid #f5e3a0; color: #5c4700;
+}
+.fl-clave svg { width: 22px; height: 22px; flex-shrink: 0; color: var(--acento-oscuro); }
+.fl-clave strong { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--acento-oscuro); }
+
+.fl-pregunta { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--linea-suave); border-radius: 14px; background: var(--blanco); }
+.fl-pregunta-titulo { display: flex; align-items: center; gap: 7px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--info); font-weight: 700; margin-bottom: 6px; }
+.fl-pregunta-titulo svg { width: 16px; height: 16px; }
+.fl-enunciado { font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+.fl-opciones { display: flex; flex-direction: column; gap: 8px; }
+.fl-opcion {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; font-size: 15px;
+  padding: 11px 14px; border-radius: 11px; border: 1.5px solid var(--linea); background: var(--blanco); color: var(--tinta);
+  cursor: pointer; transition: border-color var(--transicion), background var(--transicion);
+}
+.fl-opcion:hover:not(:disabled) { border-color: var(--acento); background: #fffdf3; }
+.fl-opcion:disabled { cursor: default; }
+.fl-opcion .letra {
+  width: 28px; height: 28px; border-radius: 8px; background: var(--papel); display: grid; place-items: center;
+  font-weight: 700; font-size: 13px; flex-shrink: 0;
+}
+.fl-opcion .marca { margin-left: auto; width: 20px; height: 20px; flex-shrink: 0; }
+.fl-opcion.correcta { border-color: var(--verde); background: var(--verde-suave); }
+.fl-opcion.correcta .letra { background: var(--verde); color: #fff; }
+.fl-opcion.correcta .marca { color: var(--verde); }
+.fl-opcion.incorrecta { border-color: var(--alerta); background: var(--alerta-suave); }
+.fl-opcion.incorrecta .letra { background: var(--alerta); color: #fff; }
+.fl-opcion.incorrecta .marca { color: var(--alerta); }
+.fl-opcion.apagada { opacity: 0.6; }
+.fl-feedback { margin-top: 12px; }
+
+.fl-pie { display: flex; justify-content: space-between; gap: 10px; padding: 16px 22px 20px; }
+.fl-fin { text-align: center; padding: 34px 24px; }
+.fl-fin .icono {
+  width: 60px; height: 60px; border-radius: 18px; background: var(--verde-suave); color: var(--verde);
+  display: grid; place-items: center; margin: 0 auto 12px;
+}
+.fl-fin .icono svg { width: 30px; height: 30px; }
+
+@media (max-width: 680px) {
+  .fl-cuerpo { padding: 18px 16px 6px; }
+  .fl-pie { padding: 14px 16px 18px; }
+  .fl-cabecera { padding: 12px 16px; }
+  .fl-punto { width: 16px; }
+  .fl-punto.actual { width: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { .fl-cuerpo { animation: none; } }
+
+/* ----------------------------------------------------------- tutor socrático */
+
+.tu { display: flex; flex-direction: column; gap: 12px; }
+.tu-mensajes { max-height: 440px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 2px; }
+.tu-yo {
+  align-self: flex-end; max-width: 90%; background: var(--tinta); color: #fff; padding: 8px 12px;
+  border-radius: 12px 12px 4px 12px; font-size: 14.5px; white-space: pre-wrap;
+}
+.tu-tutor {
+  align-self: stretch; background: var(--info-suave); border: 1px solid #c9dcf2; color: var(--tinta);
+  padding: 10px 13px; border-radius: 4px 12px 12px 12px; font-size: 14.5px;
+}
+.tu-intro { font-size: 14px; color: var(--pizarra); }
+.tu-sugerencias { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.tu-sugerencia {
+  text-align: left; font: inherit; font-size: 13.5px; padding: 8px 11px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--linea); background: var(--blanco); color: var(--tinta-2);
+  transition: border-color var(--transicion), background var(--transicion);
+}
+.tu-sugerencia:hover { border-color: var(--acento); background: #fffdf3; }
+.tu-entrada {
+  display: flex; gap: 8px; align-items: flex-end; border: 1px solid var(--linea); border-radius: 12px; padding: 6px 6px 6px 12px;
+  background: var(--blanco);
+}
+.tu-entrada:focus-within { border-color: var(--acento); box-shadow: 0 0 0 3px rgba(242, 194, 0, 0.25); }
+.tu-entrada textarea {
+  flex: 1; border: none; outline: none; resize: none; font: inherit; font-size: 14.5px; padding: 6px 0; max-height: 120px;
+  background: transparent; color: var(--tinta);
+}

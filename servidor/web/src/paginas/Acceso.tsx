@@ -78,7 +78,7 @@ export default function Acceso() {
           <div className="fila mt-1 mb-3 pequeno" style={{ color: conectado === false ? 'var(--alerta)' : 'var(--verde)' }}>
             <span className={`punto ${conectado === false ? 'mal' : ''}`} />
             {conectado === null ? 'Conectando con el servidor…'
-              : conectado ? `Servidor de ${info?.empresa ?? 'la empresa'} conectado`
+              : conectado ? `Conectado al servidor de ${info?.empresa ?? 'la empresa'}`
                 : 'No se encuentra el servidor de la empresa'}
           </div>
 

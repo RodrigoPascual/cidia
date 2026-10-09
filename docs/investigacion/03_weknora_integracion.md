@@ -15,13 +15,13 @@ Este documento complementa a `05_servidor_oracle.md` (estructura de despliegue, 
 
 1. **Servicios mínimos**: `weknora` (app Go), `docreader` (gRPC Python), `postgres` (imagen `pgvector/pgvector`), `redis` y `qdrant`. `weknora-ui` es opcional: solo sirve como consola de administración. Con `RETRIEVE_DRIVER=qdrant` WeKnora no necesita ParadeDB (AGPL), porque sus migraciones de `pg_search`/BM25 se saltan [verificado].
 2. **Corrección al borrador de `05_servidor_oracle.md`**: `redis:7-alpine` apunta hoy a Redis 7.4, que tiene licencia RSALv2/SSPLv1 (no permisiva). Hay que usar `redis:7.2-alpine` (BSD-3) o `valkey/valkey:8-alpine` (BSD-3) [verificado].
-3. **Arranque**: no hay usuario por defecto. Se registra el primer usuario por API, se hace login y, **con el JWT** (no se puede con API key), se crea una API key `full_access` para el gateway. Los modelos se crean con `POST /api/v1/models` y se asignan a cada base de conocimiento al crearla [verificado].
-4. **Autenticación**: `X-API-Key` o `Authorization: Bearer <JWT>`. Toda ruta no declarada para API keys se deniega (*fail-closed*). La key de espacio queda fijada a su espacio (tenant). La memoria personal solo funciona por usuario si se activa el modo `direct_header` y el gateway envía `X-External-User-ID` [verificado].
+3. **Arranque**: no hay usuario por defecto. Se registra el primer usuario por API, se hace login y, **con el JWT** (no se puede con API key), se crea una API key `full_access` para el gateway. El token se guarda también en la BD (cifrado solo si `SYSTEM_AES_KEY` es válida) y el Owner puede volver a leerlo (§2.2, corregido en la verificación). Los modelos se crean con `POST /api/v1/models` y se asignan a cada base de conocimiento al crearla [verificado].
+4. **Autenticación**: `X-API-Key: sk-…` para la key o `Authorization: Bearer <JWT>` para el usuario (una key enviada como `Bearer` se rechaza). Toda ruta no declarada para API keys se deniega (*fail-closed*). La key de espacio queda fijada a su espacio (tenant). La memoria personal solo funciona por usuario si se activa el modo `direct_header` y el gateway envía `X-External-User-ID` [verificado].
 5. **Búsqueda**: `POST /api/v1/knowledge-search` no admite «número de resultados» en la petición. Ese número sale de `rerank_top_k` en la configuración del espacio (por defecto 10). Para fijarlo por petición existe `POST /api/v1/knowledge-bases/{id}/hybrid-search` con `match_count`, pero sin rerank [verificado].
 6. **Calidad con Qdrant**: la búsqueda por palabras clave con Qdrant es un filtro de texto con puntuación fija 1,0 y sin BM25. En castellano, palabras como «de» o «la» casan con casi todo. **Hace falta un reranker** o desactivar `keyword_enabled` y hacer el BM25 en castellano en nuestro PostgreSQL [verificado el código; el efecto en castellano es inferencia].
 7. **arm64**: `weknora-app`, `weknora-ui` y `weknora-docreader` v0.8.2 publican imagen arm64 en Docker Hub. También `pgvector`, `qdrant`, `redis:7.2-alpine` y `valkey`. No hay que compilar nada en ARM [verificado].
-8. **Salidas a Internet**: no hay telemetría ni analítica en el backend ni en la UI. El riesgo es **Langfuse**: `.env.example` trae claves de ejemplo que lo activan solas. Hay que poner `LANGFUSE_ENABLED=false`. El resto de salidas solo ocurren si se configuran (proveedores de modelos, búsqueda web, importar URL, skills, canales de mensajería). Con la red `cidia-interna` (`internal: true`) no hay salida posible [verificado].
-9. **Licencias del `docreader`**: la imagen incluye EbookLib (AGPL-3.0+, importada en el proceso) y `antiword` (GPL-2.0, programa externo). La app incluye `anydoc` (MIT), que ya convierte en su propio proceso doc, docx, pptx, xlsx, epub y pdf. Hay que decidir si prescindimos de `docreader` o lo usamos sin modificar [verificado; la viabilidad sin docreader es inferencia].
+8. **Salidas a Internet**: no hay telemetría ni analítica en el backend ni en la UI. El riesgo es **Langfuse**: `.env.example` trae claves de ejemplo que lo activan solas. Hay que poner `LANGFUSE_ENABLED=false`. El resto de salidas solo ocurren si se configuran (proveedores de modelos, búsqueda web, importar URL, skills, canales de mensajería). Con la red `cidia-interna` (`internal: true`) no hay salida posible [comportamiento documentado de Docker; sin probar: es el paso 8 de §9].
+9. **Licencias del `docreader`**: la imagen incluye EbookLib (AGPL-3.0+, importada en el proceso), `chardet` 5.2.0 (LGPL, importada en el proceso; añadido en la verificación) y `antiword` (GPL-2.0, programa externo). La app incluye `anydoc` (MIT), que ya convierte en su propio proceso doc, docx, odt, rtf, ppt, pptx, odp, xls, xlsx, ods, epub, csv y pdf, y la app arranca sin `DOCREADER_ADDR`. Hay que decidir si prescindimos de `docreader` o lo usamos sin modificar [verificado en código; la calidad sin docreader está sin probar].
 
 ---
 
@@ -29,7 +29,7 @@ Este documento complementa a `05_servidor_oracle.md` (estructura de despliegue, 
 
 ### 1.1 Qué servicios del compose original necesitamos
 
-`docker-compose.yml` de WeKnora define 25 servicios. Para CidIA:
+`docker-compose.yml` de WeKnora define 23 servicios (corregido en la verificación: el borrador decía 25). Para CidIA:
 
 | Servicio original | Líneas | Decisión | Motivo |
 |---|---|---|---|
@@ -46,7 +46,7 @@ Este documento complementa a `05_servidor_oracle.md` (estructura de despliegue, 
 ### 1.2 Por qué basta PostgreSQL con pgvector
 
 * Con `RETRIEVE_DRIVER` sin `postgres`, la conexión de migración lleva `app.skip_embedding=true` (`internal/container/container.go:809-825`).
-* Las migraciones que crean `vector`, `pg_search` o índices `bm25` comprueban esa variable y no hacen nada: `migrations/versioned/000002_embeddings.up.sql:7-10`, `000011_pg_search_update.up.sql:6-9`, `000099_pg_search_0226.up.sql:7-9` [verificado].
+* Las migraciones que crean `vector`, `pg_search` o índices `bm25` comprueban esa variable y no hacen nada: `migrations/versioned/000002_embeddings.up.sql:7-10`, `000008_migrate_untagged_faq.up.sql:5-8`, `000011_pg_search_update.up.sql:6-9`, `000099_pg_search_0226.up.sql:7-9` [verificado]. `000059_embeddings_hnsw_1024.up.sql:30-44` se protege comprobando si existe la tabla `embeddings` [verificado].
 * Sin esa protección solo quedan `uuid-ossp` (`000000_init.up.sql:7`) y `pg_trgm` (`000041_task_queue_and_wiki_indexes.up.sql:32`), que vienen en `contrib` [verificado].
 * La memoria a largo plazo usa una columna `halfvec` solo si la extensión `vector` ya existe; si no, puntúa en el proceso (`000095_memory_vector_search.up.sql:27-36`) [verificado]. Para que la ordenación de la memoria se haga en la base de datos, hay que crear `vector` en la BD `weknora` **antes del primer arranque** de WeKnora (§1.6).
 
@@ -167,6 +167,7 @@ Notas sobre el compose, con su fuente:
 * Sin `container_name`: el original fija `WeKnora-*` (`docker-compose.yml:14, 44, 414, 533, 554, 658`).
 * `weknora` no publica puertos. Para depurar desde el PC se usa `compose.debug.yml` con `127.0.0.1:18702:8080`, añadiendo la red `borde` (ver `05_servidor_oracle.md` §6.2). En el servidor Oracle el puerto 80 ya está ocupado por Caddy [verificado con `ss -ltn`].
 * La UI de WeKnora proxifica `/api` hacia `APP_HOST:APP_PORT` (`docker-compose.yml:21-26`).
+* Este compose de prueba no tiene servicio `ollama` ni comparte red con el de `05_servidor_oracle.md`: `OLLAMA_BASE_URL=http://ollama:11434` no resolverá. Con `OLLAMA_OPTIONAL=true`, un modelo `source: local` quedaría `active` sin existir (§2.3). Para probar modelos locales hay que usar el compose de `05_servidor_oracle.md` o añadir la red de Ollama (añadido en la verificación).
 
 ### 1.4 Variables imprescindibles (`.env` de WeKnora)
 
@@ -288,7 +289,7 @@ SQL
 |---|---|---|---|
 | Imagen de Redis | `redis:7-alpine` | `redis:7.2-alpine` o `valkey/valkey:8-alpine` | Docker Hub: `7-alpine` y `7.4-alpine` tienen el mismo *digest* `sha256:858f009f…`; `redis/redis@7.4/LICENSE.txt` dice RSALv2/SSPLv1; `@7.2/COPYING` es BSD; `valkey-io/valkey@8.1/COPYING` es BSD-3 [verificado] |
 | `weknora.env` | solo secretos | añadir `REDIS_PASSWORD`, `STREAM_MANAGER_TYPE`, `JWT_SECRET`, `SYSTEM_AES_KEY`, `LANGFUSE_ENABLED=false`, `SSRF_WHITELIST`, `WEKNORA_LANGUAGE`, `DISABLE_REGISTRATION` | §1.4 |
-| `depends_on` de docreader | `service_started` | `service_healthy` y su `healthcheck`, como el original | `docker-compose.yml:385-386, 500-505` |
+| `depends_on` de docreader | `service_started` | `service_healthy` y su `healthcheck`, como el original. **Ya aplicado**: la versión actual de `05_servidor_oracle.md` §6.4 lo trae (comprobado en la verificación) | `docker-compose.yml:385-386, 500-505` |
 | initdb | rol y BD | más las extensiones | §1.6 |
 | `weknora-ui` | sin idioma | `DEFAULT_LOCALE: en-US` (no hay castellano) | `frontend/src/i18n/locales/` solo trae zh-CN, en-US, ru-RU, ko-KR y ja-JP |
 
@@ -320,7 +321,7 @@ curl -s -X POST "$WK/auth/login" -H 'Content-Type: application/json' \
 * El registro crea un espacio personal («`<usuario>`'s Workspace») y hace al usuario su Owner: `internal/application/service/user.go:167-177, 214-219` [verificado].
 * Los cuerpos de petición son `RegisterRequest {username, email, password}` y `LoginRequest {email, password}` (`internal/types/user.go:144-147, 191-201`). La respuesta del login es `AuthLoginResponse` (`internal/handler/dto/auth.go:6-14`) [verificado].
 * **Administrador de sistema**: con `WEKNORA_BOOTSTRAP_SYSTEM_ADMIN_EMAIL` se promociona ese usuario **en el siguiente arranque**, y solo si aún no hay ningún administrador de sistema (`cmd/server/bootstrap.go:33, 79-115`). Por tanto: registrar y luego `docker compose restart weknora`. Para el gateway no hace falta ser administrador de sistema: basta con ser Owner del espacio [verificado].
-* **Cerrar el registro**: `DISABLE_REGISTRATION=true` y reiniciar. Al arrancar equivale a `auth.registration_mode=invite_only` (`internal/handler/auth.go:184-195`) [verificado].
+* **Cerrar el registro**: `DISABLE_REGISTRATION=true` y reiniciar. Al arrancar equivale a `auth.registration_mode=invite_only` (la conversión está en `internal/config/config.go:848-856`; el *handler* la consulta en `internal/handler/auth.go:94-113, 184-195`) [verificado]. Ojo: el valor guardado en `system_settings` de la BD tiene prioridad sobre la variable. Si un administrador de sistema cambia el modo desde la consola, `DISABLE_REGISTRATION` deja de mandar; y ese mismo ajuste permite cerrar el registro sin reiniciar [verificado].
 
 ### 2.2 API key del gateway (solo con JWT)
 
@@ -335,9 +336,11 @@ curl -s -X POST "$WK/tenants/<N>/api-keys" \
 ```
 
 * Cuerpo: `{name, full_access, knowledge_base_ids[], capabilities[], expires_at_unix}` (`internal/handler/tenant.go:138-171`).
-* El token tiene la forma `sk-` + 32 bytes aleatorios en base64url. En la BD se guarda su SHA-256 (`internal/application/service/tenant_api_key.go:208-219`).
-* Una key sin `full_access` necesita al menos una capacidad (`tenant.go:802-827`).
-* Hay que guardar el token en el fichero de secretos del gateway en el momento de crearlo [verificado].
+* El token tiene la forma `sk-` + 32 bytes aleatorios en base64url (`internal/application/service/tenant_api_key.go:208-214`).
+* **Corregido en la verificación.** En la BD se guardan **dos** cosas: el SHA-256 (`key_hash`), que es lo que se usa para autenticar, y **el propio token** en la columna `api_key` (`tenant_api_key.go:65-75`). El token va cifrado con AES-GCM solo si `SYSTEM_AES_KEY` mide exactamente 32 bytes; si no, se guarda **en claro** (`internal/types/tenant_api_key.go:245-265`, `internal/utils/crypto.go:19-25`). Además, `GET /tenants/{id}/api-keys` (JWT de Owner) devuelve `api_key` descifrado (`internal/handler/tenant.go:660-677, 784-795`). Por tanto, **no es cierto que el token solo se vea al crearlo**: cualquier Owner puede volver a leerlo. Consecuencias: fijar `SYSTEM_AES_KEY` correcta **antes** de crear la primera key y tratar la cuenta Owner de WeKnora como un secreto más [verificado].
+* Una key sin `full_access` necesita al menos una capacidad (`tenant.go:802-827`). Con `full_access`, la lista `knowledge_base_ids` y las capacidades se vacían (`tenant_api_key.go:76-79`) [verificado].
+* La key solo se acepta en la cabecera `X-API-Key`. `Authorization: Bearer sk-…` **no** funciona: el *middleware* intenta validarla como JWT y, si falla, solo prueba la key cuando también llega `X-API-Key` (`internal/middleware/auth.go:148-171`) [verificado].
+* Recomendación: guardar el token en el fichero de secretos del gateway en el momento de crearlo.
 
 Configuración de identidad para la memoria por usuario (§3.3), también solo con JWT de Owner:
 
@@ -348,6 +351,8 @@ curl -s -X PUT "$WK/tenants/<N>/api-principal-config" \
 ```
 
 Modos posibles: `tenant` (por defecto), `direct_header` y `signed_token` (`internal/types/tenant.go:197-217`, `internal/handler/tenant.go:933-990`). El nombre de cabecera está fijo en `X-External-User-ID` (`internal/middleware/auth.go:22-27`, `internal/handler/tenant.go:173-176`) [verificado].
+
+**Matiz añadido en la verificación**: con `require_direct_header:false`, una petición del gateway que olvide la cabecera **no falla**: cae al *principal* del espacio (`api_tenant:<N>`) y, si toca `/memory/*`, lee o escribe la memoria compartida (`internal/middleware/auth.go:582-588`) [verificado]. Para que un olvido sea un error visible, es más seguro `require_direct_header:true`. Coste: entonces **todas** las peticiones con esa key (también búsqueda e ingesta) deben llevar la cabecera, porque el *principal* se resuelve en cada petición con API key (`auth.go:527`); para las operaciones sin usuario el gateway puede enviar un identificador técnico fijo, p. ej. `cidia-gateway` [inferencia sobre el diseño; el comportamiento del código está verificado].
 
 ### 2.3 Modelos por API
 
@@ -360,7 +365,7 @@ Modos posibles: `tenant` (por defecto), `direct_header` y `signed_token` (`inter
 
 Los tipos están en `internal/types/model.go:18-22` y los parámetros en `model.go:118-160` (`base_url`, `api_key`, `provider`, `embedding_parameters{dimension, truncate_prompt_tokens, supports_dimension_override}`, `extra_config`, `custom_headers`, `context_window`, `max_output_tokens`, `max_concurrency`, `supports_vision`) [verificado]. Respuesta 201 `{"success":true,"data":ModelResponse}` con `id` y `status` (`internal/handler/dto/model.go:179-199`).
 
-Ejemplos (los nombres de etiqueta de Ollama son [inferencia]: comprobar con `ollama list`):
+Ejemplos. Las etiquetas `ministral-3:8b` y `qwen3-embedding:0.6b` existen en la biblioteca de Ollama, y Qwen3-Embedding-0.6B tiene `hidden_size` 1024 [verificado en la verificación: `ollama.com/library/<modelo>/tags` y `config.json` del modelo en Hugging Face]. En Oracle todavía no hay ningún modelo descargado (`/api/tags` vacío, Ollama 0.40.2).
 
 ```json
 // LLM en Ollama (MSI: Ministral 3 8B; en Oracle, uno muy pequeño)
@@ -383,10 +388,13 @@ Ejemplos (los nombres de etiqueta de Ollama son [inferencia]: comprobar con `oll
 
 Los comentarios `//` son solo para leer: el JSON real no los admite.
 
-* **`source: local` lanza una descarga** en Ollama si el modelo no existe. El registro queda en `status: "downloading"` hasta que termina (`internal/application/service/model.go:121-150`). Si ya está descargado no sale a Internet (`internal/models/utils/ollama/ollama.go:150-158`) [verificado]. Mientras no esté en `active`, `GetModelByID` falla, así que hay que consultar `GET /models/{id}` hasta ver `"status":"active"`.
+* **`source: local` lanza una descarga** en Ollama si el modelo no existe. El registro queda en `status: "downloading"` y pasa a `active` o a `download_failed` (`internal/application/service/model.go:121-150`, `internal/types/model.go:27-31`). Si ya está descargado no sale a Internet (`internal/models/utils/ollama/ollama.go:150-158`) [verificado].
+* **Corregido en la verificación: no sirve `GET /models/{id}` para esperar.** Ese *handler* llama a `GetModelByID`, que devuelve error mientras el modelo no está `active`; la respuesta es un **500** con el mensaje `model is currently downloading` (o `model download failed`), no un `"status":"downloading"` (`internal/handler/model.go:142-172`, `internal/application/service/model.go:160-200`). Para seguir la descarga hay que usar `GET /models` (lista con `status`) [verificado].
+* **Trampa con `OLLAMA_OPTIONAL=true`**: si Ollama no responde al crear el modelo, `PullModel` devuelve `nil` sin descargar nada y el modelo queda **`active`** aunque no exista (`ollama.go:140-147`, `model.go:136-146`) [verificado]. Comprobar siempre antes con `GET /initialization/ollama/models`.
+* Si Ollama solo está en la red `internal: true`, no puede descargar: los modelos deben estar ya en Ollama (`ollama pull` por la red `borde`) antes de darlos de alta en WeKnora [inferencia de la topología de `05_servidor_oracle.md`].
 * Si `truncate_prompt_tokens` es 0, el embedder de Ollama usa `num_ctx=511` (`internal/models/embedding/ollama.go:49-50`). Por eso propongo 2048 [verificado; el valor es recomendación].
 
-Endpoints de comprobación (`internal/router/routes_infra.go:112-124`). Todos aceptan `ModelTestRequest` (`internal/handler/initialization.go:1765-1788`: `source`, `modelName`, `baseUrl`, `apiKey`, `provider`, `dimension`, `customHeaders`, `extraConfig`, `modelId`) y responden `{"success":true,"data":{"available":bool,"message":"…"}}`:
+Endpoints de comprobación (`internal/router/routes_infra.go:112-124`). Los `POST` aceptan `ModelTestRequest` (los `GET` no llevan cuerpo) (`internal/handler/initialization.go:1765-1788`: `source`, `modelName`, `baseUrl`, `apiKey`, `provider`, `dimension`, `customHeaders`, `extraConfig`, `modelId`) y responden `{"success":true,"data":{"available":bool,"message":"…"}}`:
 
 | Endpoint | Uso |
 |---|---|
@@ -466,7 +474,7 @@ Política de las rutas que usará el gateway [verificado en `internal/router/`]:
 Coincide con `docs/arquitectura.md` §3:
 
 * **Un único espacio** «CidIA <empresa>» y **una key `full_access`** solo en el gateway. El gateway calcula los permisos (departamento, nivel, formación) y decide `knowledge_base_ids` y las etiquetas de cada búsqueda.
-* **Defensa en profundidad** (opcional): una key por departamento con `capabilities:["retrieve"]` y `knowledge_base_ids:[<base del dpto>, <Público>]`. Así, un error del gateway no puede leer otro departamento [verificado que la lista se aplica en la búsqueda: `qa.go:886`].
+* **Defensa en profundidad** (opcional): una key por departamento con `capabilities:["retrieve"]` y `knowledge_base_ids:[<base del dpto>, <Público>]`. Así, un error del gateway no puede leer otro departamento [verificado que la lista se aplica en la búsqueda: `qa.go:886` para `knowledge_base_ids` y `knowledge_ids`; y, para las bases que llegan solo por `mentioned_items`, en `internal/application/access/context.go:83` vía `session_knowledge_qa.go:501-511`, que descarta la base si la key no la permite].
 * Los usuarios de CidIA **no** se crean en WeKnora. Solo el administrador técnico tiene cuenta, para la consola.
 
 ---
@@ -499,7 +507,7 @@ Respuesta 201: `{"success":true,"data":{"id":"<uuid>","name":…,"type":"documen
 * `chunking_config` admite además `enable_parent_child`, `parent_chunk_size`, `child_chunk_size`, `strategy` (`auto|heading|heuristic|recursive`), `token_limit` y `languages` (`knowledgebase.go:253-292`).
 * `indexing_strategy` por defecto: vector y palabra clave activados (`internal/types/indexing_strategy.go:22-27`).
 * `asr_config = {enabled, model_id, language}` (`knowledgebase.go:656-660`) sirve para transcribir audio y vídeo subidos a esa base.
-* Una key `full_access` crea la base sin `creator_id`: la base pertenece al espacio (`internal/application/service/knowledgebase.go:131-141`).
+* **Corregido en la verificación.** Con una key, WeKnora toma como usuario el primer usuario del espacio (`GetUserByTenantID`, `internal/middleware/auth.go:510-521`, `internal/application/repository/user.go:102-111`) y solo usa el usuario sintético `system-<N>` si el espacio no tiene ninguno. Como nuestro espacio lo crea el registro del administrador, la base queda con `creator_id` = id del administrador, no vacía (`internal/application/service/knowledgebase.go:131-141`) [verificado]. No cambia los permisos: el administrador ya es Owner.
 * Si se omite `summary_model_id`, el resumen del documento se salta y queda `summary_status=failed`, pero el documento se indexa igual (`internal/application/service/knowledge_process.go:1290-1294`) [verificado].
 
 ### 4.2 Etiquetas
@@ -560,7 +568,8 @@ curl -s -X POST "$WK/knowledge-bases/<kb>/knowledge/file" -H "X-API-Key: $KEY" \
   * `finalizing`: ya se puede buscar por vector, pero quedan resúmenes o preguntas por generar;
   * `completed`;
   * `failed` (ver `error_message`);
-  * `cancelled` y `deleting`.
+  * `cancelled` y `deleting`;
+  * `draft`: solo en conocimiento manual guardado como borrador (`internal/application/service/knowledge_create.go:793`).
 * **Estado de varios**: `GET /knowledge/batch?ids=<a>&ids=<b>[&kb_id=<kb>]` (`knowledge.go:1682-1720`).
 * **Detalle por etapas**: `GET /knowledge/{id}/stages` (5 etapas, `knowledge.go:649+`).
 * **Borrar uno**: `DELETE /knowledge/{id}` → `{"success":true,"message":"Delete task submitted","data":{"task_id":"…"}}`. El borrado es **asíncrono** (`knowledge.go:1352-1414`).
@@ -608,6 +617,8 @@ Respuesta 200: `{"success":true,"data":[SearchResult]}` (`internal/types/search.
 `SearchResult` no trae las etiquetas. Si el gateway las necesita para volver a filtrar, las obtiene con `GET /knowledge/batch?ids=…` (`data[].tags`).
 
 **Alternativa con `match_count` por petición**: `POST /knowledge-bases/{kb}/hybrid-search` con `SearchParams` (`internal/types/search.go:230-252`): `query_text`, `match_count` (0 → 50), `vector_threshold`, `keyword_threshold`, `disable_keywords_match`, `disable_vector_match`, `knowledge_ids`, `tag_ids`, `knowledge_base_ids` (varias bases con el mismo modelo de embedding). Devuelve `[SearchResult]` **sin rerank** (`internal/handler/knowledgebase.go:321-381`; `internal/application/service/knowledgebase_search.go:131, 296-297, 317-322`).
+
+**Añadido en la verificación: en `hybrid-search`, `tag_ids` no sirve para documentos.** Ahí `tag_ids` se pasa tal cual al motor (`knowledgebase_search.go:437, 466`) y Qdrant filtra por el campo `tag_id` de cada **fragmento** (`internal/application/repository/retriever/qdrant/repository.go:634-637`). En los documentos, las etiquetas viven en la relación documento-etiqueta y `/knowledge-search` las traduce a `knowledge_ids` (`session_knowledge_qa.go:579-612`, `ListKnowledgeIDsByTagIDs`). El `tag_id` del fragmento solo se rellena en las FAQ (`knowledge_faq.go:193`; el propio campo dice «used for FAQ priority filtering», `internal/types/search.go:241`). Por tanto, con `hybrid-search` sobre documentos hay que filtrar por `knowledge_ids` (obtenidos con `GET /knowledge-bases/{kb}/knowledge?tag_ids=…`) [inferencia fuerte del código; confirmar en la fase 2]. La lista de bases de una key sí se aplica aquí (`knowledgebase_search.go:170` → `knowledgebase_search_storegroup.go:199-213`) [verificado].
 
 ### 4.7 FAQ
 
@@ -686,6 +697,7 @@ Las versiones anteriores de WeKnora (v0.6.3 a v0.8.0) también publican arm64.
 * `aarch64`, Neoverse-N1, Ubuntu 20.04.6, núcleo 5.15.0-1081-oracle, **páginas de 4 KiB**: Qdrant y jemalloc no tienen el problema de las páginas de 64 KiB. Docker 26.1.3, Compose v2.35.1, cgroup v1, 23 GiB de RAM (19 GiB disponibles) y 112 GB libres en disco.
 * Puertos ocupados: 22, 53, 80, 111, 443, 631, 3000, 4001, 4002, 4005, 4010, 5678, 8000, 8090-8092, 8096 y 38791.
 * No existen contenedores `WeKnora-*`. `/home/ubuntu/CidIA` está vacío.
+* **Estado nuevo en la verificación (9-10-2026, solo lectura)**: ya hay contenedores de CidIA de otras tareas: `cidia-gateway-1` (127.0.0.1:18700), `cidia-postgres-1` (`pgvector/pgvector:0.8.7-pg17-bookworm`, 127.0.0.1:18710), `cidia-ollama-1` (Ollama 0.40.2, 127.0.0.1:18720, sin modelos) y `cidia-asr-1` (127.0.0.1:18721). `/home/ubuntu/CidIA` ya contiene `cidia`, `copias`, `datos`, `registros` y `secretos`. Siguen sin existir contenedores de WeKnora y el 18701 está libre. Memoria disponible: 18 GiB; disco libre: 106 GB. Arquitectura, páginas de 4 KiB, Docker 26.1.3, Compose 2.35.1 y cgroup v1 (`tmpfs` en `/sys/fs/cgroup`) confirmados.
 
 ### 5.3 Compilar en ARM si hiciera falta
 
@@ -749,12 +761,13 @@ Ver §1.7. El compose original usa `redis:7.0-alpine` (BSD), pero una etiqueta f
 [verificado]
 
 * `docreader/pyproject.toml` incluye `ebooklib`, que es **AGPL-3.0+** (PyPI: `License :: OSI Approved :: GNU Affero General Public License v3 or later`; `LICENSE.txt` del proyecto). Se importa **en el proceso** en `docreader/parser/epub_parser.py:16-17` y es dependencia de `textract==1.5.0` (`docreader/uv.lock:1962-1974`), que se usa para `.doc` (`docreader/parser/doc_parser.py:10`).
+* **Añadido en la verificación**: `textract` arrastra también `chardet` 5.2.0 (`docreader/uv.lock:215-216`), con licencia **LGPL-2.0+** (PyPI) y cargado en el mismo proceso de Python. Choca con la regla «LGPL solo como programa externo». Es el único paquete que depende de `chardet` en `uv.lock`, así que desaparece al quitar `textract` (opción c) [verificado].
 * `docker/Dockerfile.docreader:15-27, 93-112` instala `antiword` (GPL-2.0, se ejecuta como programa externo), `libreoffice` (MPL-2.0), `openjdk-17` (GPL-2.0 con excepción *Classpath*) y descarga WebKit de playwright (`Dockerfile.docreader:146-147`).
 * Choca con la regla «nada AGPL/GPL».
 
 Opciones:
 
-* **(a)** Prescindir de `docreader`. La imagen oficial de la app enlaza `anydoc` (MIT, `third_party/anydoc-go/Cargo.toml:11`; GitHub API: `firecrawl/anydoc` → MIT). `anydoc` convierte en el propio proceso `doc`, `docx`, `pptx`, `xls`, `xlsx`, `epub` y `pdf` (`internal/infrastructure/docparser/anydoc/anydoc.go:86-103`) y tiene preferencia sobre `docreader` (`internal/types/knowledgebase.go:303-327`). Hay que comprobar en Oracle con `GET /api/v1/system/parser-engines` que `anydoc` está disponible y que la app arranca sin `DOCREADER_ADDR`. PDF escaneados (OCR) y páginas web quedarían fuera [inferencia].
+* **(a)** Prescindir de `docreader`. La imagen oficial de la app enlaza `anydoc` (MIT, `third_party/anydoc-go/Cargo.toml:11`; GitHub API: `firecrawl/anydoc` → MIT); la imagen de Docker Hub se construye con `WITH_ANYDOC=1` (`.github/workflows/docker-image.yml:268`) [verificado]. `anydoc` convierte en el propio proceso `doc`, `docx`, `docm`, `odt`, `rtf`, `ppt`, `pptx`, `pptm`, `odp`, `xls`, `xlsx`, `xlsm`, `ods`, `epub`, `csv` y `pdf` (`internal/infrastructure/docparser/anydoc/anydoc.go:86-103`; lista ampliada en la verificación) y tiene preferencia sobre `docreader` (`internal/types/knowledgebase.go:303-327`). La app **arranca sin `DOCREADER_ADDR`** («starting disconnected», `internal/container/container.go:1686-1694`); un tipo sin lector falla con `parse_status=failed` y un mensaje claro (`internal/application/service/knowledge_process.go:3951-3962`) [verificado en código; falta probarlo]. Hay que comprobar en Oracle con `GET /api/v1/system/parser-engines` que `anydoc` aparece disponible. Sin `docreader` se pierden las páginas web (playwright) y la detección de páginas escaneadas de PDF. Ojo: `docreader` **no hace OCR**; solo convierte esas páginas en imágenes para que la app haga OCR o VLM, lo que exige un modelo VLM configurado (`docreader/parser/pdf_parser.py:1-12`) [verificado]. Si anydoc trata o no los PDF escaneados es [inferencia pendiente].
 * **(b)** Usar la imagen sin modificar, como servicio separado, y documentarlo en la tabla de licencias. Es una decisión del equipo, no asesoramiento legal.
 * **(c)** Construir una imagen propia de `docreader` sin `ebooklib` ni `textract`. El analizador de EPUB tiene una alternativa por ZIP (`epub_parser.py:60-69`).
 
@@ -816,3 +829,52 @@ class WeKnora:
 7. Memoria: dos `X-External-User-ID` distintos no deben verse entre sí. Comprobar que `PUT /memory/settings {"enabled":false}` funciona.
 8. Comprobar que no hay tráfico de salida: `docker exec` con `curl -m5 https://example.com` desde `weknora` debe fallar.
 9. Opcional: arrancar sin Redis (modo Lite con PostgreSQL) y medir el ahorro de memoria.
+10. (Añadido en la verificación) `hybrid-search` sobre una base de documentos con `tag_ids`: confirmar que devuelve vacío y que con `knowledge_ids` sí filtra (§4.6).
+11. (Añadido en la verificación) Dar de alta un modelo `local` con Ollama parado y ver si queda `active` (§2.3); seguir una descarga real con `GET /models`.
+
+---
+
+## Verificación
+
+Verificación escéptica del 9-10-2026 sobre el mismo clon (`v0.8.2`, commit `3e8b0bf`), Docker Hub (`hub.docker.com/v2/repositories/...`), PyPI (JSON de cada paquete), GitHub (licencias de Redis y Valkey), `ollama.com/library`, Hugging Face (`config.json`) y el servidor Oracle con órdenes de solo lectura (`uname`, `getconf`, `docker ps`, `ss`, `free`, `df`, `GET /api/tags` de Ollama). No se ha instalado, arrancado ni parado nada. Las correcciones ya están aplicadas en el texto de arriba y marcadas «corregido/añadido en la verificación».
+
+### Confirmado
+
+* **Migraciones sin ParadeDB**: con `RETRIEVE_DRIVER` sin `postgres` la conexión de migración lleva `app.skip_embedding=true` (`internal/container/container.go:809-825`). Las migraciones de `vector`, `pg_search` y BM25 se saltan (000002, 000008, 000011 y 000099), y 000059 y 000095 se protegen solas. No hay `CREATE EXTENSION` en el código Go. `pgvector/pgvector` basta.
+* **Redis opcional**: sin `REDIS_ADDR` se usa `SyncTaskExecutor` (`container.go:438-469`); no hay más dependencias duras de Redis (solo `reset_pending_tasks.go:33`). `STREAM_MANAGER_TYPE` vacío = flujo en memoria (`internal/stream/factory.go:19-38`).
+* **Licencia de Redis**: `redis:7-alpine` y `redis:7.4-alpine` tienen el mismo *digest* `sha256:858f009f…`; `redis@7.4/LICENSE.txt` es RSALv2/SSPLv1; `@7.2/COPYING` es BSD; `valkey@8.1/COPYING` es BSD-3. El compose original usa `redis:7.0-alpine`.
+* **Arranque**: no hay usuario sembrado; el registro crea «`<usuario>`'s Workspace» y la membresía Owner (`user.go:133-226`); registro 201 y login 200 con `AuthLoginResponse`; `WEKNORA_BOOTSTRAP_SYSTEM_ADMIN_EMAIL` solo promociona en el siguiente arranque y si no hay ningún administrador de sistema (`cmd/server/bootstrap.go:33, 79-121`); `DISABLE_REGISTRATION=true` → `invite_only` (`internal/config/config.go:848-856`).
+* **API keys**: `/tenants/:id/api-keys` y `/api-principal-config` registrados sin política para keys (`routes_auth_tenant.go:97-103`) → solo JWT de Owner; el *gate* deniega toda ruta sin política (`api_key_gate.go:128-153`); cuerpo `{name, full_access, knowledge_base_ids, capabilities, expires_at_unix}`; respuesta 201 con `api_key` y `token`; key de espacio fija a su espacio (403 con otro `X-Tenant-ID`); `full_access` = rol Owner; sin él, Viewer más capacidades.
+* **Identidad y memoria**: memoria por `(tenant_id, Principal.StorageID())`; en modo `tenant` todos comparten memoria; `X-External-User-ID` fija, de 128 caracteres como máximo; `signed_token` HS256 con `aud=weknora`, `tenant_id`, `sub` y 24 h como máximo; interruptor del espacio apagado por defecto y el del usuario a `true` si no hay registro (`memory/service.go:887-916`); la extracción automática solo se llama desde `qa.go:1945`; `/memory/*` exige `full_access` (`routes_memory.go:21`); no hay búsqueda semántica de memoria por API.
+* **Modelos**: `CreateModelRequest`, tipos y parámetros; `source: local` usa `OLLAMA_BASE_URL` con un cliente sin filtro SSRF; `remote` pasa `ValidateURLForSSRF` y los transportes anti-SSRF; un nombre de servicio Docker se rechaza si no está en `SSRF_WHITELIST` (resuelve a IP privada); rutas `/embeddings`, `/rerank` (Cohere, acepta `relevance_score` o `score`) y `/audio/transcriptions`; `score_scale` `logit` se convierte con la función logística (`internal/models/rerank/protocol.go:130-141`); embedder de Ollama con `num_ctx=511` si `truncate_prompt_tokens` es 0.
+* **Búsqueda**: `SearchKnowledgeRequest` sin campo de número de resultados; el número final es `rerank_top_k` (10 por defecto); rerank con `rerank_model_id` o el primer modelo Rerank; no llama al LLM; `tag_ids` sueltos solo con una base; con etiquetas en el ámbito solo se busca lo etiquetado; los pesos y la k de RRF se leen de `retrieval-config`; límites 0-200 y −10..10.
+* **Qdrant**: índice de texto `multilingual` en minúsculas; palabras clave con `Scroll` y puntuación fija 1,0; *tokens* de menos de 2 caracteres descartados; una colección por dimensión común a todos los espacios.
+* **Ingesta**: campos multipart, 200 con `Knowledge`, 409 `duplicate_file`, texto manual con `draft` por defecto y `enable_status: disabled`, 200 000 caracteres como máximo, borrado asíncrono con `task_id`, `batch-delete {kb_id, ids}`, sin `summary_model_id` → `summary_status=failed` y el documento se indexa igual.
+* **arm64**: `weknora-app` (579/546 MB), `weknora-ui` (32/32 MB), `weknora-docreader` (1580/1520 MB) v0.8.2 del 24-09-2026, `pgvector:0.8.7-pg17`, `qdrant:v1.16.2`, `redis:7.2-alpine` (arm64/v8) y `valkey:8-alpine` con amd64 y arm64. Oracle: aarch64, Neoverse-N1, páginas de 4 KiB, Docker 26.1.3, Compose 2.35.1 y cgroup v1.
+* **Salidas a Internet**: ningún SDK de analítica en `internal/`, `cmd/`, `frontend/src`, `docreader/` ni en las dependencias de `frontend/package.json`; Langfuse se activa solo con claves (`internal/tracing/langfuse/config.go:67, 79-84`) y `.env.example:692-694` trae claves de ejemplo; tampoco hay descargas de catálogos al arrancar.
+* **Otros**: `WEKNORA_LANGUAGE` tiene prioridad sobre `Accept-Language` (`internal/middleware/language.go:13-33`) y `.env.example:65` dice lo contrario; `es-ES` → «Spanish»; `SYSTEM_AES_KEY` de 32 bytes exactos; `JWT_SECRET` vacío o con un valor de ejemplo → aleatorio en cada arranque (`user.go:80-97`); `/health` público; Swagger solo fuera de `release`; CORS `*`; la imagen trae `config/` y `curl`; consola sin castellano (zh-CN, en-US, ru-RU, ko-KR y ja-JP); EbookLib 0.20 AGPL-3.0+ en PyPI; `textract` 1.5.0 MIT; `antiword`, `libreoffice` y `openjdk-17` en `Dockerfile.docreader`.
+
+### Corregido
+
+* **API keys en la BD (§2.2)**: no solo se guarda el SHA-256; el token también se guarda en `api_key`, cifrado solo si `SYSTEM_AES_KEY` es válida, y `GET /tenants/{id}/api-keys` lo devuelve al Owner. «Solo se muestra al crearlo» era falso.
+* **Esperar a un modelo `local` (§2.3)**: `GET /models/{id}` devuelve 500 mientras descarga; hay que mirar `GET /models`. Añadidos el estado `download_failed` y la trampa de `OLLAMA_OPTIONAL=true` (modelo `active` sin descargar si Ollama no responde).
+* **`creator_id` (§4.1)**: con una key, la base queda a nombre del primer usuario del espacio (el administrador), no vacía.
+* **`hybrid-search` (§4.6)**: `tag_ids` filtra por la etiqueta del fragmento, que solo tienen las FAQ; para documentos hay que usar `knowledge_ids` [inferencia fuerte, prueba 10 de §9].
+* **`anydoc` y `docreader` (§0.9, §7.3)**: anydoc cubre más formatos (odt, rtf, ppt, odp, ods, csv, docm, pptm y xlsm); la app arranca sin `DOCREADER_ADDR` (verificado en código); `docreader` no hace OCR (solo convierte las páginas escaneadas en imágenes); `chardet` 5.2.0 (LGPL) se carga en el proceso por `textract`.
+* **Número de servicios del compose (§1.1)**: 23, no 25.
+* **`Authorization: Bearer` (§0.4, §2.2)**: solo sirve para JWT; la key va siempre en `X-API-Key`.
+* **`direct_header` (§2.2)**: con `require_direct_header:false`, olvidar la cabecera cae en silencio a la memoria compartida del espacio.
+* **Citas y matices**: la conversión de `DISABLE_REGISTRATION` está en `config.go:848-856`, y `system_settings` de la BD manda sobre ella; los `GET` de `/initialization` no llevan cuerpo; `parse_status` también puede ser `draft`; la red `internal: true` es comportamiento documentado de Docker, no probado.
+* **Tabla de §1.7**: la versión actual de `05_servidor_oracle.md` ya trae el *healthcheck* de `docreader` y `service_healthy`. Sigue pendiente cambiar `redis:7-alpine` (línea 339).
+* **Estado de Oracle (§5.2)**: ya hay contenedores de CidIA en 18700, 18710, 18720 y 18721, `/home/ubuntu/CidIA` ya no está vacío y Ollama 0.40.2 no tiene modelos.
+
+### Sigue sin confirmar
+
+* Que WeKnora funcione de verdad sin Redis con PostgreSQL (modo Lite), y el ahorro de memoria.
+* La calidad de las palabras clave de Qdrant en castellano y el efecto del reranker (todo el §7.1 es inferencia sobre código verificado).
+* Que `anydoc` aparezca disponible en `GET /system/parser-engines` en la imagen arm64, su calidad con PDF reales y si trata PDF escaneados. Las licencias de las dependencias Rust de `anydoc` (solo está verificado `anydoc` = MIT).
+* Que la red `internal: true` bloquee toda salida desde `weknora` (prueba 8 de §9).
+* **Licencias de la imagen de la app (nuevo, sin resolver)**: el binario enlaza dos módulos Go **MPL-2.0** (`go-sql-driver/mysql` y `shoenig/go-m1cpu`), declarados por el propio WeKnora en `THIRD_PARTY_NOTICES.md` y `licenses/`. MPL-2.0 no está en la lista permisiva del proyecto; hay que llevarlo a la tabla de licencias. Además, `Dockerfile.app:112-118` instala con apt programas externos con licencia GPL (`ffmpeg` de Debian, que [por inferencia] está compilado con `--enable-gpl`, `default-mysql-client` (MariaDB, GPL-2.0), `bash`, `build-essential`…). Conviene aplicar el mismo criterio a `antiword` en `docreader` y a estos programas de la imagen de la app: programas externos dentro de una imagen oficial sin modificar. Es una decisión del equipo, no asesoramiento legal.
+* El horizonte de soporte de Redis 7.2 (la etiqueta se sigue publicando: 21-09-2026). Valkey 8 es la opción más segura a largo plazo [inferencia].
+* La personalización de la búsqueda por persona (`retrieval_conditioning` y la afinidad por documento de la memoria) cuando `direct_header` está activo: no se ha revisado si cambia el orden de `/knowledge-search` entre usuarios.
+* Que el `curl` de §8 o el compose de §1.3 funcionen tal cual: no se ha ejecutado nada, solo se ha leído.

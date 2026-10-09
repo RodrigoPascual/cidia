@@ -164,6 +164,23 @@ def app():
     return aplicacion
 
 
+@pytest.fixture(scope="module", autouse=True)
+def bd_limpia_por_modulo():
+    """Cada fichero de pruebas empieza con la base vacía (más los valores por defecto), igual
+    que cuando se ejecuta solo: así la batería completa no depende del orden de los ficheros."""
+    inicializar_bd()
+    from sqlalchemy import text
+
+    from cidia.arranque import valores_por_defecto
+    from cidia.db import Base, motor_bd
+
+    tablas = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+    with motor_bd().begin() as c:
+        c.execute(text(f"TRUNCATE {tablas} RESTART IDENTITY CASCADE"))
+    valores_por_defecto()
+    yield
+
+
 @pytest.fixture
 def cliente(app):
     from fastapi.testclient import TestClient

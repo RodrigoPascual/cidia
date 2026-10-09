@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import UploadFile
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from cidia import trabajos
@@ -19,7 +20,7 @@ from cidia.conocimiento import motor
 from cidia.conocimiento.extraccion import tipo_por_extension
 from cidia.ficheros import guardar_subida
 from cidia.ia import asr, llm
-from cidia.modelos import Documento
+from cidia.modelos import Documento, Fragmento
 from cidia.seguridad import Actor
 from cidia.xapi import registrar
 
@@ -43,7 +44,7 @@ def crear_desde_subida(
     if tipo == "otro":
         tipo = "texto"
     doc = Documento(
-        titulo=(titulo or Path(nombre).stem).strip()[:300],
+        titulo=((titulo or "").strip() or Path(nombre).stem).strip()[:300],
         descripcion=descripcion,
         tipo=tipo,
         departamento_id=departamento_id,
@@ -160,10 +161,27 @@ def indexar_trabajo(bd: Session, progreso: Any, documento_id: int,
     return {"estado": doc.estado, "fragmentos": doc.fragmentos_n}
 
 
+def partes_guardadas(bd: Session, doc: Documento) -> list[tuple[str, dict[str, Any]]] | None:
+    """Partes con metadatos propios (p. ej. los pasos de una instrucción) a partir de los
+    fragmentos actuales, para no perderlos al reindexar un documento sin fichero."""
+    frags = bd.scalars(select(Fragmento).where(Fragmento.documento_id == doc.id).order_by(Fragmento.orden)).all()
+    partes = [(f.texto, {k: v for k, v in (f.metadatos or {}).items() if not k.startswith("wk_")}) for f in frags]
+    return partes if any(meta for _, meta in partes) else None
+
+
 def reindexar(bd: Session, doc: Documento) -> None:
+    """Vuelve a indexar un documento conservando los metadatos por parte si no tiene fichero."""
+    partes = None if doc.ruta_fichero else partes_guardadas(bd, doc)
     doc.estado = "procesando"
+    doc.mensaje_estado = None
     bd.commit()
-    trabajos.encolar("indexar_documento", indexar_trabajo, doc.id, entidad="documento", entidad_id=doc.id)
+    trabajos.encolar("indexar_documento", indexar_trabajo, doc.id, partes, entidad="documento", entidad_id=doc.id)
+
+
+def marcar_interrumpidos(bd: Session) -> None:
+    """Al arrancar: los documentos que se quedaron indexando pasan a error para poder reintentarlos."""
+    bd.execute(update(Documento).where(Documento.estado == "procesando")
+               .values(estado="error", mensaje_estado="Indexado interrumpido al reiniciar el servidor. Reindexa el documento."))
 
 
 def borrar(bd: Session, doc: Documento) -> None:

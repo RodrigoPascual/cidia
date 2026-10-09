@@ -69,9 +69,10 @@ def modelos_chat_permitidos(bd: Session) -> list[ModeloIA]:
 def modelo_vision(bd: Session | None) -> str | None:
     """Modelo con visión permitido, o None si no hay ninguno."""
     if bd is not None:
+        nube = ajustes().permitir_modelos_nube
         filas = bd.scalars(select(ModeloIA).where(ModeloIA.permitido.is_(True))).all()
         for m in sorted(filas, key=lambda m: not m.predeterminado):
-            if m.soporta_vision and m.tipo in ("chat", "vision"):
+            if m.soporta_vision and m.tipo in ("chat", "vision") and (m.ubicacion == "local" or nube):
                 return m.ref
     return ajustes().llm_modelo_vision or None
 

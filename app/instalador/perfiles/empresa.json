@@ -1,0 +1,7 @@
+{
+  "descripcion": "Servidor CidIA de una planta (equipo con GPU). Ajusta la dirección a la que muestre instalar-servidor.sh.",
+  "servidor": "http://servidor-cidia:18700",
+  "modelo": "ministral-3:8b",
+  "modelo_nombre": "Ministral 3 8B",
+  "contexto": 32768
+}

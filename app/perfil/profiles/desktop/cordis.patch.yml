@@ -1,0 +1,3 @@
+# Capa de usuario del perfil de CidIA: la escribe la propia app (Ajustes) y se aplica después
+# de los bundles y antes de la capa home ($DSH_HOME/cordis.patch.yml), que manda sobre ella.
+[]

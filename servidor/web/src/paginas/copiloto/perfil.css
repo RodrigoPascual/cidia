@@ -1,0 +1,46 @@
+/* Mi perfil: cuenta, contraseña y memoria personal. */
+
+.perfil-rejilla {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start;
+}
+@media (max-width: 980px) { .perfil-rejilla { grid-template-columns: 1fr; } }
+
+.perfil-identidad { display: flex; align-items: center; gap: 16px; }
+.perfil-identidad h2 { font-size: 21px; }
+
+.perfil-datos { margin: 18px 0 0; display: flex; flex-direction: column; }
+.perfil-fila {
+  display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 12px; align-items: center;
+  padding: 10px 0; border-top: 1px solid var(--linea-suave);
+}
+.perfil-fila dt { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--pizarra); }
+.perfil-fila dt svg { width: 16px; height: 16px; color: var(--pizarra-2); flex-shrink: 0; }
+.perfil-fila dd { margin: 0; min-width: 0; }
+@media (max-width: 520px) {
+  .perfil-fila { grid-template-columns: 1fr; gap: 4px; }
+}
+
+.texto-alerta { color: var(--alerta); }
+
+.memoria-explicacion { font-size: 14px; color: var(--tinta-2); }
+.memoria-explicacion p { margin: 0 0 8px; }
+.memoria-explicacion ul { margin: 0; padding-left: 1.2em; color: var(--pizarra); }
+.memoria-explicacion li { margin: 3px 0; }
+.memoria-explicacion strong { color: var(--tinta); }
+
+.memoria-nuevo { display: flex; gap: 8px; }
+@media (max-width: 520px) { .memoria-nuevo { flex-direction: column; } }
+
+.recuerdos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.recuerdos.inactivos .recuerdo { opacity: 0.6; }
+.recuerdo {
+  display: flex; align-items: center; gap: 12px; padding: 9px 10px 9px 12px;
+  border: 1px solid var(--linea-suave); border-radius: var(--radio); background: var(--blanco);
+  transition: border-color var(--transicion), opacity var(--transicion);
+}
+.recuerdo:hover { border-color: var(--linea); }
+.recuerdo-icono {
+  width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0;
+  background: var(--acento-suave); color: var(--acento-oscuro);
+}
+.recuerdo-icono svg { width: 16px; height: 16px; }

@@ -1,0 +1,55 @@
+# Bundle CidIA: filas que añade a la app.
+#
+#  · cidia: el plugin (Host: proxy, sesión, credencial del modelo y MCP; cliente: paneles,
+#    marca e idioma). La dirección del servidor la fija el instalador en la capa home
+#    ($DSH_HOME/cordis.patch.yml), que se aplica después de este fichero.
+#  · preset-cidia: modo de agente sin herramientas locales (ni terminal, ni ficheros, ni web).
+#    Las herramientas del agente son las del servidor CidIA (MCP), que el Host conecta con la
+#    identidad de la persona que ha iniciado sesión. La capa home desactiva los demás modos.
+- insert:
+    - id: cidia
+      name: cidia
+      config:
+        gatewayUrl: http://127.0.0.1:18700
+    - id: preset-cidia
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cidia
+        name: CidIA
+        description: Copiloto de conocimiento industrial de la empresa.
+        order: 0
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: >-
+                Eres CidIA, el copiloto de conocimiento industrial de la planta. Respondes
+                siempre en castellano, con frases claras y cortas, pensando en una persona que
+                está trabajando en su puesto. Para cualquier pregunta sobre procedimientos,
+                instrucciones de trabajo, seguridad, calidad o documentación de la empresa usa
+                las herramientas del servidor CidIA y cita las fuentes que te devuelvan. Si la
+                documentación no respalda una respuesta, dilo con honestidad en lugar de
+                inventarla. No tienes acceso al ordenador de la persona ni a Internet.
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: false
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024

@@ -13,8 +13,9 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from cidia import __version__, rutas, vida
 from cidia.config import ajustes
@@ -82,6 +83,35 @@ def _montar_web(app: FastAPI) -> None:
         return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
+_MENSAJES_VALIDACION = {
+    "missing": "falta este dato",
+    "string_type": "debe ser un texto",
+    "int_parsing": "debe ser un número entero",
+    "int_type": "debe ser un número entero",
+    "float_parsing": "debe ser un número",
+    "bool_parsing": "debe ser sí o no",
+    "dict_type": "debe ser un objeto",
+    "list_type": "debe ser una lista",
+    "string_too_short": "es demasiado corto",
+    "string_too_long": "es demasiado largo",
+    "greater_than_equal": "es demasiado pequeño",
+    "less_than_equal": "es demasiado grande",
+    "json_invalid": "el cuerpo no es un JSON válido",
+    "enum": "no es un valor permitido",
+    "literal_error": "no es un valor permitido",
+}
+
+
+async def _error_validacion(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Los 422 de pydantic, con un 'detail' en castellano que la interfaz pueda mostrar."""
+    partes = []
+    for e in exc.errors():
+        campo = ".".join(str(x) for x in e.get("loc", []) if x not in ("body", "query", "path", "form"))
+        msg = _MENSAJES_VALIDACION.get(e.get("type", ""), "no es válido")
+        partes.append(f"{campo}: {msg}" if campo else msg)
+    return JSONResponse(status_code=422, content={"detail": "Datos no válidos. " + "; ".join(partes) + "."})
+
+
 def crear_app() -> FastAPI:
     app = FastAPI(
         title="CidIA",
@@ -99,6 +129,7 @@ def crear_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["Content-Disposition"],
     )
+    app.add_exception_handler(RequestValidationError, _error_validacion)  # type: ignore[arg-type]
     _incluir_rutas(app)
     _montar_mcp(app)
     _montar_web(app)
