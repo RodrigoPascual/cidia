@@ -1029,10 +1029,13 @@ def test_negativa_sin_marca_es_laguna(cliente, bd, planta, docs, ia):
 
 
 def test_respuesta_vacia_del_modelo_no_es_laguna(cliente, bd, planta, docs, ia):
+    # Hay documentación, pero ninguna frase responde claramente (no dice cada cuántos ciclos): no se
+    # rehace la respuesta y el fallo es del modelo, no una laguna. Con un respaldo claro, una respuesta
+    # vacía se rehace (test_sin_respaldo_con_buen_contexto_da_respuesta_extractiva).
     ia.respuesta = "<think>solo pienso</think>"
-    d = cliente.post("/api/consulta/simple", json={"pregunta": "¿Qué hago si se atasca la prensa 3?"},
+    d = cliente.post("/api/consulta/simple", json={"pregunta": "¿Cada cuántos ciclos se limpia el sensor S4 de la prensa 3?"},
                      headers=cab(cliente, "pedro")).json()
-    assert d["respuesta"].startswith("No he podido generar") and "think" not in d["respuesta"]
+    assert d["fuentes"] and d["respuesta"].startswith("No he podido generar") and "think" not in d["respuesta"]
     assert d["con_respaldo"] is False and d["laguna_id"] is None  # había documentación: falló el modelo
 
 
@@ -1082,3 +1085,169 @@ def test_fuente_de_instruccion_lleva_su_tarea(cliente, bd, planta, ia):
         documentos.borrar(bd, bd.get(type(doc), doc.id))
         bd.execute(delete(Instruccion).where(Instruccion.id == ins.id))
         bd.commit()
+
+
+# --------------------------------------------------------------------------- respaldo claro: rehacer la respuesta
+
+_GUIA = """# Guía de acogida en Producción
+
+> Documento sintético de demostración. Metalúrgica Arlanza, S. L. es una empresa ficticia.
+
+## Cómo está organizada Producción
+
+Producción tiene tres puestos: **Prensas** (nave 1), **Montaje línea 2** (nave 2) y **Soldadura** (nave 2). Responsable del departamento: **Javier Martín**.
+
+## Lo primero que tienes que saber
+
+- Cada puesto tiene su pantalla con la instrucción vigente.
+"""
+_PREGUNTA_PUESTOS = "cuantos puestos tiene la Producción de Arlanza, S. L."
+_EXTRACTIVA = ("Según «Guía de acogida en Producción» (v1): Producción tiene tres puestos: Prensas (nave 1), "
+               "Montaje línea 2 (nave 2) y Soldadura (nave 2) [1].")
+
+
+@pytest.fixture
+def guia(bd, planta, docs):
+    """La guía de acogida (como en la demo de Oracle) y el nombre de la empresa de la demo."""
+    from cidia.modelos import Empresa
+
+    empresa = bd.scalar(select(Empresa).limit(1))
+    anterior = empresa.nombre
+    empresa.nombre = "Metalúrgica Arlanza, S. L."
+    doc = _doc(bd, "Guía de acogida en Producción", _GUIA, planta.deps["prod"], 1, autor=planta.personas["javier"])
+    try:
+        yield doc
+    finally:
+        documentos.borrar(bd, bd.get(type(doc), doc.id))
+        empresa = bd.scalar(select(Empresa).limit(1))
+        empresa.nombre = anterior
+        bd.commit()
+
+
+def _llamadas_chat(ia) -> list[dict[str, Any]]:
+    return [ll for ll in ia.llamadas if ll["tipo"] in ("chat", "chat_stream")]
+
+
+@pytest.mark.parametrize("bruto", ["SIN_RESPALDO", "<think>solo pienso</think>", "Hoy hace buen tiempo."])
+def test_sin_respaldo_con_buen_contexto_da_respuesta_extractiva(cliente, bd, guia, ia, bruto):
+    """El fallo visto en Oracle: la Guía de acogida responde, pero el modelo pequeño dice SIN_RESPALDO (o
+    nada, o algo sin relación). Se reintenta una vez con el prompt directo y, si sigue fallando, se
+    responde con la frase del fragmento: con respaldo, citada y sin laguna."""
+    ia.respuesta = bruto
+    antes = len(_llamadas_chat(ia))
+    d = cliente.post("/api/consulta/simple", json={"pregunta": _PREGUNTA_PUESTOS}, headers=cab(cliente, "marta")).json()
+    assert d["fuentes"][0]["titulo"] == "Guía de acogida en Producción"
+    assert d["respuesta"] == _EXTRACTIVA and "**" not in d["respuesta"]
+    assert d["con_respaldo"] is True and d["laguna_id"] is None and d["aviso_sin_respaldo"] is False
+    assert d["citadas"] == [1]
+    llamadas = _llamadas_chat(ia)[antes:]
+    assert len(llamadas) == 2  # la respuesta normal y un único reintento
+    assert "La respuesta está en el CONTEXTO, en el fragmento [1]" in llamadas[1]["mensajes"][-1]["content"]
+    assert "**" not in llamadas[1]["mensajes"][-1]["content"]  # el contexto del reintento va sin Markdown
+    c = bd.get(Consulta, d["consulta_id"])
+    assert c.con_respaldo is True and c.laguna_id is None and c.respuesta == _EXTRACTIVA
+    x = bd.scalar(select(SentenciaXapi).where(SentenciaXapi.verbo == "pregunto", SentenciaXapi.objeto_id == str(c.id)))
+    assert x.resultado["rehecha"] == "extractiva" and x.resultado["con_respaldo"] is True
+    assert not bd.scalars(select(Laguna).where(Laguna.pregunta == _PREGUNTA_PUESTOS)).all()
+
+    # En streaming: no se ve la respuesta mala, sino los tokens de la nueva, y el fin dice que hay respaldo.
+    eventos = _eventos(cliente, {"pregunta": _PREGUNTA_PUESTOS}, cab(cliente, "marta"))
+    assert [e for e, _ in eventos][0] == "fuentes" and eventos[-1][0] == "fin"
+    tokens = [d["texto"] for e, d in eventos if e == "token"]
+    assert len(tokens) > 3 and "".join(tokens) == _EXTRACTIVA
+    fin = eventos[-1][1]
+    assert fin["con_respaldo"] is True and fin["laguna_id"] is None and fin["aviso_sin_respaldo"] is False
+    assert fin["citadas"] == [1]
+
+
+def test_reintento_directo_que_responde_bien(cliente, bd, guia, ia, monkeypatch):
+    """Si el reintento directo responde bien (cita y dice lo del fragmento), vale su respuesta."""
+    from cidia.ia import llm
+
+    buena = "Producción tiene tres puestos: Prensas, Montaje línea 2 y Soldadura [1]."
+    respuestas: list[str] = []
+
+    def chat(mensajes, *a, **k):
+        respuestas.append(mensajes[-1]["content"])
+        return "SIN_RESPALDO" if len(respuestas) % 2 else buena
+
+    async def chat_stream(mensajes, *a, **k):
+        for trozo in re.findall(r"\S+\s*", chat(mensajes)):
+            yield trozo
+
+    monkeypatch.setattr(llm, "chat", chat)
+    monkeypatch.setattr(llm, "chat_stream", chat_stream)
+    d = cliente.post("/api/consulta/simple", json={"pregunta": _PREGUNTA_PUESTOS}, headers=cab(cliente, "marta")).json()
+    assert d["respuesta"] == buena and d["con_respaldo"] is True and d["laguna_id"] is None
+    eventos = _eventos(cliente, {"pregunta": _PREGUNTA_PUESTOS}, cab(cliente, "marta"))
+    texto = "".join(d["texto"] for e, d in eventos if e == "token")
+    assert texto == buena and "No lo he encontrado" not in texto
+    assert eventos[-1][1]["con_respaldo"] is True and eventos[-1][1]["laguna_id"] is None
+    # Un reintento que repite la cabecera del fragmento o solo cita no vale: respuesta extractiva.
+    malas = iter(["SIN_RESPALDO", "[1] Guía de acogida en Producción (versión 1)", "SIN_RESPALDO", "[1]"])
+    monkeypatch.setattr(llm, "chat", lambda *a, **k: next(malas))
+    for _ in range(2):
+        d = cliente.post("/api/consulta/simple", json={"pregunta": _PREGUNTA_PUESTOS}, headers=cab(cliente, "marta")).json()
+        assert d["respuesta"] == _EXTRACTIVA and d["con_respaldo"] is True
+
+
+def test_buena_respuesta_con_respaldo_claro_no_se_rehace(cliente, guia, ia):
+    ia.respuesta = "Hay tres puestos: Prensas, Montaje línea 2 y Soldadura [1]."
+    antes = len(_llamadas_chat(ia))
+    eventos = _eventos(cliente, {"pregunta": _PREGUNTA_PUESTOS}, cab(cliente, "marta"))
+    assert "".join(d["texto"] for e, d in eventos if e == "token") == ia.respuesta
+    assert eventos[-1][1]["con_respaldo"] is True and len(_llamadas_chat(ia)) - antes == 1
+
+
+def test_contexto_malo_sigue_siendo_laguna(cliente, bd, guia, planta, ia):
+    """Sin una frase que responda de verdad no se rehace nada: hay fragmentos parecidos (la prensa 3,
+    la limpieza del sensor S4), pero no responden a la prensa 2 ni dicen cada cuántos ciclos."""
+    prensa = _doc(bd, "Manual de manejo de la prensa 3",
+                  "## Datos principales\n\n| Característica | Valor |\n|---|---|\n"
+                  "| Amarres de molde | Hidráulicos; presión de amarre 180 bar en el cilindro del carro |\n",
+                  planta.deps["prod"], 1)
+    try:
+        ia.respuesta = "SIN_RESPALDO"
+        for pregunta in ("¿Qué presión lleva el cilindro de la prensa 2?",
+                         "¿Cada cuántos ciclos se limpia el sensor S4 de la prensa 3?"):
+            antes = len(_llamadas_chat(ia))
+            d = cliente.post("/api/consulta/simple", json={"pregunta": pregunta}, headers=cab(cliente, "pedro")).json()
+            assert d["fuentes"], pregunta
+            assert d["respuesta"].startswith("No lo he encontrado") and d["con_respaldo"] is False
+            assert d["laguna_id"] and d["aviso_sin_respaldo"] is True
+            assert len(_llamadas_chat(ia)) - antes == 1  # sin reintento
+    finally:
+        documentos.borrar(bd, bd.get(type(prensa), prensa.id))
+        bd.commit()
+
+
+def test_evidencia_y_frases_sin_markdown():
+    from cidia.servicios.consulta import evidencia, sin_markdown, unidades
+
+    assert sin_markdown("- **Prensas** (nave 1) y `S4`, ver [manual](http://x)") == "Prensas (nave 1) y S4, ver manual"
+    # El troceado pega el encabezado con la tabla; la fila de cabecera da nombre a las columnas.
+    texto = ("## Distribución de la planta | Zona | EPIs obligatorios |\n|---|---|\n"
+             "| Nave 1 · Prensas | Calzado S3, protección auditiva, guantes anticorte |\n"
+             "| Nave 2 · Soldadura | Pantalla de soldar, guantes de soldador, mandil |\n")
+    assert unidades(texto) == [
+        ("Distribución de la planta", "Zona: Nave 1 · Prensas; EPIs obligatorios: Calzado S3, protección auditiva, guantes anticorte"),
+        ("Distribución de la planta", "Zona: Nave 2 · Soldadura; EPIs obligatorios: Pantalla de soldar, guantes de soldador, mandil"),
+    ]
+    fuente = {"n": 1, "documento_id": 1, "titulo": "Bienvenida y PRL", "similitud": 0.6}
+    ev = evidencia([fuente], [texto], "¿Qué EPI necesito en la nave 1?")
+    assert [f.texto for f in ev] == [unidades(texto)[0][1]]  # la nave 2 no responde a la nave 1
+    # Las líneas partidas de un PDF se unen; «cada 40 horas» responde a «cada cuántas horas».
+    plan = "Engrase de guías del carro (IT-072) Todas Grasa EP-2; la P3 cada 40 horas de\ntrabajo\nOtra tarea"
+    ev = evidencia([{**fuente, "titulo": "Plan de mantenimiento de prensas"}], [plan],
+                   "¿Cada cuántas horas se engrasan las guías de la prensa 3?")
+    assert ev and ev[0].texto.endswith("cada 40 horas de trabajo")
+    # Sin la cantidad que se pregunta, el código o la referencia de la pregunta, no hay evidencia.
+    faq = "Solución: limpiar el sensor S4 con aire y reiniciar el ciclo en modo manual."
+    assert not evidencia([fuente], [faq], "¿Cada cuántos ciclos se limpia el sensor S4?")
+    assert not evidencia([fuente], [faq], "¿Cómo se limpia el sensor S7?")
+    assert evidencia([fuente], [faq], "¿Cómo se limpia el sensor S4?")
+    assert not evidencia([{**fuente, "titulo": "Manual de la prensa 3"}], ["Presión de amarre del cilindro: 180 bar."],
+                         "¿Qué presión lleva el cilindro de la prensa 2?")
+    # La pregunta de una FAQ no es una respuesta.
+    assert not evidencia([fuente], ["Pregunta: ¿Por qué se atasca la prensa 3 al cambiar el molde?"],
+                         "¿Por qué se atasca la prensa 3 al cambiar el molde?")

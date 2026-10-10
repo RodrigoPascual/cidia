@@ -72,7 +72,7 @@ _ETIQUETAS_PENSAMIENTO = ("<think>", "</think>")
 # El modelo dice que la documentación no responde (con o sin la marca SIN_RESPALDO).
 _RE_NIEGA = re.compile(
     r"\bno (?:lo |la |los |las |se )?(?:encuentr|he encontrado|hemos encontrado|aparece|figura|consta|indica|"
-    r"especifica|menciona|recoge|detalla|tengo (?:informaci|datos)|dispongo|hay (?:informaci|datos|nada))",
+    r"especifica|menciona|recoge|detalla|tengo (?:informaci|datos?)|dispongo|hay (?:informaci|datos?|nada|ningun))",
     re.I,
 )
 
@@ -174,6 +174,302 @@ def con_respaldo(encontrados: list[Encontrado], pregunta: str | None = None) -> 
     return [e for e in encontrados if respalda(e)]
 
 
+# --------------------------------------------------------------------------- respaldo claro y respuesta extractiva
+#
+# Los modelos pequeños (qwen3:0.6b) contestan a menudo solo «SIN_RESPALDO» aunque el dato esté en el
+# CONTEXTO (en Oracle: «¿cuántos puestos tiene Producción?», con la Guía de acogida como primera fuente).
+# Cuando el respaldo es CLARO, esa respuesta se rehace: primero se reintenta con un prompt más directo y,
+# si tampoco sirve, se compone una respuesta EXTRACTIVA con las frases del fragmento, citadas.
+# «Claro» no es solo similitud: «¿Qué presión lleva el cilindro de la prensa 2?» (sin respuesta en la
+# demo) recupera la prensa 3 con similitud 0,61 y coincidencia de texto. Hace falta además una FRASE de un
+# fragmento que contenga todas las palabras con contenido de la pregunta (contando el título y el apartado
+# del fragmento), sus códigos (IT-031, S4) y sus referencias numeradas («prensa 2», «nave 1» o «P2»).
+
+MARGEN_CLARO = 0.1  # la mejor similitud supera el umbral al menos en esto (o hay coincidencia significativa)
+MAX_FRASES_EXTRACTIVA = 3
+MAX_EXTRACTIVA = 600  # caracteres de frases en la respuesta extractiva
+MAX_TOKENS_REINTENTO = 220
+MAX_FRAGMENTOS_REINTENTO = 2
+# Sufijos que se quitan para comparar palabras («engrasan» y «engrase», «puesto» y «puestos»), sin llegar a
+# confundir «responsable» con «responde» ni «plantilla» con «planta» (lo que hace la raíz de 5 letras).
+_SUFIJOS = tuple(sorted((
+    "amientos", "imientos", "amiento", "imiento", "aciones", "iciones", "ciones", "siones", "acion", "icion",
+    "cion", "sion", "mente", "ables", "ibles", "able", "ible", "adoras", "adores", "adora", "ador", "ando",
+    "iendo", "amos", "emos", "imos", "ados", "adas", "idos", "idas", "ajes", "ado", "ada", "ido", "ida", "aje",
+    "ar", "er", "ir", "an", "en", "es", "as", "os", "a", "e", "o", "s",
+), key=len, reverse=True))
+# «prensa 2», «línea 2», «nave nº 1»: una referencia numerada de la pregunta tiene que estar en el fragmento.
+_RE_REFERENCIA = re.compile(r"\b([a-z]{4,})\s+(?:no?\.?\s*)?(\d{1,3})\b")
+_RE_SEPARADOR_TABLA = re.compile(r"^\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?$")
+_RE_ABREVIATURA = re.compile(r"(?:\b[A-ZÁÉÍÓÚÑ]|\b(?:[Pp]|[Ee]j|aprox|m[aá]x|m[ií]n|n[uú]m|p[aá]g|Sr|Sra|Rev))\.$")
+# Preguntas por una cantidad o por un valor: la frase que responde tiene que llevar un número («¿Cada
+# cuántos ciclos se limpia?» no lo responde «reiniciar el ciclo en modo manual»).
+_NUMEROS = ("dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|"
+            "veinte|treinta|cuarenta|cincuenta|sesenta|cien|ciento|doscientos|quinientos|mil")
+_RE_NUMERO = re.compile(rf"\d|\b(?:{_NUMEROS})\b")
+_RE_CUANTOS = re.compile(r"\bcuant[oa]s\s+(?:de\s+)?([a-z]{2,})|\bcuanto\s+(tiempo)\b")
+_RE_CUANTO = re.compile(r"\bcuant[oa]s?\b")
+_RE_MAGNITUD = re.compile(
+    r"\b(?:que|cual|cuales)\b(?:\s+\w+){0,3}?\s+(?:presion|temperatura|par|valor|distancia|tolerancias?|peso|"
+    r"longitud|altura|anchura|velocidad|frecuencia|caudal|tension|potencia|capacidad|fuerza|dimension|medida|cota|"
+    r"tiempo|duracion|plazo|precio|coste|cantidad)\b"
+)
+_RE_CIFRA = re.compile(r"\d+(?:[.,]\d+)*")
+# Raíces de palabras que no aportan nada a una respuesta (versión, revisión, página, documento...).
+_GENERICAS = frozenset({"version", "revi", "pagin", "document", "fragment", "tare", "segun"})
+MIN_PARECIDO_REINTENTO = 0.3  # parte de lo que aporta la mejor frase que el reintento tiene que decir
+
+
+def _normal(texto: str) -> str:
+    """Minúsculas y sin tildes."""
+    t = unicodedata.normalize("NFKD", (texto or "").lower())
+    return "".join(c for c in t if not unicodedata.combining(c))
+
+
+def _raiz(palabra: str) -> str:
+    for s in _SUFIJOS:
+        if palabra.endswith(s) and len(palabra) - len(s) >= 4:
+            return palabra[: -len(s)]
+    return palabra
+
+
+def _raices(texto: str) -> frozenset[str]:
+    """Raíces (sin sufijos) de las palabras con contenido de un texto. Las siglas cortas (EPI, EPIs, CAD,
+    PRL) cuentan aunque tengan menos de cuatro letras."""
+    raices: set[str] = set()
+    for palabra in re.findall(r"[^\W\d_]+", texto or ""):
+        if re.fullmatch(r"[A-ZÁÉÍÓÚÑ]{2,4}s?", palabra):
+            raices.add(_normal(palabra[:-1] if palabra.endswith("s") else palabra))
+            continue
+        p = _normal(palabra)
+        if len(p) >= 4 and p not in _VACIAS:
+            raices.add(_raiz(p))
+    return frozenset(raices)
+
+
+def _referencias(texto: str) -> frozenset[tuple[str, str]]:
+    return frozenset((_raiz(p), n) for p, n in _RE_REFERENCIA.findall(_normal(texto)) if p not in _VACIAS)
+
+
+def sin_markdown(texto: str) -> str:
+    """Una línea sin marcas de Markdown (encabezado, cita, viñeta, negrita, código, enlaces)."""
+    t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", texto or "")
+    t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", t)
+    t = re.sub(r"^\s*(?:#{1,6}\s+|>\s*|[-*+•]\s+|\d{1,2}[.)]\s+)+", "", t)
+    t = t.replace("**", "").replace("__", "").replace("`", "")
+    t = re.sub(r"(?<![\w*])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![\w*])", r"\1", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _frases(texto: str) -> list[str]:
+    frases: list[str] = []
+    for p in re.split(r"(?<=[.!?])\s+", texto):
+        if frases and (len(frases[-1]) < 15 or _RE_ABREVIATURA.search(frases[-1])):
+            frases[-1] += " " + p  # «S. L.», «Paso 3.», «p. ej.» no terminan la frase
+        else:
+            frases.append(p)
+    return [f.strip() for f in frases if f.strip()]
+
+
+def unidades(texto: str) -> list[tuple[str, str]]:
+    """(apartado, frase) de un fragmento, sin Markdown: frases de los párrafos, elementos de las listas y
+    filas de las tablas («Columna: valor; …»). Las líneas partidas de un PDF se vuelven a unir."""
+    lineas: list[str] = []
+    for bruta in (texto or "").splitlines():
+        linea = bruta.strip()
+        if not linea:
+            lineas.append("")
+            continue
+        m = re.match(r"#{1,6}\s+(.*)", linea)
+        if m:
+            # El troceado puede pegar un encabezado con la línea siguiente («## Codificación | Elemento |…»).
+            corte = re.search(r"\s(?=\|)|\s(?=[-*•]\s)|\s(?=\d{1,2}\.\s)", m.group(1))
+            if corte:
+                lineas += ["#" + m.group(1)[: corte.start()], m.group(1)[corte.end():].strip()]
+            else:
+                lineas.append("#" + m.group(1))
+            continue
+        anterior = lineas[-1] if lineas else ""
+        if (anterior and not anterior.startswith(("#", "|")) and not linea.startswith("|")
+                and linea[0].islower() and not re.search(r"[.:;!?]$", anterior)):
+            lineas[-1] = f"{anterior} {linea}"  # continuación de una línea partida
+            continue
+        lineas.append(linea)
+
+    salida: list[tuple[str, str]] = []
+    apartado = ""
+    cabecera: list[str] | None = None
+    fila: tuple[int, list[str]] | None = None  # última fila de tabla (puede resultar ser la cabecera)
+    for linea in lineas:
+        if not linea:
+            cabecera = fila = None
+        elif linea.startswith("#"):
+            apartado, cabecera, fila = sin_markdown(linea.lstrip("#")), None, None
+        elif linea.startswith("|"):
+            if _RE_SEPARADOR_TABLA.match(linea):
+                if fila is not None and fila[0] == len(salida) - 1:
+                    salida.pop()
+                    cabecera = fila[1]
+                fila = None
+                continue
+            celdas = [sin_markdown(c) for c in linea.strip().strip("|").split("|")]
+            if cabecera and len(cabecera) == len(celdas):
+                texto_fila = "; ".join(f"{h}: {c}" if h else c for h, c in zip(cabecera, celdas) if c)
+            else:
+                texto_fila = " · ".join(c for c in celdas if c)
+            salida.append((apartado, texto_fila))
+            fila = (len(salida) - 1, celdas)
+        else:
+            cabecera = fila = None
+            salida += [(apartado, f) for f in _frases(sin_markdown(linea))]
+    return [(a, f) for a, f in salida if len(f) >= 12]
+
+
+@dataclass(frozen=True)
+class Frase:
+    """Una frase de un fragmento que responde a la pregunta (para el reintento y la respuesta extractiva)."""
+
+    n: int
+    documento_id: int | None
+    posicion: int
+    texto: str
+    en_frase: int  # palabras de la pregunta que están en la propia frase (las demás, en el título o el apartado)
+    similitud: float
+
+
+def respaldo_claro(encontrados: list[Encontrado], pregunta: str) -> bool:
+    """La recuperación respalda la pregunta con margen: la mejor similitud supera el umbral en
+    MARGEN_CLARO o algún fragmento tiene una coincidencia de texto significativa."""
+    if not encontrados:
+        return False
+    mejor = max((e.similitud or 0.0) for e in encontrados)
+    if mejor >= ajustes().umbral_respaldo + MARGEN_CLARO:
+        return True
+    buscados = terminos(pregunta)
+    return any(coincidencia_significativa(buscados, e) for e in encontrados)
+
+
+def _pide_numero(pregunta: str) -> tuple[bool, str | None]:
+    """¿La pregunta pide una cantidad o un valor? Devuelve (hace falta un número, raíz de lo que se cuenta:
+    «cuántos puestos» → «puest», que tiene que ir justo detrás del número)."""
+    t = _normal(pregunta)
+    m = _RE_CUANTOS.search(t)
+    if m:
+        palabra = m.group(1) or m.group(2)
+        return True, (None if palabra in _VACIAS else _raiz(palabra))
+    return bool(_RE_CUANTO.search(t) or _RE_MAGNITUD.search(t)), None
+
+
+def _tiene_numero(texto_normal: str, contado: str | None) -> bool:
+    if contado is None:
+        return bool(_RE_NUMERO.search(texto_normal))
+    return bool(re.search(rf"(?:\d+(?:[.,]\d+)*|\b(?:{_NUMEROS}))\s+(?:[a-z]+\s+)?{re.escape(contado)}", texto_normal))
+
+
+def evidencia(fuentes: list[dict[str, Any]], textos: list[str], pregunta: str,
+              empresa: str | None = None) -> list[Frase]:
+    """Frases de los fragmentos que responden claramente a la pregunta, de la mejor a la peor.
+
+    Una frase vale si:
+    * contiene al menos la mitad de las palabras con contenido de la pregunta y el resto está en el título
+      o en el apartado del fragmento (el nombre de la empresa no cuenta: sale en todas partes);
+    * aporta algo más que la pregunta y el título (dos palabras nuevas, o una y una cifra);
+    * el fragmento tiene todos los códigos y referencias numeradas de la pregunta («prensa 3» también
+      vale escrito «P3») y la frase no habla de otra («nave 2» no responde a «nave 1»);
+    * si la pregunta pide una cantidad o un valor, lleva un número («tres puestos», «cada 40 horas»);
+    * no es una pregunta (la de una FAQ).
+    Con menos de dos palabras con contenido (o una y un código), no hay evidencia."""
+    buscadas = _raices(pregunta) - _raices(empresa or "")
+    codigos = terminos(pregunta).codigos
+    referencias = _referencias(pregunta)
+    if len(buscadas) < 2 and not (buscadas and (codigos or referencias)):
+        return []
+    pide_numero, contado = _pide_numero(pregunta)
+    nombres = {r[0] for r in referencias}
+    frases: list[Frase] = []
+    for f, texto in zip(fuentes, textos):
+        cabeza = f"{f.get('titulo') or ''} {f.get('codigo') or ''}"
+        todo = f"{cabeza}\n{texto}"
+        en_doc = terminos(todo).codigos
+        if codigos - en_doc:
+            continue
+        refs = _referencias(todo)
+        if any(r not in refs and f"{r[0][0]}{r[1]}" not in en_doc for r in referencias):
+            continue
+        raices_titulo = _raices(cabeza)
+        del_titulo = raices_titulo & buscadas
+        cifras_fijas = set(_RE_CIFRA.findall(f"{cabeza} {pregunta} {f.get('version') or ''}"))
+        for i, (apartado, frase) in enumerate(unidades(texto)):
+            if "?" in frase or "¿" in frase:
+                continue
+            raices_frase = _raices(frase)
+            propias = raices_frase & buscadas
+            if len(propias) * 2 < len(buscadas) or propias | del_titulo | (_raices(apartado) & buscadas) != buscadas:
+                continue
+            normal = _normal(frase)
+            nuevas = raices_frase - buscadas - raices_titulo - _GENERICAS
+            cifras = set(_RE_CIFRA.findall(frase)) - cifras_fijas
+            if len(nuevas) < 2 and not (nuevas and cifras):
+                continue  # no aporta nada: el título del documento repetido, «Tarea: …»
+            otras = {r for r in _referencias(frase) if r[0] in nombres}
+            if otras and not otras & referencias:
+                continue
+            if pide_numero and not _tiene_numero(normal, contado):
+                continue
+            frases.append(Frase(f["n"], f.get("documento_id"), i, frase, len(propias),
+                                float(f.get("similitud") or 0.0)))
+    frases.sort(key=lambda x: (-x.en_frase, -x.similitud, x.n, x.posicion))
+    return frases
+
+
+def _contexto_directo(fuentes: list[dict[str, Any]], textos: list[str], frases: list[Frase]) -> str:
+    """Contexto del reintento: solo los fragmentos donde está la respuesta, sin Markdown (con su número)."""
+    bloques: list[str] = []
+    for n in list(dict.fromkeys(f.n for f in frases))[:MAX_FRAGMENTOS_REINTENTO]:
+        fu = fuentes[n - 1]
+        lineas: list[str] = []
+        apartado = ""
+        for ap, frase in unidades(textos[n - 1]):
+            if ap and ap != apartado:
+                lineas.append(f"{ap}:")
+                apartado = ap
+            lineas.append(frase)
+        bloques.append(prompts.fragmento_contexto(n, fu.get("titulo") or "", "\n".join(lineas), fu.get("version"),
+                                                  fu.get("paso"), codigo=fu.get("codigo")))
+    return "\n\n".join(bloques)
+
+
+def respuesta_extractiva(prep: Preparada) -> str:
+    """Respuesta compuesta con las 1-3 frases que mejor responden, del mismo documento, sin Markdown,
+    precedidas de «Según «título» (vN):» y con su cita."""
+    mejor = prep.evidencia[0]
+    otras: list[Frase] = []
+    vistas = {_normal(mejor.texto)}
+    completa = len(_raices(prep.pregunta_terminos) - _raices(prep.empresa or ""))
+    for f in prep.evidencia[1:]:
+        clave = _normal(f.texto)
+        # Solo se añaden frases del mismo documento que responden por sí solas (sin ayuda del título).
+        if f.documento_id != mejor.documento_id or f.en_frase < max(mejor.en_frase, completa) or clave in vistas:
+            continue
+        vistas.add(clave)
+        otras.append(f)
+        if len(otras) >= MAX_FRASES_EXTRACTIVA - 1:
+            break
+    fuente = prep.fuentes[mejor.n - 1]
+    titulo = fuente.get("titulo") or "la documentación"
+    version = fuente.get("version")
+    cabeza = f"Según «{titulo}»" + (f" (v{version})" if version and f"(v{version})" not in titulo else "")
+    partes: list[str] = []
+    total = 0
+    for f in [mejor, *sorted(otras, key=lambda x: (x.n, x.posicion))]:
+        t = _recortar(f.texto, 400).rstrip(" .;:,")
+        if partes and total + len(t) > MAX_EXTRACTIVA:
+            break
+        partes.append(f"{t} [{f.n}].")
+        total += len(t)
+    return f"{cabeza}: " + " ".join(partes)
+
+
 # --------------------------------------------------------------------------- preparación
 
 
@@ -196,6 +492,13 @@ class Preparada:
     usar_memoria: bool = False
     contar_ejecucion: bool = False  # sumar la consulta a la ejecución (solo desde /api/consulta)
     inicio: float = field(default_factory=time.monotonic)
+    # Respaldo claro: frases que responden (vacía = la respuesta del modelo nunca se rehace).
+    evidencia: list[Frase] = field(default_factory=list)
+    contexto_directo: str = ""  # contexto del reintento
+    textos_evidencia: dict[int, str] = field(default_factory=dict)  # n → texto de los fragmentos del reintento
+    empresa: str | None = None
+    pregunta_terminos: str = ""  # texto con el que se buscó la evidencia (la pregunta y, si acaso, tarea o puesto)
+    rehecha: str | None = None  # «reintento» o «extractiva» si se rehízo la respuesta del modelo
 
 
 def _recortar(texto: str, maximo: int) -> str:
@@ -348,12 +651,14 @@ def _consulta_busqueda(pregunta: str, tarea: dict[str, Any] | None, historial: l
     return pregunta, pregunta
 
 
-def _fuentes_y_contexto(bd: Session, encontrados: list[Encontrado]) -> tuple[list[dict[str, Any]], str]:
+def _fuentes_y_contexto(bd: Session, encontrados: list[Encontrado]) -> tuple[list[dict[str, Any]], str, list[str]]:
+    """(fuentes, contexto numerado, texto de cada fragmento tal y como va en el contexto)."""
     docs = {d.id: d for d in bd.scalars(
         select(Documento).where(Documento.id.in_({e.documento_id for e in encontrados}))
     ).all()} if encontrados else {}
     fuentes: list[dict[str, Any]] = []
     bloques: list[str] = []
+    textos: list[str] = []
     total = 0
     for e in encontrados:
         meta = e.metadatos or {}
@@ -387,9 +692,10 @@ def _fuentes_y_contexto(bd: Session, encontrados: list[Encontrado]) -> tuple[lis
         })
         bloques.append(prompts.fragmento_contexto(n, e.titulo, texto, version, meta.get("paso"), autor, validador,
                                                   meta.get("codigo")))
+        textos.append(texto)
         total += len(texto)
     _anadir_tarea(bd, fuentes)
-    return fuentes, "\n\n".join(bloques)
+    return fuentes, "\n\n".join(bloques), textos
 
 
 def _anadir_tarea(bd: Session, fuentes: list[dict[str, Any]]) -> None:
@@ -440,7 +746,8 @@ def preparar(bd: Session, actor: Actor, pregunta: str, modo: str = "normal",
         log.warning("Búsqueda sin modelo de embeddings: %s", e)
         raise HTTPException(503, "El buscador de conocimiento no está disponible ahora mismo. "
                                  "Inténtalo de nuevo en unos segundos.") from e
-    fuentes, texto_contexto = _fuentes_y_contexto(bd, con_respaldo(encontrados, texto_terminos))
+    respaldan = con_respaldo(encontrados, texto_terminos)
+    fuentes, texto_contexto, textos = _fuentes_y_contexto(bd, respaldan)
 
     usar_memoria = bool(actor.usuario and actor.usuario.memoria_activa)
     recuerdos = [m.contenido for m in memoria.relevantes(bd, actor.id, pregunta, RECUERDOS_POR_CONSULTA)] \
@@ -454,12 +761,18 @@ def preparar(bd: Session, actor: Actor, pregunta: str, modo: str = "normal",
                                        persona if habla_de_si else None)
     mensajes = [{"role": "system", "content": sistema}, *hist,
                 {"role": "user", "content": prompts.usuario_consulta(pregunta, texto_contexto or None)}]
+    # En el modo tutor no se rehace la respuesta: una respuesta directa o extractiva le daría la solución.
+    frases = evidencia(fuentes, textos, texto_terminos, empresa) \
+        if fuentes and modo != "socratico" and respaldo_claro(respaldan, texto_terminos) else []
     prep = Preparada(
         pregunta=pregunta, modo=modo, mensajes=mensajes, fuentes=fuentes, con_contexto=bool(fuentes), modelo=modelo,
         temperatura=0.4 if modo == "socratico" else 0.2,
         max_tokens=350 if modo == "planta" else 900,
         tarea_id=tarea_id, paso_id=paso_id, ejecucion_id=ejecucion_id, paso_critico=paso_critico,
         usar_memoria=usar_memoria, contar_ejecucion=contar_ejecucion, inicio=inicio,
+        evidencia=frases, contexto_directo=_contexto_directo(fuentes, textos, frases) if frases else "",
+        textos_evidencia={n: textos[n - 1] for n in list(dict.fromkeys(f.n for f in frases))[:MAX_FRAGMENTOS_REINTENTO]},
+        empresa=empresa, pregunta_terminos=texto_terminos,
     )
     # La consulta cuenta en la ejecución al preguntar (como en el modo planta), no al terminar la
     # respuesta: así no se libra quien corta el streaming a mitad.
@@ -547,6 +860,128 @@ def respaldada(texto: str, marca_vista: bool, n_fuentes: int) -> bool:
     if marca_vista:
         return bool(citas) and not niega
     return bool(citas) or not niega
+
+
+def _redaccion_valida(prep: Preparada, texto: str, marca_vista: bool) -> bool:
+    """¿Sirve lo que ha escrito el modelo? Se juzga solo cuando el respaldo es claro (prep.evidencia):
+    no vale vacía, ni un «no lo encuentro» (respaldada()), ni sin relación con la pregunta (sin citas y
+    sin ninguna palabra en común)."""
+    t = (texto or "").strip()
+    if not t or not respaldada(t, marca_vista, len(prep.fuentes)):
+        return False
+    return bool(citadas(t, len(prep.fuentes))) or bool(_raices(t) & _raices(prep.pregunta))
+
+
+def _sin_eco(prep: Preparada, texto: str) -> str:
+    """Quita la cabecera del fragmento que algunos modelos copian al principio («[1] Guía de acogida en
+    Producción (versión 1)»); si la cita iba en ella, la pone al final de la respuesta."""
+    for n in dict.fromkeys(f.n for f in prep.evidencia):
+        titulo = prep.fuentes[n - 1].get("titulo") or ""
+        eco = re.compile(rf"^\s*\[{n}\]\s*{re.escape(titulo)}\s*(?:\([^)]*\))?\s*[:.\-–]?\s*", re.I)
+        if titulo and eco.match(texto):
+            resto = eco.sub("", texto, count=1).strip()
+            if resto and not citadas(resto, len(prep.fuentes)):
+                resto = re.sub(r"\s*([.!?]?)\s*$", rf" [{n}]\1", resto, count=1)
+            texto = resto
+    # «[1] La P3 se engrasa…»: la cita va detrás de lo que respalda.
+    m = re.match(r"\s*(\[\d{1,2}\])\s*(\S.*)$", texto, re.S)
+    if m and not _RE_CITA.search(m.group(2)):
+        texto = re.sub(r"\s*([.!?]?)\s*$", rf" {m.group(1)}\1", m.group(2), count=1)
+    return texto
+
+
+def _reintento_valido(prep: Preparada, texto: str) -> str | None:
+    """La respuesta del reintento, limpia, si sirve: cita, no niega, dice algo del fragmento que no estaba
+    ya en la pregunta ni en el título, no trae cifras que no estén en el contexto y, si se pregunta por
+    una cantidad, la da. Si no sirve, None (y se compone la respuesta extractiva)."""
+    t = _sin_eco(prep, (texto or "").strip())
+    if not t or not citadas(t, len(prep.fuentes)) or _RE_NIEGA.search(t[:300]):
+        return None
+    cuerpo = " ".join(f for texto_n in prep.textos_evidencia.values() for _, f in unidades(texto_n))
+    titulos = " ".join(prep.fuentes[n - 1].get("titulo") or "" for n in {f.n for f in prep.evidencia})
+    nuevas = _raices(t) - _raices(prep.pregunta) - _raices(titulos)
+    if not nuevas & _raices(cuerpo):
+        return None
+    sin_citas = _RE_CITA.sub("", t)
+    if set(_RE_CIFRA.findall(sin_citas)) - set(_RE_CIFRA.findall(f"{cuerpo} {titulos} {prep.pregunta}")):
+        return None  # una cifra inventada
+    # Tiene que decir buena parte de lo que aporta la mejor frase (no basta con una palabra suelta).
+    mejor = prep.evidencia[0].texto
+    fijas = _raices(prep.pregunta_terminos) | _raices(titulos) | _GENERICAS
+    aporta = (_raices(mejor) - fijas) | (set(_RE_CIFRA.findall(mejor)) - set(_RE_CIFRA.findall(f"{titulos} {prep.pregunta}")))
+    dice = (_raices(sin_citas) | set(_RE_CIFRA.findall(sin_citas))) & aporta
+    if aporta and len(dice) < MIN_PARECIDO_REINTENTO * len(aporta):
+        return None
+    pide_numero, _ = _pide_numero(prep.pregunta)
+    if pide_numero and not _RE_NUMERO.search(_normal(sin_citas)):
+        return None
+    return t
+
+
+def _mensajes_directos(prep: Preparada) -> list[dict[str, Any]]:
+    n = prep.evidencia[0].n
+    return [{"role": "system", "content": prompts.sistema_directo(prep.empresa, n)},
+            {"role": "user", "content": prompts.usuario_directo(prep.pregunta, prep.contexto_directo, n)}]
+
+
+def _rehacer(prep: Preparada, bruto: str) -> str:
+    """Respuesta rehecha a partir de lo que escribió el reintento: la suya si sirve o, si no, la
+    extractiva. Anota en prep.rehecha cuál ha sido."""
+    filtro = FiltroMarca()
+    valido = _reintento_valido(prep, filtro.alimentar(bruto or "") + filtro.terminar())
+    prep.rehecha = "reintento" if valido else "extractiva"
+    log.info("Respuesta rehecha (%s) con el modelo %s", prep.rehecha, prep.modelo)
+    return valido or respuesta_extractiva(prep)
+
+
+class _Intento:
+    """La primera redacción del modelo en streaming. Con `retener`, no suelta nada mientras pueda acabar
+    siendo un «no lo encuentro» (marca SIN_RESPALDO, una negativa o, al principio, nada citado): si lo es,
+    la respuesta se rehace sin que la persona haya visto la mala. Sin `retener`, deja pasar todo al momento."""
+
+    def __init__(self, n_fuentes: int, retener: bool) -> None:
+        self.filtro = FiltroMarca()
+        self.n_fuentes = n_fuentes
+        self.soltado = not retener
+        self.retenido = ""
+        self.emitido = ""
+
+    def alimentar(self, delta: str) -> str:
+        return self._pasar(self.filtro.alimentar(delta))
+
+    def terminar(self) -> str:
+        return self._pasar(self.filtro.terminar())
+
+    def soltar(self) -> str:
+        """Deja pasar lo retenido (se ha dado por bueno)."""
+        t, self.retenido, self.soltado = self.retenido, "", True
+        self.emitido += t
+        return t
+
+    def sin_emitir(self) -> str:
+        """Lo que el modelo escribió y la persona no llegó a ver (para guardar una respuesta cortada)."""
+        return self.retenido + self.filtro.terminar()
+
+    def _pasar(self, visible: str) -> str:
+        if self.soltado:
+            self.emitido += visible
+            return visible
+        self.retenido += visible
+        return self.soltar() if self._fiable() else ""
+
+    def _fiable(self) -> bool:
+        t = self.retenido
+        if self.filtro.vista or _RE_NIEGA.search(t[:300]):
+            return False
+        return bool(citadas(t, self.n_fuentes)) or len(t.strip()) >= 120
+
+    @property
+    def texto(self) -> str:
+        return (self.emitido + self.retenido).strip()
+
+    @property
+    def vista(self) -> bool:
+        return self.filtro.vista
 
 
 def _merece_laguna(pregunta: str) -> bool:
@@ -638,6 +1073,8 @@ def finalizar(bd: Session, actor: Actor, prep: Preparada, texto: str, marca_vist
                                  "duracion_ms": duracion, "laguna_id": laguna_id}
     if interrumpida:
         resultado["interrumpida"] = True
+    if prep.rehecha:
+        resultado["rehecha"] = prep.rehecha  # el modelo no supo responder con un respaldo claro
     registrar(
         bd, actor, "pregunto", "consulta", c.id, _recortar(prep.pregunta, 200),
         resultado=resultado,
@@ -699,23 +1136,46 @@ async def emitir(bd: Session, actor: Actor, prep: Preparada) -> AsyncIterator[di
     """Eventos de una consulta ya preparada: fuentes, tokens y fin (o error).
 
     Si el generador se cierra antes de terminar (la persona detiene la respuesta o se corta la
-    conexión), la consulta se guarda igual en segundo plano con el texto que llegó a escribirse."""
-    filtro = FiltroMarca()
-    partes: list[str] = []
+    conexión), la consulta se guarda igual en segundo plano con el texto que llegó a escribirse.
+
+    Con respaldo claro (prep.evidencia), lo que escribe el modelo se retiene mientras pueda ser un «no lo
+    encuentro»; si lo es, se rehace (reintento directo y, si no, respuesta extractiva) y se emiten los
+    tokens de la nueva respuesta. La persona solo ve la respuesta que vale."""
+    rehacer = bool(prep.evidencia)
+    actual = _Intento(len(prep.fuentes), retener=rehacer)
+    partes: list[str] = []  # lo que ha llegado a la persona
     pendiente = True  # nadie más va a guardar esta consulta si el generador se corta aquí
     try:
         yield {"tipo": "fuentes", "fuentes": prep.fuentes}
         try:
             async for delta in llm.chat_stream(prep.mensajes, prep.modelo, temperatura=prep.temperatura,
                                                max_tokens=prep.max_tokens):
-                visible = filtro.alimentar(delta)
+                visible = actual.alimentar(delta)
                 if visible:
                     partes.append(visible)
                     yield {"tipo": "token", "texto": visible}
-            resto = filtro.terminar()
+            resto = actual.terminar()
             if resto:
                 partes.append(resto)
                 yield {"tipo": "token", "texto": resto}
+            if rehacer and not actual.soltado:
+                if _redaccion_valida(prep, actual.texto, actual.vista):
+                    resto = actual.soltar()
+                else:
+                    # El reintento es corto (una o dos frases): se lee entero y se juzga antes de enseñarlo.
+                    bruto: list[str] = []
+                    try:
+                        async for delta in llm.chat_stream(_mensajes_directos(prep), prep.modelo, temperatura=0.1,
+                                                           max_tokens=MAX_TOKENS_REINTENTO):
+                            bruto.append(delta)
+                    except llm.ErrorModelo as e:
+                        log.warning("El reintento de la consulta falló: %s", e)
+                    resto = _rehacer(prep, "".join(bruto))
+                    actual = _Intento(len(prep.fuentes), retener=False)
+                # Los tokens de la respuesta que vale, palabra a palabra.
+                for trozo in re.findall(r"\s*\S+\s*", resto):
+                    partes.append(trozo)
+                    yield {"tipo": "token", "texto": trozo}
         except llm.ErrorModelo as e:
             log.warning("El modelo falló durante la consulta: %s", e)
             pendiente = False
@@ -728,11 +1188,11 @@ async def emitir(bd: Session, actor: Actor, prep: Preparada) -> AsyncIterator[di
             return
         texto = "".join(partes).strip()
         if not texto:
-            texto = _texto_vacio(filtro.vista)
+            texto = _texto_vacio(actual.vista)
             yield {"tipo": "token", "texto": texto}
         pendiente = False  # a partir de aquí la guarda finalizar() (aunque se cancele la espera, el hilo sigue)
         try:
-            fin = await run_in_threadpool(finalizar, bd, actor, prep, texto, filtro.vista)
+            fin = await run_in_threadpool(finalizar, bd, actor, prep, texto, actual.vista)
         except Exception:  # noqa: BLE001
             log.exception("No se pudo guardar la consulta")
             bd.rollback()
@@ -741,8 +1201,8 @@ async def emitir(bd: Session, actor: Actor, prep: Preparada) -> AsyncIterator[di
         yield {"tipo": "fin", **fin}
     finally:
         if pendiente:
-            texto = ("".join(partes) + filtro.terminar()).strip()
-            _guardar_interrumpida(actor, prep, texto, filtro.vista)
+            texto = ("".join(partes) + actual.sin_emitir()).strip()
+            _guardar_interrumpida(actor, prep, texto, actual.vista)
 
 
 async def responder_stream(bd: Session, actor: Actor, pregunta: str, modo: str = "normal",
@@ -778,8 +1238,17 @@ def responder(bd: Session, actor: Actor, pregunta: str, modo: str = "normal", co
         log.warning("Respuesta del modelo que no se entiende: %r", e)
         raise HTTPException(503, _MODELO_CAIDO) from e
     filtro = FiltroMarca()
-    texto = (filtro.alimentar(bruto) + filtro.terminar()).strip() or _texto_vacio(filtro.vista)
-    fin = finalizar(bd, actor, prep, texto, filtro.vista)
+    texto, vista = (filtro.alimentar(bruto) + filtro.terminar()).strip(), filtro.vista
+    if prep.evidencia and not _redaccion_valida(prep, texto, vista):
+        try:
+            bruto = llm.chat(_mensajes_directos(prep), modelo=prep.modelo, temperatura=0.1,
+                             max_tokens=MAX_TOKENS_REINTENTO)
+        except (llm.ErrorModelo, KeyError, IndexError, TypeError, ValueError) as e:
+            log.warning("El reintento de la consulta falló: %r", e)
+            bruto = ""
+        texto, vista = _rehacer(prep, bruto), False
+    texto = texto or _texto_vacio(vista)
+    fin = finalizar(bd, actor, prep, texto, vista)
     return {"respuesta": texto, "fuentes": prep.fuentes, **fin}
 
 

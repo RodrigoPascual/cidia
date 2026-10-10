@@ -7,8 +7,25 @@ import {
 } from 'lucide-react'
 import { urlServidor } from '../../api'
 import { useSesion } from '../../sesion'
-import { Aviso, Boton, Etiqueta } from '../../ui'
+import { Aviso, Boton, Etiqueta, TextoFormato } from '../../ui'
 import { nombreTipo, ubicacion, type Fuente } from './tipos'
+
+/** El fragmento es un trozo del documento tal cual (Markdown, o texto de un PDF): se prepara para verlo
+ * con formato. El troceado puede pegar un encabezado con la línea siguiente («## Zonas | Zona | EPI |»),
+ * cortar una negrita a medias o dejar las líneas de un PDF sin párrafos. */
+function fragmentoMarkdown(texto: string): string {
+  let t = texto.replace(/\r/g, '')
+  // Encabezado pegado a una tabla o a una lista: cada uno en su línea.
+  t = t.replace(/^(#{1,6}\s+[^\n|]*?)\s+(?=\|)/gm, '$1\n\n')
+  t = t.replace(/^(#{1,6}\s+[^\n]*?)\s+(?=[-*]\s|\d{1,2}\.\s)/gm, '$1\n\n')
+  // Una negrita que el corte dejó sin cerrar se queda sin marcas.
+  if ((t.match(/\*\*/g) ?? []).length % 2 === 1) t = t.replace(/\*\*(?![\s\S]*\*\*)/, '')
+  // Una tabla va separada del texto de antes y de después (si no, el texto se toma como otra fila).
+  t = t.replace(/([^\n|][ \t]*)\n(?=\|)/g, '$1\n\n').replace(/(\|[ \t]*)\n(?=[^\n|])/g, '$1\n\n')
+  // Saltos de línea sueltos (texto de un PDF) como saltos de verdad.
+  t = t.replace(/([^\n|])\n(?=[^\n|])/g, '$1  \n')
+  return t
+}
 
 export default function PanelFuente({ fuentes, n, citadas, onCambiar, onCerrar }: {
   fuentes: Fuente[]
@@ -109,7 +126,7 @@ export default function PanelFuente({ fuentes, n, citadas, onCambiar, onCerrar }
               )}
               <div className="panel-fuente-fragmento">
                 <Quote className="comillas" />
-                <p className="pre">{f.fragmento}</p>
+                <TextoFormato texto={fragmentoMarkdown(f.fragmento ?? '')} />
               </div>
             </>
           )}

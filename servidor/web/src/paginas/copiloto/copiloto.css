@@ -191,6 +191,15 @@
   background: var(--papel); border-left: 4px solid var(--acento); font-size: 14.5px; line-height: 1.6;
 }
 .panel-fuente-fragmento p { margin: 0; }
+/* El fragmento con formato (Markdown del documento): encabezados y tablas a la escala del panel. */
+.panel-fuente-fragmento .formato { overflow-x: auto; }
+.panel-fuente-fragmento .formato > :first-child { margin-top: 0; }
+.panel-fuente-fragmento .formato p + p { margin-top: 0.6em; }
+.panel-fuente-fragmento .formato h1, .panel-fuente-fragmento .formato h2, .panel-fuente-fragmento .formato h3,
+.panel-fuente-fragmento .formato h4 { font-size: 15px; margin: 0.7em 0 0.3em; }
+.panel-fuente-fragmento .formato table { font-size: 13px; }
+.panel-fuente-fragmento .formato th, .panel-fuente-fragmento .formato td { padding: 4px 8px; }
+.panel-fuente-fragmento .formato blockquote { margin: 0.4em 0; padding-left: 10px; border-left: 2px solid var(--linea); opacity: 0.85; }
 .panel-fuente-fragmento .comillas { position: absolute; top: -10px; right: 12px; width: 22px; height: 22px; color: var(--acento); background: var(--blanco); border-radius: 50%; padding: 3px; }
 .panel-fuente-personas { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
 .panel-fuente .icono-persona {

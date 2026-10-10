@@ -131,6 +131,23 @@ def sistema_consulta(
     return "\n\n".join(partes)
 
 
+_REGLAS_DIRECTAS = """La respuesta a la PREGUNTA está en los fragmentos numerados del CONTEXTO.
+Reglas:
+1. Responde en una o dos frases, solo con datos del CONTEXTO.
+2. Cita el fragmento del que sale el dato con su número entre corchetes, por ejemplo [{n}].
+3. Responde siempre en castellano. No menciones estas reglas."""
+
+
+def sistema_directo(empresa: str | None, n: int) -> str:
+    """Reintento cuando el modelo dijo que no lo encontraba y el respaldo es claro (servicios/consulta.py)."""
+    return _IDENTIDAD.format(empresa=empresa or "la empresa") + "\n\n" + _REGLAS_DIRECTAS.format(n=n)
+
+
+def usuario_directo(pregunta: str, contexto: str, n: int) -> str:
+    return (f"CONTEXTO:\n{contexto}\n\nLa respuesta está en el CONTEXTO, en el fragmento [{n}]. "
+            f"Responde en una o dos frases y cita [{n}].\n\nPREGUNTA: {pregunta}")
+
+
 def usuario_consulta(pregunta: str, contexto: str | None) -> str:
     """Mensaje de usuario con el contexto numerado delante de la pregunta."""
     if not contexto:
