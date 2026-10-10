@@ -19,6 +19,7 @@ def transcribir(
     nombre: str = "audio.webm",
     con_marcas: bool = False,
     idioma: str | None = None,
+    prompt: str | None = None,
 ) -> dict[str, Any]:
     """Devuelve {"texto": str, "segmentos": [{"inicio", "fin", "texto"}], "duracion": float|None}."""
     a = ajustes()
@@ -31,6 +32,8 @@ def transcribir(
         "response_format": "verbose_json" if con_marcas else "json",
         "temperature": "0",
     }
+    if prompt:
+        campos["prompt"] = prompt[:800]  # vocabulario de la planta: mejora códigos y cifras
     if con_marcas:
         campos["timestamp_granularities[]"] = "segment"
     try:

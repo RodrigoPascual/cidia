@@ -88,7 +88,7 @@ def _ffmpeg_disponible(monkeypatch: pytest.MonkeyPatch) -> bool:
 
 
 def _transcripcion(segmentos: list[dict[str, Any]]):
-    def transcribir(audio: Any, nombre: str = "audio.webm", con_marcas: bool = False, idioma: str | None = None):
+    def transcribir(audio: Any, nombre: str = "audio.webm", con_marcas: bool = False, idioma: str | None = None, **otros: Any):
         return {"texto": " ".join(s["texto"] for s in segmentos), "segmentos": segmentos,
                 "duracion": segmentos[-1]["fin"]}
     return transcribir

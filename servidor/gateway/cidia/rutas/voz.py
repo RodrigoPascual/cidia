@@ -6,10 +6,16 @@ import logging
 import re
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from cidia.db import obtener_bd
 
 from cidia.ficheros import nombre_seguro
 from cidia.ia import asr
+from cidia.modelos import Instruccion, Paso, Puesto, Tarea
+from cidia.permisos import alcance_de, departamentos_visibles
 from cidia.seguridad import Actor, usuario_actual
 
 log = logging.getLogger("cidia.voz")
@@ -41,9 +47,33 @@ def limpiar_transcripcion(texto: str | None) -> str:
     return transcripcion_util(texto) or ""
 
 
+def vocabulario(bd: Session, actor: Actor, tarea_id: int | None = None) -> str:
+    """Códigos y nombres de las tareas que la persona puede ver (y los pasos de la tarea en curso),
+    como prompt inicial de Whisper: con ruido de planta mejora mucho los códigos y las cifras."""
+    alcance = alcance_de(bd, actor)
+    deps = departamentos_visibles(alcance)
+    consulta = select(Tarea.id, Tarea.codigo, Tarea.nombre).join(Puesto, Puesto.id == Tarea.puesto_id).where(Tarea.activa.is_(True))
+    if not alcance.todo:
+        if not deps:
+            return ""
+        consulta = consulta.where(Puesto.departamento_id.in_(deps))
+    tareas = bd.execute(consulta.order_by(Tarea.id).limit(30)).all()
+    partes: list[str] = []
+    if tarea_id and any(t.id == tarea_id for t in tareas):
+        pasos = bd.scalars(select(Paso.titulo).join(Instruccion, Instruccion.id == Paso.instruccion_id)
+                           .where(Instruccion.tarea_id == tarea_id, Instruccion.estado == "publicada")
+                           .order_by(Paso.orden).limit(12)).all()
+        partes.extend(pasos)
+    partes.extend(f"{t.codigo} {t.nombre}" if t.codigo else t.nombre for t in tareas)
+    texto = "Vocabulario de la planta: " + "; ".join(partes)
+    return texto[:700]
+
+
 @router.post("/transcribir")
-def transcribir(audio: UploadFile = File(...), actor: Actor = Depends(usuario_actual)) -> dict[str, Any]:
-    """Devuelve {texto, duracion}. Solo con sesión de usuario (los invitados no usan la voz)."""
+def transcribir(audio: UploadFile = File(...), tarea_id: int | None = Form(None),
+                actor: Actor = Depends(usuario_actual), bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
+    """Devuelve {texto, duracion}. Solo con sesión de usuario (los invitados no usan la voz).
+    `tarea_id` (opcional) añade los pasos de esa tarea al vocabulario."""
     tipo = (audio.content_type or "").split(";")[0].strip().lower()
     if not (tipo.startswith("audio/") or tipo in _TIPOS_GENERICOS):
         raise HTTPException(400, "El fichero no es una grabación de audio.")
@@ -53,7 +83,12 @@ def transcribir(audio: UploadFile = File(...), actor: Actor = Depends(usuario_ac
     if len(datos) < MIN_AUDIO:
         raise HTTPException(400, "La grabación está vacía. Mantén pulsado el botón mientras hablas.")
     try:
-        r = asr.transcribir(datos, nombre=nombre_seguro(audio.filename or "voz.webm"))
+        try:
+            prompt = vocabulario(bd, actor, tarea_id)
+        except Exception:  # noqa: BLE001  (el vocabulario ayuda, pero no es imprescindible)
+            log.warning("No se pudo preparar el vocabulario de la voz", exc_info=True)
+            prompt = ""
+        r = asr.transcribir(datos, nombre=nombre_seguro(audio.filename or "voz.webm"), prompt=prompt or None)
     except Exception as e:  # noqa: BLE001  (servicio caído o respuesta que no se entiende)
         log.warning("Fallo de transcripción: %s", e)
         raise HTTPException(503, "El servicio de voz no está disponible ahora mismo. "

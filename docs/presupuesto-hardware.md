@@ -37,7 +37,7 @@ Los tres perfiles son los de la sección «Adaptación a cada empresa» del plan
 * Búferes y codificador de visión: 0,5 a 1 GB. Embeddings (`qwen3-embedding:0.6b`): 0,8 GB. Whisper `large-v3-turbo`: 1,5 a 2 GB mientras transcribe.
 * Total en el MSI: unos 9,5 a 10 GB, así que caben `OLLAMA_NUM_PARALLEL=1` con 32K o `NUM_PARALLEL=2` con 16K cada uno, que ocupan lo mismo. Whisper se carga a demanda.
 
-**De consultas a la vez a puestos atendidos [E, a medir en la fase 4 con la prueba de varios usuarios a la vez].** Una consulta con GPU ocupa su hueco unos 10 a 20 s (prompt de unos 6.000 tokens y respuesta de 500 a 40-60 tokens por segundo). Con unas 20 consultas por operario y jornada, la ocupación media de cada puesto es del 1 al 2 %. Dejamos margen para los picos (inicio de turno, sesiones de formación) y para el procesado de capturas, que ocupa la GPU varios minutos: **un hueco por cada 5 a 10 puestos**.
+**De consultas a la vez a puestos atendidos [E, a medir en la fase 4 con la prueba de varios usuarios a la vez].** Una consulta con GPU ocupa su hueco unos 10 a 20 s (prompt de unos 6.000 tokens y respuesta de 500 a 40-60 tokens por segundo). Con unas 20 consultas por operario y jornada, cada puesto ocupa la GPU alrededor del 1 % de la jornada. Dejamos margen para los picos (inicio de turno, sesiones de formación) y para el procesado de capturas, que ocupa la GPU varios minutos: **un hueco por cada 5 a 10 puestos**.
 
 | GPU (VRAM) | Ejemplo | Modelo recomendado | Reparto | Consultas a la vez | Puestos |
 |---|---|---|---|---|---|
@@ -174,7 +174,7 @@ Todo CidIA para un centro y varios puestos. Es la configuración del MVP, con un
 | **GPU recomendada, 48 GB** | NVIDIA RTX PRO 5000 Blackwell 48 GB (PNY) | 9.947,06 € | 8.220,71 € | [PcComponentes](https://www.pccomponentes.com/categorias/tarjetas-graficas/para-ia-machine-learning?page=2), vendedor externo NOWBUY | [C] |
 | GPU, 24 GB | PNY RTX PRO 4000 Blackwell 24 GB | 2.970,00 € | 2.454,55 € | ídem, vendedor INSTYLEANDJOY | [C] |
 | GPU, 32 GB | NVIDIA RTX PRO 4500 Blackwell 32 GB Server Edition | 5.347,00 € | 4.419,01 € | ídem, vendedor Leasi-es | [C] |
-| GPU, 96 GB | PNY RTX PRO 6000 Blackwell Max-Q 96 GB (300 W; la versión Workstation de 600 W no cabe en el T560) | 20.255,99 € | 16.740,49 € | [PcComponentes](https://www.pccomponentes.com/categorias/tarjetas-graficas/para-ia-machine-learning), vendedor NOWBUY | [C] |
+| GPU, 96 GB | PNY RTX PRO 6000 Blackwell Max-Q 96 GB (300 W; la versión Workstation de 600 W supera lo que admite el T560) | 20.255,99 € | 16.740,49 € | [PcComponentes](https://www.pccomponentes.com/categorias/tarjetas-graficas/para-ia-machine-learning), vendedor NOWBUY | [C] |
 | GPU, 96 GB, más barata | La misma, en Amazon.de (mediana de tres meses: 14.600 €) | 16.719,00 € | 13.817,36 € | [gpuprix](https://gpuprix.com/eu/gpus/rtx-pro-6000-blackwell), actualizado el 7/10/2026 | [R] |
 | GPU alternativa AMD, 64 GB | 2 × XFX Radeon AI PRO R9700 de 32 GB | 4.599,98 € | 3.801,64 € | [PcComponentes](https://www.pccomponentes.com/categorias/tarjetas-graficas/para-ia-machine-learning) | [C] |
 | Descartada | RTX 5090 de 32 GB: 6.999,99 € [C], más cara que la RTX PRO 4500 de 32 GB y diseñada para sobremesa | | | ídem | |

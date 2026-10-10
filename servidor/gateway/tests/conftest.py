@@ -132,7 +132,9 @@ class IAFalsa:
     def embeddings(self, textos: list[str], modelo: str | None = None) -> list[list[float]]:
         return [vector_falso(t) for t in textos]
 
-    def transcribir(self, audio: Any, nombre: str = "audio.webm", con_marcas: bool = False, idioma: str | None = None) -> dict[str, Any]:
+    def transcribir(self, audio: Any, nombre: str = "audio.webm", con_marcas: bool = False, idioma: str | None = None,
+                    **otros: Any) -> dict[str, Any]:
+        self.llamadas.append({"tipo": "transcribir", **otros})
         return {"texto": self.transcripcion, "segmentos": [{"inicio": 0.0, "fin": 3.0, "texto": self.transcripcion}],
                 "duracion": 3.0}
 

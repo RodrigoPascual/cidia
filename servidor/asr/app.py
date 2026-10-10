@@ -83,9 +83,12 @@ def transcribir(
     audio = a_pcm(file.file.read())
     if audio.size == 0:
         return {"text": "", "segments": [], "duration": 0.0}
+    # Con temperatura 0 se permiten reintentos a temperaturas mayores si la salida se repite
+    # o es poco probable (prueba de ruido: docs/prueba-audio-ruido.md).
+    temperaturas = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0) if temperature == 0 else temperature
     segmentos, info = modelo().transcribe(
-        audio, language=language or None, vad_filter=True, beam_size=5, temperature=temperature,
-        initial_prompt=prompt or None,
+        audio, language=language or None, vad_filter=True, beam_size=5, temperature=temperaturas,
+        initial_prompt=prompt or None, condition_on_previous_text=False,
     )
     segs = [{"id": i, "start": round(s.start, 2), "end": round(s.end, 2), "text": s.text.strip()}
             for i, s in enumerate(segmentos)]

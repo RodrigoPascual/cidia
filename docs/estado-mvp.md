@@ -73,9 +73,9 @@ Leyenda: **✓** funciona de punta a punta · **◐** funciona simplificado · *
 
 | Pieza | Estado | Notas |
 |---|---|---|
-| Gateway (API, OpenAI, MCP) | ✓ | Pruebas automáticas: unas 400, en `servidor/gateway/tests` (`qa/pruebas_en_paralelo.sh`) |
-| Interfaz web | ✓ | Servida en `/app/`; embebida en la app de escritorio |
-| App de escritorio y `CidIA-Setup.exe` | ✓ | Instalada y verificada en el PC de desarrollo; ver `app/README.md` |
+| Gateway (API, OpenAI, MCP) | ✓ | 1.069 pruebas automáticas en verde (`servidor/gateway/qa/pruebas_en_paralelo.sh`), incluida una batería de seguridad que recorre todas las rutas con cada rol |
+| Interfaz web | ✓ | Servida en `/app/`; embebida en la app de escritorio. Revisada pantalla a pantalla con cada rol en escritorio, portátil, móvil y modo embebido, sin errores de consola |
+| App de escritorio y `CidIA-Setup.exe` | ✓ | Instalada y verificada de punta a punta en el PC de desarrollo (sesión, secciones por permisos, MCP, micrófono por el puente del plugin, sin conexiones externas); ver `app/README.md` |
 | Instalador del servidor y herramienta `cidia` | ○ | Probado en modo comprobación en el servidor de pruebas; la instalación desde cero será en el MSI (`docs/manual-servidor.md`) |
 | Servidor de pruebas Oracle (ARM) | ✓ | Modelos diminutos; sirve para validar flujos, no rendimiento |
 | MSI con Ubuntu y GPU | ○ | Perfil `msi` listo (Ministral 3 8B); pendiente de instalar |
@@ -85,3 +85,12 @@ Leyenda: **✓** funciona de punta a punta · **◐** funciona simplificado · *
 * La app de escritorio parte de DeepSeek Harness sin recompilar: los menús nativos, algunos diálogos y el instalador base siguen en inglés; la política de actualización obligatoria de la app base no se puede desactivar por configuración (bloquear su dominio en la red de la empresa). El rebrand compilado es de la fase 4.
 * Con los modelos diminutos del servidor de pruebas las respuestas son pobres: la calidad real se mide en el MSI.
 * El motor WeKnora no forma parte del despliegue por defecto por licencias (su lector de documentos incluye EbookLib, AGPL); el motor propio cubre la búsqueda híbrida en castellano.
+
+## 9. Documentos de apoyo
+
+* `docs/guia-demo.md`: demostración de 3 minutos con plan B por paso; `datos-demo/README.md`: quién es quién en los datos sintéticos.
+* `docs/manual-servidor.md`: instalación del servidor (MSI o equipo de empresa) y herramienta `cidia` (incluido el modo demo).
+* `docs/presupuesto-hardware.md`: presupuesto con precios consultados el 10 de octubre de 2026 por perfil de empresa.
+* `docs/prueba-audio-ruido.md`: transcripción con ruido industrial (propuesta C7).
+* `docs/plantillas/`: aviso a las personas trabajadoras y consentimiento de imagen y voz (borradores para revisar con la empresa).
+* `THIRD_PARTY_NOTICES.md`: licencias de todo lo que usa CidIA.
