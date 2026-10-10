@@ -55,6 +55,9 @@ def test_mi_progreso_pasaporte(cliente, bd, planta):
     assert len(ev["ejecuciones"]) == 4 and ev["observaciones"][0]["evaluador"] == "Ana López"
     assert {r["clave"] for r in t["requisitos"] if r["cumplido"]} == {"inicio", "cuestionario", "ejecuciones",
                                                                       "observacion"}
+    # Con más ejecuciones de las necesarias (4 de 3) no sale «Faltan -1».
+    req = next(r for r in t["requisitos"] if r["clave"] == "ejecuciones")
+    assert req["falta"] == "No falta ninguna ejecución en modo planta." and "(3 de 3)" in req["texto"]
     assert datos["resumen"]["por_nivel"]["L"] >= 1
     # Sin sesión no hay pasaporte.
     assert cliente.get("/api/progreso/yo", headers=cab(cliente, "invitado")).status_code == 401

@@ -314,7 +314,7 @@ class Evidencias:
     def requisitos(self) -> list[dict[str, Any]]:
         """Requisitos de cada nivel, en orden, con su estado y el texto de lo que falta."""
         k, n = len(self.completadas), self.necesarias
-        faltan = n - k
+        faltan = max(0, n - k)  # puede haber más ejecuciones de las necesarias
         ins = self.instruccion
         return [
             {"clave": "inicio", "nivel": 1, "cumplido": bool(self.actividad),
@@ -326,7 +326,8 @@ class Evidencias:
              else "La tarea aún no tiene una instrucción publicada."},
             {"clave": "ejecuciones", "nivel": 2, "cumplido": k >= n,
              "texto": f"{n} ejecuciones completadas ({min(k, n)} de {n})",
-             "falta": "Falta 1 ejecución completada en modo planta." if faltan == 1
+             "falta": "No falta ninguna ejecución en modo planta." if faltan == 0
+             else "Falta 1 ejecución completada en modo planta." if faltan == 1
              else f"Faltan {faltan} ejecuciones completadas en modo planta."},
             {"clave": "observacion", "nivel": 3, "cumplido": bool(self.observacion),
              "texto": "Observación en el puesto aprobada por el supervisor",

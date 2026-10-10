@@ -111,7 +111,7 @@ Cada paso dice qué hacer, una propuesta de qué decir y el plan B. Regla genera
 
 ### Paso 6 · 2:35 · Permisos y cierre (`luis`, `ana`, `marta`, `admin`)
 
-**Hacer.** Con `luis`: «¿Quién aprueba la compra de un utillaje de más de 3.000 €?». No ve el documento de costes (es de nivel 3): CidIA no lo cita ni dice que existe y la pregunta queda como laguna. Con `ana`, la misma pregunta se responde con el documento de costes. Con `marta`, el Manual de iniciación a Oficina técnica aparece porque se está formando allí. Cierra con Registro de actividad (xAPI) de `admin`.
+**Hacer.** Con `luis`: «¿Quién aprueba las compras de utillaje de más de 12.000 €?» (la de más de 3.000 € es ambigua, porque cae en dos tramos, y el modelo pequeño de pruebas a veces no la contesta). No ve el documento de costes (es de nivel 3): CidIA no lo cita ni dice que existe y la pregunta queda como laguna. Con `ana`, la misma pregunta se responde con el documento de costes. Con `marta`, el Manual de iniciación a Oficina técnica aparece porque se está formando allí. Cierra con Registro de actividad (xAPI) de `admin`.
 
 **Decir.** «Cada persona encuentra solo lo que le corresponde por departamento y nivel: para Luis ese documento no existe. Ana, la responsable, sí lo ve. Marta, que se forma en Oficina técnica, ve su material de iniciación. Y todo queda registrado en xAPI, el estándar de la formación. CidIA: el conocimiento de la planta, capturado, enseñado y medido, sin que salga de la empresa.»
 
