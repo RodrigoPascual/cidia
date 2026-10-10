@@ -20,8 +20,6 @@
   .perfil-fila { grid-template-columns: 1fr; gap: 4px; }
 }
 
-.texto-alerta { color: var(--alerta); }
-
 .memoria-explicacion { font-size: 14px; color: var(--tinta-2); }
 .memoria-explicacion p { margin: 0 0 8px; }
 .memoria-explicacion ul { margin: 0; padding-left: 1.2em; color: var(--pizarra); }

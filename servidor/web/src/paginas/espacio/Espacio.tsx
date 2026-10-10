@@ -61,7 +61,11 @@ function Fila({ el, seleccionado, abrir, renombrar, borrar }: {
         <IconoElemento el={el} />
         <span className="recortar">{el.nombre}</span>
       </button>
-      <span className="espacio-tamano">{seAbre(el) ? tamano(el.tamano) : el.tipo}</span>
+      <span className="espacio-tamano">
+        {el.tipo === 'carpeta'
+          ? (el.hijos?.length ? `${el.hijos.length} ${el.hijos.length === 1 ? 'elemento' : 'elementos'}` : 'vacía')
+          : seAbre(el) ? tamano(el.tamano) : el.tipo}
+      </span>
       <span className="espacio-fecha" title={fecha(el.modificado, true)}>{hace(el.modificado)}</span>
       <span className="espacio-acciones">
         {el.url_descarga && (

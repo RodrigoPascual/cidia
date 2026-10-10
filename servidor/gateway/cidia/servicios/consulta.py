@@ -27,10 +27,12 @@ import time
 import unicodedata
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -555,22 +557,36 @@ def _merece_laguna(pregunta: str) -> bool:
 
 def _contar_en_ejecucion(bd: Session, prep: Preparada) -> None:
     """Curva de autonomía: suma la consulta a la ejecución en curso y a su paso (solo si se pidió).
-    No hace commit."""
+    No hace commit.
+
+    Incrementos en SQL, como el modo planta (servicios/planta.registrar_consulta): dos preguntas que
+    se procesan a la vez no pueden perder una consulta de la curva."""
     if not (prep.contar_ejecucion and prep.ejecucion_id):
         return
+    sumadas = bd.execute(
+        update(Ejecucion).where(Ejecucion.id == prep.ejecucion_id, Ejecucion.estado == "en_curso")
+        .values(consultas=func.coalesce(Ejecucion.consultas, 0) + 1,
+                consultas_criticos=func.coalesce(Ejecucion.consultas_criticos, 0) + (1 if prep.paso_critico else 0))
+        .execution_options(synchronize_session=False)
+    ).rowcount
+    if not sumadas or not prep.paso_id:
+        return  # ejecución terminada o abandonada: ya no cuenta
     ej = bd.get(Ejecucion, prep.ejecucion_id)
-    if ej is None or ej.estado != "en_curso":
+    if ej is not None:
+        bd.expire(ej, ["consultas", "consultas_criticos"])
+    filtro = (EjecucionPaso.ejecucion_id == prep.ejecucion_id, EjecucionPaso.paso_id == prep.paso_id)
+    mas_una = {"consultas": func.coalesce(EjecucionPaso.consultas, 0) + 1}
+    if bd.execute(update(EjecucionPaso).where(*filtro).values(**mas_una)
+                  .execution_options(synchronize_session=False)).rowcount:
         return
-    ej.consultas = (ej.consultas or 0) + 1
-    if prep.paso_critico:
-        ej.consultas_criticos = (ej.consultas_criticos or 0) + 1
-    if prep.paso_id:
-        ep = bd.scalar(select(EjecucionPaso).where(EjecucionPaso.ejecucion_id == ej.id,
-                                                   EjecucionPaso.paso_id == prep.paso_id))
-        if ep is None:
-            ep = EjecucionPaso(ejecucion_id=ej.id, paso_id=prep.paso_id, consultas=0)
-            bd.add(ep)
-        ep.consultas = (ep.consultas or 0) + 1
+    # El modo planta crea las filas de los pasos al empezar; si falta, se crea aquí. Si otra petición
+    # la crea a la vez (restricción única ejecucion_id + paso_id), se suma sobre la suya.
+    try:
+        with bd.begin_nested():
+            bd.add(EjecucionPaso(ejecucion_id=prep.ejecucion_id, paso_id=prep.paso_id, consultas=1))
+    except IntegrityError:
+        bd.execute(update(EjecucionPaso).where(*filtro).values(**mas_una)
+                   .execution_options(synchronize_session=False))
 
 
 def finalizar(bd: Session, actor: Actor, prep: Preparada, texto: str, marca_vista: bool,
@@ -636,6 +652,16 @@ def finalizar(bd: Session, actor: Actor, prep: Preparada, texto: str, marca_vist
 
 
 _SIN_TEXTO = "No he podido generar una respuesta. Prueba a reformular la pregunta, por favor."
+# Los modelos pequeños a veces escriben solo la marca SIN_RESPALDO: es un «no lo encuentro», no un fallo.
+_NO_ENCONTRADO = ("No lo he encontrado en la documentación a la que tienes acceso. "
+                  "Consúltalo con tu responsable o con una persona experta.")
+
+
+def _texto_vacio(marca_vista: bool) -> str:
+    """Lo que se muestra cuando, quitada la marca y el razonamiento, el modelo no ha escrito nada."""
+    return _NO_ENCONTRADO if marca_vista else _SIN_TEXTO
+
+
 _MODELO_CAIDO = "El modelo no responde ahora mismo. Inténtalo de nuevo en unos segundos."
 
 
@@ -695,9 +721,14 @@ async def emitir(bd: Session, actor: Actor, prep: Preparada) -> AsyncIterator[di
             pendiente = False
             yield {"tipo": "error", "mensaje": _MODELO_CAIDO}
             return
+        except Exception:  # noqa: BLE001  (un fallo inesperado no deja el flujo cortado sin explicación)
+            # Lo que llegó a escribirse se guarda como respuesta interrumpida (en el finally).
+            log.exception("Fallo inesperado durante la respuesta en streaming")
+            yield {"tipo": "error", "mensaje": _MODELO_CAIDO}
+            return
         texto = "".join(partes).strip()
         if not texto:
-            texto = _SIN_TEXTO
+            texto = _texto_vacio(filtro.vista)
             yield {"tipo": "token", "texto": texto}
         pendiente = False  # a partir de aquí la guarda finalizar() (aunque se cancele la espera, el hilo sigue)
         try:
@@ -742,8 +773,12 @@ def responder(bd: Session, actor: Actor, pregunta: str, modo: str = "normal", co
     except llm.ErrorModelo as e:
         log.warning("El modelo falló durante la consulta: %s", e)
         raise HTTPException(503, _MODELO_CAIDO) from e
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        # El servidor de modelos devolvió algo con otra forma (sin «choices», JSON roto...).
+        log.warning("Respuesta del modelo que no se entiende: %r", e)
+        raise HTTPException(503, _MODELO_CAIDO) from e
     filtro = FiltroMarca()
-    texto = (filtro.alimentar(bruto) + filtro.terminar()).strip() or _SIN_TEXTO
+    texto = (filtro.alimentar(bruto) + filtro.terminar()).strip() or _texto_vacio(filtro.vista)
     fin = finalizar(bd, actor, prep, texto, filtro.vista)
     return {"respuesta": texto, "fuentes": prep.fuentes, **fin}
 
@@ -751,18 +786,36 @@ def responder(bd: Session, actor: Actor, pregunta: str, modo: str = "normal", co
 # --------------------------------------------------------------------------- historial
 
 
+def _version_sustituida_visible(alcance: Alcance | None, d: Documento) -> bool:
+    """¿Es la versión sustituida (obsoleta) de una instrucción que la persona podría ver si siguiera vigente?
+
+    Esas filas se conservan para la trazabilidad de las citas: una respuesta antigua sigue mostrando
+    de dónde salió el dato, avisando de que hay una versión más reciente. Se aplican las mismas
+    reglas de permisos (departamento, nivel, formación, público) que a un documento listo."""
+    if d.estado != "obsoleto":
+        return False
+    if alcance is None:
+        return True
+    como_vigente = SimpleNamespace(estado="listo", es_publico=d.es_publico, departamento_id=d.departamento_id,
+                                   nivel_minimo=d.nivel_minimo, es_formacion=d.es_formacion)
+    return puede_ver(alcance, como_vigente)  # type: ignore[arg-type]
+
+
 def a_dict(bd: Session, c: Consulta, alcance: Alcance | None = None) -> dict[str, Any]:
     """Consulta guardada en JSON. Las URLs de las fuentes se vuelven a firmar (caducan). Las fuentes
     de documentos que la persona ya no puede ver (o que se han borrado) se vacían: como si no
-    existieran, igual que en la búsqueda."""
+    existieran, igual que en la búsqueda. Las de una versión sustituida de una instrucción se
+    muestran con `obsoleta: true` (y sin enlace al fichero)."""
     guardadas = [f for f in (c.fuentes or []) if isinstance(f, dict)]
     ids = {f.get("documento_id") for f in guardadas if f.get("documento_id")}
     docs = {d.id: d for d in bd.scalars(select(Documento).where(Documento.id.in_(ids))).all()} if ids else {}
     fuentes: list[dict[str, Any]] = []
     for f in guardadas:
         d = docs.get(f.get("documento_id"))
-        if d is not None and (alcance is None or puede_ver(alcance, d)):
+        if d is not None and (alcance is None or puede_ver(alcance, d)) and d.estado != "obsoleto":
             fuentes.append({**f, "url": url_fichero(d.ruta_fichero) if d.ruta_fichero else None, "disponible": True})
+        elif d is not None and _version_sustituida_visible(alcance, d):
+            fuentes.append({**f, "url": None, "disponible": True, "obsoleta": True})
         else:
             fuentes.append({"n": f.get("n"), "documento_id": None, "titulo": "Documento no disponible",
                             "fragmento": "", "url": None, "disponible": False})

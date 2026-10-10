@@ -17,10 +17,13 @@
 //   2. reconecta el cliente MCP del gateway (/mcp) con la nueva cabecera Authorization: el
 //      cliente MCP es un plugin hijo y se reinicia con fiber.update;
 //   3. sin sesión de usuario, obtiene un token de invitado y lo renueva antes de que caduque.
+// Además deniega a los agentes la única herramienta local que la app monta por código y que
+// ningún patch puede quitar (load_workspace_dependencies, docs/investigacion/02 §3.1).
 
 import http from 'node:http'
 import https from 'node:https'
 import { readFile } from 'node:fs/promises'
+import { pipeline } from 'node:stream'
 import z from '@deepseek-ai/schemastery'
 
 export const name = 'cidia'
@@ -44,18 +47,33 @@ const VALIDAR_CADA_MS = 5 * 60_000
 /** Margen con el que se renueva el token de invitado antes de que caduque. */
 const MARGEN_RENOVACION_MS = 10 * 60_000
 const MAX_CUERPO_SESION = 64 * 1024
+/** Tope de las respuestas que el Host lee enteras (sesión, perfil, invitado): un servidor que
+ *  respondiera sin fin no puede llenar la memoria del Host. */
+const MAX_RESPUESTA_INTERNA = 1024 * 1024
+/** Herramientas locales que el Host de escritorio registra por código (desktop-office) y que la
+ *  capa home no puede desactivar: load_workspace_dependencies devuelve rutas del Python y el
+ *  Node de la app y, la primera vez, copia unos 289 MB en DSH_HOME. CidIA no las usa. */
+export const HERRAMIENTAS_DENEGADAS = new Set(['load_workspace_dependencies'])
 
 // Cabeceras que no se reenvían al gateway: las de conexión, la cookie de la app (autentica al
 // renderer ante el Host, nunca debe salir del equipo) y las que el proxy fija por su cuenta.
 const QUITAR_PETICION = new Set([
   'host', 'cookie', 'origin', 'referer', 'connection', 'keep-alive', 'proxy-connection', 'transfer-encoding',
   'te', 'trailer', 'upgrade', 'proxy-authorization', 'accept-encoding', 'x-forwarded-prefix', 'x-forwarded-for',
-  'x-forwarded-host', 'x-forwarded-proto',
+  'x-forwarded-host', 'x-forwarded-proto', 'forwarded',
 ])
-// Cabeceras de la respuesta que no vuelven al renderer.
+// Cabeceras de la respuesta que no vuelven al renderer: las de conexión y las que tocarían el
+// estado del origen de la app (dsh-app://app), como su cookie de sesión con el Host.
 const QUITAR_RESPUESTA = new Set([
   'connection', 'keep-alive', 'transfer-encoding', 'te', 'trailer', 'upgrade', 'proxy-authenticate', 'set-cookie',
+  'clear-site-data',
 ])
+
+/** Cabeceras que la propia cabecera Connection declara de salto a salto (RFC 9110 §7.6.1):
+ *  tampoco se reenvían. */
+function deConexion(cabeceras) {
+  return new Set(String(cabeceras.connection ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean))
+}
 
 function enviarJson(res, estado, cuerpo) {
   if (res.headersSent) { res.end(); return }
@@ -119,10 +137,13 @@ export function apply(ctx, config) {
 
   /** Petición HTTP sin proxy corporativo (el gateway está en la red de la empresa). La ruta
    *  siempre se resuelve dentro del gateway: «./» impide que una ruta como «http://otro» salga
-   *  a otro servidor con el token de la sesión. */
+   *  a otro servidor con el token de la sesión, y tampoco puede subir por encima de la ruta
+   *  base del gateway (si se publica en una subcarpeta de otro servidor). */
   function abrir(ruta, opciones) {
     const destino = new URL('./' + ruta.replace(/^\/+/, ''), urlBase)
-    if (destino.origin !== urlBase.origin) throw Object.assign(new Error('Ruta fuera del servidor CidIA.'), { estado: 400 })
+    if (destino.origin !== urlBase.origin || !destino.pathname.startsWith(urlBase.pathname)) {
+      throw Object.assign(new Error('Ruta fuera del servidor CidIA.'), { estado: 400 })
+    }
     const seguro = destino.protocol === 'https:'
     return (seguro ? https : http).request(destino, { ...opciones, agent: seguro ? agenteHttps : agenteHttp })
   }
@@ -140,7 +161,13 @@ export function apply(ctx, config) {
       peticion.on('error', rechazar)
       peticion.on('response', (resp) => {
         const trozos = []
-        resp.on('data', t => trozos.push(t))
+        let total = 0
+        resp.on('data', (t) => {
+          total += t.length
+          if (total <= MAX_RESPUESTA_INTERNA) { trozos.push(t); return }
+          rechazar(new Error('El servidor CidIA ha enviado una respuesta demasiado grande.'))
+          resp.destroy()
+        })
         resp.on('error', rechazar)
         resp.on('end', () => {
           const texto = Buffer.concat(trozos).toString('utf8')
@@ -157,7 +184,9 @@ export function apply(ctx, config) {
 
   let credencialAplicada
   async function aplicarCredencial(token) {
-    if (token === credencialAplicada) return
+    // Con el plugin ya descargado no se escribe: una sesión que llegue tarde no debe dejar su
+    // token en disco después de que la limpieza lo haya retirado.
+    if (!vivo || token === credencialAplicada) return
     try {
       if (token) await ctx.credentials.set(REF_TOKEN, token)
       else await ctx.credentials.unset(REF_TOKEN)
@@ -195,6 +224,18 @@ export function apply(ctx, config) {
     }
   }
 
+  /** Quita del cliente MCP la identidad de la persona (cierre de sesión sin servidor): se queda
+   *  sin cabecera hasta que llegue el siguiente token de invitado. */
+  function soltarMcp() {
+    if (fibraMcp === null || tokenMcp === null) return
+    tokenMcp = null
+    try {
+      fibraMcp.update({ transport: 'streamable-http', serverName: 'cidia', url: urlMcp(), headers: {}, failOnStartupError: false }, true)
+    } catch (error) {
+      aviso('cidia: no se pudo reiniciar el cliente MCP: %s', error?.message ?? error)
+    }
+  }
+
   // ------------------------------------------------------------------ sesión del Host
 
   function programar(ms, tarea) {
@@ -225,6 +266,20 @@ export function apply(ctx, config) {
     programarSiguiente()
   }
 
+  /** Token de una sesión cerrada en este equipo que el servidor aún no ha revocado (se cerró sin
+   *  conexión): se revoca en cuanto vuelva el servidor y no se puede volver a adoptar. */
+  let revocarPendiente = null
+
+  /** Revoca un token de usuario en el servidor. true si ya no vale (revocado o caducado). */
+  async function revocar(token) {
+    try {
+      const r = await llamar('POST', '/api/auth/salir', { token, cuerpo: {} })
+      return (r.estado >= 200 && r.estado < 300) || r.estado === 401
+    } catch {
+      return false
+    }
+  }
+
   /** Obtiene un token de invitado nuevo (servicios básicos sin sesión). */
   async function invitado() {
     try {
@@ -234,6 +289,7 @@ export function apply(ctx, config) {
       }
       conectado = true
       ultimoError = null
+      if (revocarPendiente !== null && await revocar(revocarPendiente)) revocarPendiente = null
       const expira = Date.parse(r.datos.expira ?? '')
       await fijar({ modo: 'invitado', token: r.datos.token, perfil: r.datos.perfil ?? null, expira: Number.isFinite(expira) ? expira : 0 })
       info('cidia: sesión de invitado lista')
@@ -243,7 +299,10 @@ export function apply(ctx, config) {
       // Sin servidor se reintenta más tarde. Un token de invitado se conserva; uno de usuario no
       // (se acaba de cerrar su sesión): la credencial vuelve al token de arranque del .env.
       const conservar = sesion.modo === 'invitado' ? sesion.token : null
-      if (sesion.modo === 'usuario') await aplicarCredencial(null)
+      if (sesion.modo === 'usuario') {
+        await aplicarCredencial(null)
+        soltarMcp()
+      }
       sesion = { modo: 'sin_conexion', token: conservar, perfil: null, expira: 0 }
       programarSiguiente()
     }
@@ -275,6 +334,10 @@ export function apply(ctx, config) {
       throw Object.assign(new Error('Token de sesión no válido.'), { estado: 400 })
     }
     if (token === sesion.token && sesion.perfil) return estadoPublico()
+    // Una sesión que se cerró aquí sin conexión no vuelve aunque algún marco aún tenga el token.
+    if (token === revocarPendiente) {
+      throw Object.assign(new Error('La sesión se cerró en este equipo. Vuelve a iniciar sesión.'), { estado: 401 })
+    }
     let r
     try {
       r = await llamar('GET', '/api/auth/yo', { token })
@@ -297,7 +360,8 @@ export function apply(ctx, config) {
    *  sesión de usuario solo comprueba que el token de invitado sigue valiendo. */
   async function salir() {
     if (sesion.modo === 'usuario' && sesion.token) {
-      try { await llamar('POST', '/api/auth/salir', { token: sesion.token, cuerpo: {} }) } catch { /* ya no era válida */ }
+      // Sin conexión no se puede revocar ya: queda pendiente para cuando vuelva el servidor.
+      if (!await revocar(sesion.token)) revocarPendiente = sesion.token
       return invitado()
     }
     return sesion.modo === 'invitado' ? validar() : invitado()
@@ -336,8 +400,9 @@ export function apply(ctx, config) {
       return
     }
     const cabeceras = {}
+    const saltoPeticion = deConexion(req.headers)
     for (const [clave, valor] of Object.entries(req.headers)) {
-      if (QUITAR_PETICION.has(clave) || clave.startsWith('sec-fetch-')) continue
+      if (QUITAR_PETICION.has(clave) || saltoPeticion.has(clave) || clave.startsWith('sec-fetch-')) continue
       cabeceras[clave] = valor
     }
     const tokenDelHost = !cabeceras.authorization && sesion.token
@@ -355,12 +420,15 @@ export function apply(ctx, config) {
     })
     salida.on('response', (resp) => {
       const fuera = {}
+      const saltoRespuesta = deConexion(resp.headers)
       for (const [clave, valor] of Object.entries(resp.headers)) {
-        if (!QUITAR_RESPUESTA.has(clave)) fuera[clave] = valor
+        if (!QUITAR_RESPUESTA.has(clave) && !saltoRespuesta.has(clave)) fuera[clave] = valor
       }
       if (fuera.location !== undefined) fuera.location = reescribirLocation(fuera.location)
       res.writeHead(resp.statusCode ?? 502, fuera)
-      resp.pipe(res)
+      // pipeline y no pipe: si el servidor corta a mitad de respuesta (reinicio, red), se corta
+      // también la del renderer, que ve el error en lugar de esperar para siempre.
+      pipeline(resp, res, () => undefined)
       // El token del Host ya no vale (caducado o revocado): se comprueba y se renueva.
       if (resp.statusCode === 401 && tokenDelHost && !validacionPendiente) {
         validacionPendiente = true
@@ -400,7 +468,12 @@ export function apply(ctx, config) {
     if (req.method === 'GET') { enviarJson(res, 200, await enCola(estadoPublico)); return }
     if (req.method === 'DELETE') { enviarJson(res, 200, await enCola(salir)); return }
     if (req.method !== 'POST') { enviarJson(res, 405, { detail: 'Método no permitido.' }); return }
-    const { token } = await leerJson(req)
+    const cuerpo = await leerJson(req)
+    if (cuerpo === null || typeof cuerpo !== 'object' || Array.isArray(cuerpo)) {
+      enviarJson(res, 400, { detail: 'El cuerpo debe ser un objeto JSON con el token de la sesión.' })
+      return
+    }
+    const { token } = cuerpo
     // Sin token: la interfaz ha cerrado la sesión o ha caducado; el Host vuelve a invitado.
     if (token === null || token === undefined || token === '') { enviarJson(res, 200, await enCola(salir)); return }
     enviarJson(res, 200, await enCola(() => adoptar(token)))
@@ -427,6 +500,15 @@ export function apply(ctx, config) {
       if (!res.headersSent) enviarJson(res, estado, { detail: String(error?.message ?? 'Error interno de CidIA.') })
       else res.destroy()
     }
+  }
+
+  // Herramientas locales que ningún patch quita: un guard en un contexto sin ámbito de agente se
+  // aplica a todos los agentes (siguen en el catálogo, pero su ejecución se deniega). El
+  // servicio tools es opcional: sin él, el plugin funciona igual.
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['tools'], (c) => {
+      c.tools.guard(e => (HERRAMIENTAS_DENEGADAS.has(e?.name) ? 'Esta herramienta no está disponible en CidIA.' : undefined))
+    })
   }
 
   // ctx.webServer.register no se ata solo al ciclo de vida del plugin: se envuelve en ctx.effect.

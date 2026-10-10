@@ -3,7 +3,7 @@
 // quedan bloqueados mientras la política de la empresa no los permita.
 
 import { useState } from 'react'
-import { Brain, CheckCircle2, Cloud, Download, Eye, Info, Lock, Plus, RefreshCw, Server, ShieldCheck, Star, Trash2 } from 'lucide-react'
+import { Brain, CheckCircle2, Cloud, Download, Eye, Info, Lock, Plus, RefreshCw, Server, Star, Trash2 } from 'lucide-react'
 import { get, post, put, del } from '../../api'
 import {
   Area, Aviso, Boton, Cabecera, Campo, Entrada, ErrorCarga, Esqueleto, Etiqueta, Interruptor, Modal, Selector, Tarjeta, Vacio,
@@ -70,10 +70,8 @@ export default function Modelos() {
 
       <div className="columna mb-2">
         <Aviso>
-          <span className="fila envolver" style={{ gap: 6 }}>
-            <ShieldCheck size={15} /> El gateway consulta esta lista antes de cada petición. En la app, las personas no ven la
-            configuración de modelos ni de claves y no pueden añadir las suyas.
-          </span>
+          El gateway consulta esta lista antes de cada petición. En la app, las personas no ven la configuración de modelos
+          ni de claves y no pueden añadir las suyas.
         </Aviso>
         {datos && !datos.servidor.ok && (
           <Aviso tono="alerta" titulo="El servidor de modelos no responde">
@@ -96,7 +94,7 @@ export default function Modelos() {
       ) : (
         <Tarjeta relleno={false}>
           <div className="tabla-envoltorio">
-            <table className="tabla adm-tabla">
+            <table className="tabla adm-tabla adm-tabla-modelos">
               <thead>
                 <tr><th>Modelo</th><th>Dónde se ejecuta</th><th>Quién lo usa</th><th>Estado</th><th>Predeterminado</th><th aria-label="Acciones" /></tr>
               </thead>
@@ -148,7 +146,7 @@ function FilaModelo({ m, ocupado, onPermitir, onPredeterminado, onQuitar }: {
 }) {
   return (
     <tr>
-      <td>
+      <td className="adm-col-modelo">
         <div className="negrita">{m.nombre}</div>
         {m.ubicacion === 'local' && m.ref !== m.nombre && <div className="adm-modelo-ref">{m.ref}</div>}
         <div className="fila envolver mt-1" style={{ gap: 5 }}>
@@ -158,18 +156,18 @@ function FilaModelo({ m, ocupado, onPermitir, onPredeterminado, onQuitar }: {
         </div>
         {m.descripcion && m.ubicacion === 'local' && <div className="diminuto apagado mt-1">{m.descripcion}</div>}
       </td>
-      <td>
-        <span className="adm-donde">
+      <td className="adm-col-donde">
+        <span className="adm-donde" title={m.donde}>
           {m.ubicacion === 'local' ? <Server /> : <Cloud />}
-          {m.donde}
+          {m.ubicacion === 'local' ? 'Servidor de la empresa' : 'En la nube'}
         </span>
       </td>
-      <td className={m.uso === 'Nadie' ? 'apagado' : ''}>{m.uso}</td>
-      <td>
+      <td className={`adm-col-uso ${m.uso === 'Nadie' ? 'apagado' : ''}`}>{m.uso}</td>
+      <td className="adm-col-estado">
         {m.bloqueado ? (
           <div className="columna" style={{ gap: 6, alignItems: 'flex-start' }}>
             <Interruptor activo={false} onCambio={() => {}} deshabilitado />
-            <Etiqueta tono="roja" icono={<Lock />} title="Los datos saldrían del servidor de la empresa">bloqueado por la política de la empresa</Etiqueta>
+            <Etiqueta tono="roja" icono={<Lock />} title="Los datos saldrían del servidor de la empresa. Solo se habilita en la configuración del servidor.">Bloqueado por la política de la empresa</Etiqueta>
           </div>
         ) : m.indexa_documentos && m.permitido ? (
           <span title="Los documentos están indexados con este modelo. Se cambia en la configuración del servidor.">
@@ -180,9 +178,9 @@ function FilaModelo({ m, ocupado, onPermitir, onPredeterminado, onQuitar }: {
             etiqueta={<span className="pequeno">{m.permitido ? 'Permitido' : 'Desactivado'}</span>} />
         )}
       </td>
-      <td>
+      <td className="adm-col-predet">
         {m.predeterminado ? (
-          <Etiqueta tono="amarilla" icono={<Star />}>predeterminado</Etiqueta>
+          <Etiqueta tono="amarilla" icono={<Star />}>Predeterminado</Etiqueta>
         ) : m.tipo === 'embeddings' && !m.indexa_documentos ? (
           <span className="diminuto apagado" title="El modelo de búsqueda lo fija el servidor">Fijado por el servidor</span>
         ) : !m.bloqueado ? (
@@ -192,7 +190,7 @@ function FilaModelo({ m, ocupado, onPermitir, onPredeterminado, onQuitar }: {
           </Boton>
         ) : null}
       </td>
-      <td>
+      <td className="adm-col-acciones">
         {m.ubicacion === 'local' && !m.permitido && (
           <Boton tamano="pequeno" variante="fantasma" icono={<Trash2 />} onClick={onQuitar} aria-label="Quitar de la lista" title="Quitar de la lista" />
         )}

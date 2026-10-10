@@ -218,6 +218,28 @@ def test_audio_sin_transcripcion_queda_para_escuchar(cliente, planta, ia, monkey
     assert r.status_code == 200, r.text
 
 
+def test_nota_de_voz_con_ruido_queda_sin_transcribir(cliente, planta, ia):
+    """Un pitido o el ruido de la nave hacen que Whisper devuelva «¡¡¡¡…» o créditos de subtítulos:
+    no se publica eso como título y solución, la nota queda para escucharla."""
+    ia.transcripcion = "¡" * 300
+    r = cliente.post("/api/aportaciones", headers=cab(cliente, "pedro"),
+                     files={"audio": ("nota.webm", b"\x1aE\xdf\xa3audio-falso" * 50, "audio/webm")})
+    assert r.status_code == 200, r.text
+    ap = r.json()
+    assert ap["estado"] == "pendiente" and ap["transcripcion"] is None
+    assert ap["titulo"] == "Nota de voz sin transcribir" and not ap["solucion"]
+    for ruido in ("", "  ¡¡¡ ??? ...", "Subtítulos realizados por la comunidad de Amara.org", "[Música]",
+                  "la la la la la la la"):
+        assert srv.transcripcion_util(ruido) is None, ruido
+    for voz in ("Prensa P2.", "¿Qué pasa con la prensa 3? Se para cada dos golpes."):
+        assert srv.transcripcion_util(voz) == voz
+    # la coletilla que Whisper añade tras una nota real se quita, sin perder lo que se dijo
+    assert srv.transcripcion_util("La prensa 3 se para cada dos golpes. Subtítulos realizados por la comunidad "
+                                  "de Amara.org") == "La prensa 3 se para cada dos golpes."
+    assert srv.transcripcion_util("[Música] Hay que purgar el circuito a 3.000 rpm.") == \
+        "Hay que purgar el circuito a 3.000 rpm."
+
+
 # --------------------------------------------------------------------------- robustez con el LLM
 
 
@@ -249,11 +271,27 @@ def test_normalizar_tolera_formatos_de_modelos_pequenos():
     ficha = srv.normalizar({"ficha": {"Title": "Sensor sucio.", "problem": "Solución: no arranca", "cause": "Ninguna",
                                       "solution": {"paso1": "Limpiar", "paso2": "Rearmar"}, "tags": ["#S4", "s4", ""],
                                       "Nivel mínimo": "nivel 9"}}, relato, maximo_nivel=4)
-    assert ficha["titulo"] == "Sensor sucio" and ficha["problema"] == "no arranca" and ficha["causa"] == ""
+    assert ficha["titulo"] == "Sensor sucio" and ficha["problema"] == "No arranca" and ficha["causa"] == ""
     assert ficha["solucion"] == "Limpiar\nRearmar" and ficha["etiquetas"] == ["S4"] and ficha["nivel_minimo"] == 4
     # sin solución pero con problema: la solución es el relato completo
     assert srv.normalizar({"problema": "Se atasca"}, RELATO)["solucion"] == RELATO
     assert srv.primera_frase("¿Qué pasa? Nada.") == "¿Qué pasa?"
+
+
+def test_normalizar_pone_mayuscula_inicial():
+    """Lo que escribe el modelo en minúscula («el jefe…», «- firma…») sale con mayúscula en cada
+    línea; el relato de respaldo se guarda tal cual lo dijo la persona."""
+    relato = ("La compra de un utillaje de más de 3.000 euros la aprueba el jefe de Oficina técnica con Compras: "
+              "se piden dos presupuestos, se adjuntan al pedido en el ERP y el jefe firma el pedido.")
+    ficha = srv.normalizar({"titulo": "Aprobación de compra", "problema": "quién aprueba la compra de un utillaje",
+                            "causa": "el jefe de Oficina técnica con Compras.",
+                            "solucion": "- se piden dos presupuestos\n- adjuntar al pedido en el ERP\nfirma el pedido"},
+                           relato)
+    assert ficha["problema"] == "Quién aprueba la compra de un utillaje"
+    assert ficha["causa"] == "El jefe de Oficina técnica con Compras."
+    assert ficha["solucion"] == "- Se piden dos presupuestos\n- Adjuntar al pedido en el ERP\nFirma el pedido"
+    assert srv.inicial_mayuscula("ñandú\n  - ácido") == "Ñandú\n  - Ácido"
+    assert srv.normalizar({"problema": "se atasca"}, "pues se atasca la cinta")["solucion"] == "pues se atasca la cinta"
 
 
 def test_normalizar_descarta_lo_inventado():

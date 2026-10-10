@@ -13,7 +13,7 @@
 // Al terminar imprime un JSON con los errores de consola, las excepciones y las peticiones
 // fallidas (4xx/5xx): sirve para detectar fallos además de para mirar las capturas.
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -51,7 +51,8 @@ const perfil = mkdtempSync(join(tmpdir(), 'cidia-visor-'))
 const proc = spawn(navegador, [
   '--headless=new', `--remote-debugging-port=${puerto}`, `--user-data-dir=${perfil}`,
   '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--hide-scrollbars',
-  '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required',
+  '--disable-component-update', '--disable-background-networking', '--disable-sync', '--disk-cache-size=1',
+  '--disable-extensions', '--no-pings', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required',
   `--window-size=${ancho},${alto}`, 'about:blank',
 ], { stdio: 'ignore' })
 
@@ -110,8 +111,19 @@ try {
   informe.error = String(e)
 } finally {
   try { ws?.close() } catch { /* nada */ }
-  proc.kill()
-  await dormir(300)
-  try { rmSync(perfil, { recursive: true, force: true }) } catch { /* Edge puede tardar en soltar el perfil */ }
+  // Cerrar el navegador entero: Browser.close por CDP y, por si acaso, el árbol de procesos
+  // (Edge lanza muchos procesos hijos que sobreviven a matar solo el primero).
+  try {
+    const v = await (await fetch(`http://127.0.0.1:${puerto}/json/version`)).json()
+    const wb = new WebSocket(v.webSocketDebuggerUrl)
+    await new Promise((ok) => { wb.onopen = ok; wb.onerror = ok; setTimeout(ok, 1500) })
+    try { wb.send(JSON.stringify({ id: 1, method: 'Browser.close' })) } catch { /* ya cerrado */ }
+    await dormir(800)
+  } catch { /* ya cerrado */ }
+  if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
+  else proc.kill('SIGKILL')
+  for (let i = 0; i < 10; i++) {
+    try { rmSync(perfil, { recursive: true, force: true }); break } catch { await dormir(500) }
+  }
 }
 console.log(JSON.stringify(informe, null, 2))

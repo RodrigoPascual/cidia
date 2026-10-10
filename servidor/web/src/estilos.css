@@ -67,7 +67,10 @@ a:hover { text-decoration: underline; }
 button { font-family: inherit; }
 ::selection { background: var(--acento-suave); }
 
-:focus-visible { outline: 3px solid rgba(242, 194, 0, 0.6); outline-offset: 2px; }
+/* Foco visible: anillo oscuro con halo amarillo (se ve sobre fondo claro y sobre la tinta). */
+:focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(242, 194, 0, 0.5); }
+.lateral :focus-visible, .barra-movil :focus-visible, .ini-portada :focus-visible, .acceso-marca :focus-visible,
+.aviso-flotante :focus-visible, .planta-barra :focus-visible { outline-color: var(--acento); }
 .modal:focus, main:focus { outline: none; }
 body.sin-desplazamiento { overflow: hidden; }
 
@@ -239,6 +242,7 @@ body.sin-desplazamiento { overflow: hidden; }
 }
 .tarjeta-cabecera h3 { display: flex; align-items: center; gap: 8px; }
 .tarjeta-cuerpo { padding: 18px 20px; }
+.tarjeta-cuerpo.sin-relleno { padding: 0; }
 .tarjeta-pie { padding: 12px 20px; border-top: 1px solid var(--linea-suave); display: flex; gap: 8px; justify-content: flex-end; }
 
 .dato {
@@ -519,6 +523,7 @@ body.sin-desplazamiento { overflow: hidden; }
 .vacio .icono-vacio svg { width: 26px; height: 26px; }
 .vacio h3 { color: var(--tinta); }
 .vacio .pequeno { line-height: 1.55; }
+.error-carga.grave .icono-vacio { background: var(--alerta-suave); color: var(--alerta); }
 
 .girando { animation: girar 0.9s linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }

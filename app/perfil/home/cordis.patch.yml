@@ -57,6 +57,10 @@
   disabled: true
 - id: ui-cordis
   disabled: true
+# Mitad de página de Creator: ejecutaría paquetes dinámicos y, sin cordis-host-runner, falla con
+# un 404 en cada arranque. Solo la inyecta ui-cordis.
+- id: cordis-client-runner
+  disabled: true
 
 # --- Ajustes que permitirían reconfigurar la app ------------------------------------------
 - id: ui-plugin-manager

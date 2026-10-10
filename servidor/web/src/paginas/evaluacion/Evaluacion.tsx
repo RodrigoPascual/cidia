@@ -5,7 +5,7 @@
 // La pestaña y lo que se está haciendo van en la URL (?pestana=observar&usuario=3&tarea=5),
 // para poder llegar desde el pasaporte o la matriz del equipo.
 
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { ClipboardCheck, Eye, ListChecks } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { get } from '../../api'
@@ -46,11 +46,21 @@ export default function Evaluacion() {
     preguntas: pend?.preguntas?.reduce((n, i) => n + i.propuestas, 0),
     observar: pend?.observaciones?.length,
   }
+  // En el móvil las tres pestañas no caben: texto corto y sin icono (evaluacion.css).
+  const texto = (largo: string, corto: string) => (
+    <><span className="ev-txt-largo">{largo}</span><span className="ev-txt-corto">{corto}</span></>
+  )
   const pestanas = [
-    { id: 'cuestionarios' as const, texto: 'Mis cuestionarios', icono: <ClipboardCheck size={17} />, contador: contadores.cuestionarios || undefined },
-    { id: 'preguntas' as const, texto: 'Revisar preguntas', icono: <ListChecks size={17} />, contador: contadores.preguntas || undefined },
-    { id: 'observar' as const, texto: 'Observar en el puesto', icono: <Eye size={17} />, contador: contadores.observar || undefined },
+    { id: 'cuestionarios' as const, texto: texto('Mis cuestionarios', 'Cuestionarios'), icono: <ClipboardCheck size={17} />, contador: contadores.cuestionarios || undefined },
+    { id: 'preguntas' as const, texto: texto('Revisar preguntas', 'Preguntas'), icono: <ListChecks size={17} />, contador: contadores.preguntas || undefined },
+    { id: 'observar' as const, texto: texto('Observar en el puesto', 'Observar'), icono: <Eye size={17} />, contador: contadores.observar || undefined },
   ].filter((p) => disponibles.includes(p.id))
+
+  // Si aun así no caben, la pestaña activa se desliza a la vista (al llegar desde la matriz con
+  // ?pestana=observar quedaba fuera de la pantalla).
+  useEffect(() => {
+    document.querySelector('.ev-pestanas .pestana.activa')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activa])
 
   function contenido() {
     if (tareaCuestionario) {
@@ -73,7 +83,9 @@ export default function Evaluacion() {
       <Cabecera antetitulo="Evaluación" titulo={tareaCuestionario ? 'Cuestionario' : 'Evaluación'}
         subtitulo={tareaCuestionario ? undefined : SUBTITULOS[activa]} />
       {!tareaCuestionario && pestanas.length > 1 && (
-        <Pestanas<Pestana> pestanas={pestanas} activa={activa} onCambio={(id) => setParams(id === 'cuestionarios' ? {} : { pestana: id })} />
+        <div className="ev-pestanas">
+          <Pestanas<Pestana> pestanas={pestanas} activa={activa} onCambio={(id) => setParams(id === 'cuestionarios' ? {} : { pestana: id })} />
+        </div>
       )}
       {contenido()}
     </>

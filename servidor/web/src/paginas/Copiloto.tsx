@@ -8,7 +8,7 @@ import {
   BookOpen, CircleHelp, Clock, Copy, GraduationCap, HardHat, History, ListChecks, LogIn, MessageSquarePlus, Mic,
   RotateCcw, Send, ShieldCheck, Sparkles, Square, ThumbsDown, ThumbsUp, Wrench,
 } from 'lucide-react'
-import { flujo, get, post } from '../api'
+import { ErrorApi, flujo, get, post } from '../api'
 import { useSesion } from '../sesion'
 import { Aviso, Boton, Cabecera, Interruptor, LogoCidia, TextoFormato, useAvisarError, useAvisos } from '../ui'
 import BotonVoz from './copiloto/BotonVoz'
@@ -19,7 +19,7 @@ import { ubicacion, type ConsultaGuardada, type Fuente, type Mensaje, type Modo,
 import './copiloto/copiloto.css'
 
 const MAX_GUARDADOS = 40 // mensajes que se recuerdan al volver a la página (en esta pestaña)
-const TURNOS_HISTORIAL = 6
+const TURNOS_HISTORIAL = 6 // mensajes anteriores (3 preguntas con su respuesta), como el servidor
 
 const SUGERENCIAS_EMPLEADO: { icono: ReactNode; texto: string }[] = [
   { icono: <ShieldCheck />, texto: '¿Qué equipos de protección necesito en mi puesto?' },
@@ -100,6 +100,21 @@ function guardar(clave: string, mensajes: Mensaje[]) {
   }
 }
 
+/**
+ * Últimos turnos de la conversación para el modelo: solo parejas completas (pregunta y respuesta
+ * terminada). Una pregunta que falló o que se va a reintentar no se envía como turno anterior.
+ */
+function turnosPrevios(mensajes: Mensaje[]): { rol: Mensaje['rol']; texto: string }[] {
+  const turnos: { rol: Mensaje['rol']; texto: string }[] = []
+  mensajes.forEach((m, i) => {
+    const r = mensajes[i + 1]
+    if (m.rol === 'usuario' && r?.rol === 'asistente' && r.estado === 'listo' && r.texto.trim()) {
+      turnos.push({ rol: 'usuario', texto: m.texto }, { rol: 'asistente', texto: r.texto })
+    }
+  })
+  return turnos.slice(-TURNOS_HISTORIAL)
+}
+
 function leerSocratico(): boolean {
   try {
     return localStorage.getItem('cidia.copiloto.socratico') === '1'
@@ -171,10 +186,7 @@ export default function Copiloto() {
     const p = pregunta.trim()
     if (!p || control.current) return
     const modo: Modo = socratico ? 'socratico' : 'normal'
-    const historial = mensajes
-      .filter((m) => m.estado === 'listo' && m.texto.trim())
-      .slice(-TURNOS_HISTORIAL)
-      .map((m) => ({ rol: m.rol, texto: m.texto }))
+    const historial = turnosPrevios(mensajes)
     const idRespuesta = nuevoId()
     setMensajes((ms) => [
       ...ms,
@@ -201,9 +213,12 @@ export default function Copiloto() {
           : { estado: 'error', error: 'La respuesta se ha cortado. Inténtalo de nuevo.' }
         : {}))
     } catch (e) {
+      // El límite de preguntas sin sesión, un permiso o una pregunta no válida no se arreglan reintentando.
+      const sinReintento = e instanceof ErrorApi && [400, 403, 404, 413, 422, 429].includes(e.estado)
       actualizar((m) => ({
         estado: ctl.signal.aborted && m.texto ? 'listo' : 'error',
         error: ctl.signal.aborted ? 'Has detenido la respuesta.' : e instanceof Error ? e.message : String(e),
+        sinReintento,
       }))
     } finally {
       if (control.current === ctl) control.current = null
@@ -476,7 +491,7 @@ function Respuesta({ m, invitado, onCita, onValorar, onCopiar, onReintentar }: {
         {m.estado === 'error' && (
           <div className="respuesta-error">
             <span>{m.error ?? 'No se ha podido responder.'}</span>
-            {m.pregunta && m.error !== 'Has detenido la respuesta.' && (
+            {m.pregunta && m.error !== 'Has detenido la respuesta.' && !m.sinReintento && (
               <Boton tamano="pequeno" icono={<RotateCcw />} onClick={onReintentar}>Reintentar</Boton>
             )}
           </div>
@@ -535,7 +550,8 @@ function ListaFuentes({ fuentes, citadas, revisadas, onAbrir }: {
           const apagada = f.disponible === false || (!citada && citadas.length > 0)
           return (
             <button key={f.n} type="button" className={`fuente ${citada ? 'citada' : apagada ? 'sin-citar' : ''}`}
-              onClick={() => onAbrir(f.n)} title={`${f.titulo}${donde ? ` · ${donde}` : ''}`}>
+              onClick={() => onAbrir(f.n)}
+              title={`${f.titulo}${donde ? ` · ${donde}` : ''}${f.obsoleta ? ' · versión sustituida' : ''}`}>
               <span className="n">{f.n}</span>
               <span className="recortar">{f.titulo}</span>
               {donde && <span className="ubic">{donde}</span>}

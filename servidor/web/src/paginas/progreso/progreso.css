@@ -17,7 +17,9 @@
 /* ----------------------------------------------------------- filas de tareas */
 
 .pp-rejilla { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
-@media (max-width: 1100px) { .pp-rejilla { grid-template-columns: 1fr; } }
+.pp-rejilla > * { min-width: 0; }
+/* minmax(0, …): el texto recortado de las filas no debe ensanchar la columna (en el móvil salía de la pantalla). */
+@media (max-width: 1100px) { .pp-rejilla { grid-template-columns: minmax(0, 1fr); } }
 
 .pp-fila {
   display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
@@ -28,6 +30,7 @@
 }
 .pp-fila:hover { border-color: var(--linea); box-shadow: var(--sombra-2); }
 .pp-fila.activa { border-color: var(--acento); box-shadow: 0 0 0 3px rgba(242, 194, 0, 0.22), var(--sombra-1); }
+.pp-fila > .crece { min-width: 0; }
 .pp-fila-iluo { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; width: 40px; }
 .pp-fila-iluo span { font-weight: 700; font-size: 13px; line-height: 1; color: var(--tinta-2); }
 .pp-fila-iluo span.caducado { color: var(--alerta); }
@@ -89,8 +92,8 @@
 
 /* ----------------------------------------------------------- curva de autonomía */
 
-.pp-curva { position: relative; width: 100%; overflow: hidden; }
-.pp-curva svg { display: block; touch-action: pan-y; }
+.pp-curva { position: relative; width: 100%; overflow: hidden; contain: inline-size; }
+.pp-curva svg { display: block; max-width: 100%; touch-action: pan-y; }
 .pp-curva-rejilla { stroke: var(--linea-suave); stroke-width: 1; }
 .pp-curva-eje { fill: var(--pizarra); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .pp-curva-area { fill: var(--verde); opacity: 0.1; }
@@ -175,7 +178,10 @@
 .mz-aviso:hover { background: var(--papel); }
 .mz-dep-activo td { background: var(--acento-suave) !important; }
 .mz-ajuste .campo { margin-bottom: 10px; }
-.mz-pasaporte-modal .pp-rejilla { grid-template-columns: 1fr; }
+/* Dentro de un diálogo, el contenido no marca el ancho: el diálogo se ajusta a la pantalla (en el móvil, la
+   curva de autonomía, con su ancho en píxeles, lo ensanchaba a ~600 px y cortaba el botón de cerrar). */
+.mz-modal, .mz-pasaporte-modal { contain: inline-size; min-width: 0; }
+.mz-pasaporte-modal .pp-rejilla { grid-template-columns: minmax(0, 1fr); }
 
 @media (max-width: 760px) {
   .mz-tabla .mz-esquina { min-width: 150px; }

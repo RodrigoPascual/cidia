@@ -115,6 +115,11 @@ def test_modelos_no_permitidos(cliente, planta, proveedor):
     assert r.status_code == 403
     assert proveedor.peticiones == []  # no se llega a llamar al proveedor
     assert cliente.post("/v1/chat/completions", json={"messages": []}, headers=h).status_code == 400
+    # Un modelo que no es un texto (número, lista...) es un error de la petición, no un fallo del servidor.
+    for raro in (7, ["openai"], {"id": "openai"}):
+        r = _chat(cliente, h, model=raro)
+        assert r.status_code == 400 and r.json()["error"]["message"], raro
+    assert cliente.post("/v1/chat/completions", content=b"{no es json", headers=h).status_code == 400
     assert cliente.post("/v1/chat/completions", json={"messages": [{"role": "user", "content": "x"}]}).status_code == 401
 
 

@@ -117,9 +117,58 @@ Function Reparar
   ${EndIf}
 FunctionEnd
 
+; Host de una dirección http(s)://[usuario@]host[:puerto][/ruta]   $R4 = dirección -> $R4 = host
+Function HostDeUrl
+  ${WordReplace} "$R4" "https://" "" "+" $R4
+  ${WordReplace} "$R4" "http://" "" "+" $R4
+  ${WordFind} "$R4" " " "+1{" $R4
+  ${WordFind} "$R4" "/" "+1{" $R4
+  ${WordFind} "$R4" "@" "-1" $R4
+  ${WordFind} "$R4" ":" "+1{" $R4
+FunctionEnd
+
+; Añade a $R5 (lista para NO_PROXY) los hosts de las direcciones CIDIA_*_URL de $DSH_HOME\.env:
+; quien cambia de servidor editando el .env (lo que explican el instalador y el README) no debe
+; quedarse con el modelo y el MCP mandados al sumidero.
+Function HostsDelEnv
+  Push $0
+  Push $1
+  Push $2
+  ClearErrors
+  FileOpen $0 "${CIDIA_DATOS}\.env" r
+  ${IfNot} ${Errors}
+    ${Do}
+      ClearErrors
+      FileRead $0 $1
+      ${If} ${Errors}
+        ${ExitDo}
+      ${EndIf}
+      ${TrimNewLines} "$1" $1
+      StrCpy $2 $1 6
+      ${If} $2 == "CIDIA_"
+        ClearErrors
+        ${WordFind} "$1" "_URL=" "E+1}" $R4
+        ${IfNot} ${Errors}
+          ${WordReplace} "$R4" '"' "" "+" $R4
+          ${WordReplace} "$R4" "'" "" "+" $R4
+          Call HostDeUrl
+          ${If} $R4 != ""
+            StrCpy $R5 "$R5,$R4"
+          ${EndIf}
+        ${EndIf}
+      ${EndIf}
+    ${Loop}
+    FileClose $0
+  ${EndIf}
+  ClearErrors
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
+
 ; Red de la app: solo el servidor CidIA y el propio equipo.
-;  · NO_PROXY con el servidor CidIA y el bucle local: el modelo, las herramientas MCP y las
-;    llamadas internas de la app van directas.
+;  · NO_PROXY con el servidor CidIA (el de la instalación y los del .env) y el bucle local: el
+;    modelo, las herramientas MCP y las llamadas internas de la app van directas.
 ;  · Todo lo demás que salga por fetch de Node (proceso principal y Host) va a un «proxy
 ;    sumidero» en 127.0.0.1:9, donde no escucha nadie: la conexión se rechaza al momento. Así
 ;    se corta la consulta de la política de actualización obligatoria de la app base
@@ -128,18 +177,16 @@ FunctionEnd
 ;    bloquea. Node 24 (Electron 44) solo aplica HTTP(S)_PROXY con NODE_USE_ENV_PROXY=1. El
 ;    navegador de la app (Chromium) no lee estas variables en Windows: no le afecta.
 Function PrepararRed
-  Push $0
   Push $1
-  StrCpy $0 "$Servidor"
-  ${WordReplace} "$0" "https://" "" "+" $0
-  ${WordReplace} "$0" "http://" "" "+" $0
-  ${WordFind} "$0" "/" "+1{" $0
-  ${WordFind} "$0" ":" "+1{" $0
+  StrCpy $R4 "$Servidor"
+  Call HostDeUrl
+  StrCpy $R5 "$R4,127.0.0.1,localhost,::1"
+  Call HostsDelEnv
   ReadEnvStr $1 "NO_PROXY"
   ${If} $1 == ""
-    StrCpy $1 "$0,127.0.0.1,localhost,::1"
+    StrCpy $1 "$R5"
   ${Else}
-    StrCpy $1 "$1,$0,127.0.0.1,localhost,::1"
+    StrCpy $1 "$1,$R5"
   ${EndIf}
   System::Call 'kernel32::SetEnvironmentVariable(t "NO_PROXY", t r1) i'
   System::Call 'kernel32::SetEnvironmentVariable(t "NODE_USE_ENV_PROXY", t "1") i'
@@ -148,7 +195,6 @@ Function PrepararRed
   System::Call 'kernel32::SetEnvironmentVariable(t "ALL_PROXY", p 0) i'
   ClearErrors
   Pop $1
-  Pop $0
 FunctionEnd
 
 Section

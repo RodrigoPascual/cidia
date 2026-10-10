@@ -20,7 +20,8 @@
 @media (max-width: 760px) {
   .cap-tarea > .tarjeta-cuerpo { padding: 16px 16px 2px; }
   .cap-tarea-fila { grid-template-columns: 1fr; gap: 0; }
-  .cap-tarea-fila > .cap-paso-numero { display: none; }
+  /* En móvil el «1» no cabe junto al campo: se ocultan los dos números para no dejar un «2» suelto. */
+  .cap-tarea-fila > .cap-paso-numero, .cap-paso-titulo > .cap-paso-numero { display: none; }
   .cap-tarea .tarjeta-cuerpo > .pequeno { margin-left: 0; }
 }
 
@@ -180,7 +181,9 @@
   background: linear-gradient(180deg, #fafbfc 0%, var(--blanco) 120px);
 }
 .cap-msg { display: flex; gap: 10px; align-items: flex-start; max-width: 720px; animation: subir 180ms ease-out; }
-.cap-msg.copiloto > svg { flex-shrink: 0; }
+/* «cap-msg-ia» y no «copiloto»: .copiloto es la página del copiloto (copiloto.css) y su altura mínima
+   y su columna se aplicarían a cada mensaje en cuanto esa hoja estuviera cargada. */
+.cap-msg.cap-msg-ia > svg { flex-shrink: 0; }
 .cap-globo {
   background: var(--blanco); border: 1px solid var(--linea-suave); border-radius: 4px 14px 14px 14px;
   padding: 10px 14px; box-shadow: var(--sombra-1); font-size: 15px; line-height: 1.5;

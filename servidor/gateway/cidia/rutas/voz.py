@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -20,6 +21,20 @@ MIN_AUDIO = 200  # menos que esto es una grabación vacía
 # Lo que envían los navegadores y la app al grabar (Chrome a veces etiqueta el webm como vídeo) y los
 # clientes que no indican el tipo. Una imagen o un documento no se manda al servicio de voz.
 _TIPOS_GENERICOS = {"", "application/octet-stream", "video/webm", "video/mp4", "video/ogg"}
+# Lo que Whisper «oye» en una grabación casi en silencio (pulsar y soltar sin hablar, ruido de la
+# nave): créditos de subtítulos, despedidas de vídeo o etiquetas de sonido. No es una pregunta, y
+# enviarla tal cual haría responder al copiloto a algo que nadie ha dicho.
+_ALUCINACION = re.compile(
+    r"amara\.org|subt[ií]tulos? (?:realizados? )?por|gracias por (?:ver|mirar)|suscr[ií]bete|dale (?:a )?like"
+    r"|^\W*[\[(][^\])]{1,30}[\])]\W*$",
+    re.I,
+)
+
+
+def limpiar_transcripcion(texto: str | None) -> str:
+    """Texto transcrito listo para enviar al copiloto, o «» si es una alucinación típica del silencio."""
+    texto = " ".join((texto or "").split())
+    return "" if _ALUCINACION.search(texto) else texto
 
 
 @router.post("/transcribir")
@@ -39,4 +54,4 @@ def transcribir(audio: UploadFile = File(...), actor: Actor = Depends(usuario_ac
         log.warning("Fallo de transcripción: %s", e)
         raise HTTPException(503, "El servicio de voz no está disponible ahora mismo. "
                                  "Escribe tu pregunta o inténtalo más tarde.") from e
-    return {"texto": (r.get("texto") or "").strip(), "duracion": r.get("duracion")}
+    return {"texto": limpiar_transcripcion(r.get("texto")), "duracion": r.get("duracion")}

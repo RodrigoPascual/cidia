@@ -61,6 +61,9 @@ const NAVEGACION: Grupo[] = [
 
 const TODOS = NAVEGACION.flatMap((g) => g.enlaces)
 
+/** Avisa a la barra lateral de que algo ha cambiado. Tras un POST/PUT/PATCH/DELETE ya se hace solo. */
+export { refrescarContadores } from './api'
+
 /** Enlace de la navegación que corresponde a una ruta (el más específico). */
 function enlaceDe(ruta: string): Enlace | undefined {
   if (ruta === '/' || ruta === '') return TODOS[0]
@@ -73,11 +76,6 @@ const TITULOS_EXTRA: Record<string, string> = { '/perfil': 'Mi perfil' }
 /** Cada cuánto se piden los contadores como mucho al navegar (la barra no necesita más). */
 const MIN_ENTRE_CONTADORES = 15_000
 const CADA_CONTADORES = 60_000
-
-/** Avisa a la barra lateral de que algo ha cambiado (p. ej. tras validar una aportación). */
-export function refrescarContadores() {
-  window.dispatchEvent(new Event('cidia:contadores'))
-}
 
 function esCaida(e: unknown) {
   return e instanceof ErrorApi && (e.estado === 0 || e.estado >= 502)
@@ -108,9 +106,10 @@ export default function Marco({ ancho = false }: { ancho?: boolean }) {
     document.title = texto && texto !== 'Inicio' ? `${texto} · CidIA` : 'CidIA'
   }, [lugar.pathname])
 
-  // Menú del móvil: Escape lo cierra y el fondo no se desplaza mientras está abierto.
+  // Menú del móvil: recibe el foco, Escape lo cierra y el fondo no se desplaza mientras está abierto.
   useEffect(() => {
     if (!menu) return
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.lateral .cerrar-menu')?.focus())
     document.body.classList.add('sin-desplazamiento')
     const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') { setMenu(false); botonMenu.current?.focus() } }
     window.addEventListener('keydown', tecla)

@@ -90,7 +90,7 @@
 .rv-fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex-shrink: 0; width: 196px; }
 .rv-fotos figure { margin: 0; }
 .rv-fotos img, .rv-sin {
-  width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: var(--papel);
+  width: 100%; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 8px; background: var(--papel);
   border: 1px solid var(--linea-suave); display: block;
 }
 .rv-sin { display: grid; place-items: center; color: var(--pizarra-2); }
@@ -292,6 +292,12 @@
 .ej-tarjeta h2 { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .ej-tarjeta h2 svg { width: 22px; height: 22px; color: var(--acento-oscuro); }
 .ej-cierre-lateral { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.ej-comparando {
+  display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radio);
+  background: var(--info-suave); border: 1px solid #c9dcf2; color: #1e4f8c; font-size: 14.5px; line-height: 1.45;
+}
+.ej-comparando > svg { width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; }
+.ej-comparando strong { display: block; }
 .ej-revision.pendiente { border: 2px solid var(--acento); box-shadow: 0 0 0 4px rgba(242, 194, 0, 0.16), var(--sombra-1); }
 .ej-revision .area { font-size: 15.5px; }
 .ej-revision-botones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
@@ -305,7 +311,8 @@
 .ej-comparar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
 .ej-comparar figure { margin: 0; }
 .ej-comparar figcaption { font-size: 12.5px; color: var(--pizarra); margin-top: 5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-.ej-comparar img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 12px; background: var(--papel); border: 1px solid var(--linea-suave); display: block; }
+/* contain: la referencia es un esquema 16:9 y la foto suele ser 4:3; las dos se ven enteras. */
+.ej-comparar img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 12px; background: #eceef1; border: 1px solid var(--linea-suave); display: block; cursor: zoom-in; }
 .ej-comparar .sin-ref { aspect-ratio: 4 / 3; border-radius: 12px; background: var(--papel); display: grid; place-items: center; color: var(--pizarra-2); font-size: 13px; text-align: center; padding: 10px; }
 .ej-cifras { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 18px; }
 .ej-cifra { background: var(--papel); border-radius: 12px; padding: 12px 14px; }
@@ -340,8 +347,13 @@ body:has(.planta.ej .planta-pie) .avisos-flotantes { bottom: 116px; }
 /* ----------------------------------------------------------- pantallas medianas y pequeñas */
 
 @media (max-width: 1000px) {
-  .ej .planta-cuerpo { overflow-y: auto; grid-template-columns: 1fr; grid-template-rows: auto; }
-  .ej-columna { overflow: visible; }
+  /* Una columna: el paso arriba y el copiloto debajo, cada uno con su altura (sin max-content, con la
+     altura de la pantalla limitada, las filas encogen y el copiloto se monta encima del paso). */
+  .ej .planta-cuerpo {
+    overflow-y: auto; grid-template-columns: 1fr; grid-template-rows: max-content; grid-auto-rows: max-content;
+    align-content: start;
+  }
+  .ej-columna { overflow: visible; min-height: auto; }
   .ej-copiloto { height: auto; }
   .ej-mensajes { max-height: 50vh; }
   .ej-cierre { grid-template-columns: 1fr; }

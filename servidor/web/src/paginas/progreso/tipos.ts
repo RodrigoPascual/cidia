@@ -34,7 +34,7 @@ export interface EvidenciasTarea {
 }
 
 export interface EntradaHistorial {
-  tipo: 'subida' | 'caducidad' | 'reevaluacion' | 'reevaluado' | 'ajuste'
+  tipo: 'subida' | 'caducidad' | 'reevaluacion' | 'reevaluado' | 'ajuste' | 'importado'
   fecha: string
   nivel?: number
   nivel_anterior?: number

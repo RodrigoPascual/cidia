@@ -387,9 +387,23 @@ def test_veredicto_tolerante_con_modelos_pequenos():
     v = _veredicto_modelo({"resultado": {"coincide": "Verdadero.", "observaciones": "Bien.", "confianza": "0.7"}})
     assert v == {"coincide": True, "observaciones": "Bien.", "confianza": 0.7}
     v = _veredicto_modelo([{"coincide": "no", "observaciones": "Falta un tornillo", "confianza": "alta"}])
-    assert v["coincide"] is False and v["confianza"] is None
+    assert v["coincide"] is False and v["confianza"] == 0.85
     assert _veredicto_modelo({"coincide": False, "confianza": 140})["confianza"] == 1.0
-    for malo in ({"coincide": "puede"}, {"texto": "no sé"}, "coincide", []):
+    # Confianza con coma decimal, en porcentaje o con palabras; lo que no es un número, sin confianza.
+    assert _veredicto_modelo({"coincide": True, "confianza": "0,85"})["confianza"] == 0.85
+    assert _veredicto_modelo({"coincide": True, "confianza": "85 %"})["confianza"] == 0.85
+    assert _veredicto_modelo({"coincide": True, "confianza": "Baja."})["confianza"] == 0.3
+    for raro in ("NaN", float("nan"), float("inf"), "mucha", True, None, [0.9]):
+        assert _veredicto_modelo({"coincide": True, "confianza": raro})["confianza"] is None, raro
+    # Un NaN no puede convertirse en «100 % seguro» y saltarse la revisión de una persona.
+    from cidia.servicios.planta import necesita_revision
+    assert necesita_revision({"estado": "comparada", **_veredicto_modelo({"coincide": True, "confianza": "baja"})})
+    # Sí/no escritos con más palabras; las observaciones como lista de frases.
+    assert _veredicto_modelo({"coincide": "Sí, coincide."})["coincide"] is True
+    assert _veredicto_modelo({"coincide": "No coincide"})["coincide"] is False
+    assert _veredicto_modelo({"coincide": True, "observaciones": ["Bien.", "Sin holgura."]})["observaciones"] == "Bien. Sin holgura."
+    for malo in ({"coincide": "puede"}, {"coincide": "no sé"}, {"coincide": "sí, pero no del todo"}, {"texto": "no sé"},
+                 "coincide", []):
         with pytest.raises(ValueError):
             _veredicto_modelo(malo)
 
@@ -555,6 +569,7 @@ def test_supervisor_sin_acceso_a_la_tarea_no_ve_el_contenido(cliente, bd, planta
         assert p["texto"] is None and p["criterio_aceptacion"] is None and p["imagen_url"] is None and p["clip_url"] is None
     ins = jefe["instruccion"]
     assert ins["resumen"] is None and ins["riesgos"] is None and ins["epis"] is None and jefe["tarea"]["riesgos_prl"] is None
+    assert ins["referencia_url"] is None
     h = jefe["historial"][0]
     assert h["pregunta"] == "¿Qué par?" and h["respuesta"] is None and h["fuentes"] == []
     assert jefe["foto"]["foto_url"] and jefe["foto"]["referencia_url"] is None
@@ -563,7 +578,7 @@ def test_supervisor_sin_acceso_a_la_tarea_no_ve_el_contenido(cliente, bd, planta
         completo = cliente.get(base, headers=cab(cliente, quien)).json()
         assert completo["contenido_restringido"] is False
         assert completo["pasos"][2]["imagen_url"] and completo["historial"][0]["respuesta"]
-        assert completo["foto"]["referencia_url"]
+        assert completo["foto"]["referencia_url"] and completo["instruccion"]["referencia_url"]
 
 
 def test_nueva_version_cierra_la_ejecucion_anterior(cliente, bd, planta, recalculos):
@@ -658,9 +673,9 @@ def test_foto_con_vision_real(cliente, bd, planta, monkeypatch, recalculos):
 
 
 def _ejecucion_con_foto(cliente, bd, planta, usuario: str = "pedro", dep: str = "prod",
-                        completar: bool = True) -> tuple[dict[str, Any], dict[str, str]]:
+                        completar: bool = True, nivel_minimo: int = 1) -> tuple[dict[str, Any], dict[str, str]]:
     """Ejecución con todos los pasos confirmados, foto del resultado y (si `completar`) finalizada."""
-    tarea, _ = crear_tarea_con_instruccion(bd, planta, dep)
+    tarea, _ = crear_tarea_con_instruccion(bd, planta, dep, nivel_minimo=nivel_minimo)
     h = cab(cliente, usuario)
     ej = cliente.post("/api/planta/ejecuciones", json={"tarea_id": tarea.id}, headers=h).json()
     base = f"/api/planta/ejecuciones/{ej['id']}"
@@ -787,3 +802,135 @@ def test_revision_de_quien_se_forma_en_otro_departamento(cliente, bd, planta, mo
     sin = cliente.post("/api/planta/ejecuciones", json={"tarea_id": tarea.id}, headers=cab(cliente, "pedro")).json()
     r = cliente.post(f"/api/planta/ejecuciones/{sin['id']}/revision", json={"decision": "aprobada"}, headers=hj)
     assert r.status_code == 409
+
+
+def test_revision_sin_acceso_a_la_tarea_no_ensena_la_referencia(cliente, bd, planta, monkeypatch, recalculos):
+    """Marta se forma en Oficina técnica y hace una tarea de nivel 4 (la formación no mira el nivel).
+    Ana, jefa de Oficina técnica con nivel 3, revisa su foto, pero no puede abrir esa tarea: la
+    imagen del experto no le llega ni en la lista de revisiones ni al revisar (igual que en la
+    ejecución). La administración sí la ve."""
+    monkeypatch.setattr(llm, "modelo_vision", lambda bd=None: None)
+    ej, _ = _ejecucion_con_foto(cliente, bd, planta, usuario="marta", dep="ot", nivel_minimo=4)
+    ha = cab(cliente, "ana")
+    base = f"/api/planta/ejecuciones/{ej['id']}"
+    assert ej["pasos"][2]["imagen_url"]  # la tarea tiene imagen de referencia
+    assert cliente.get(base, headers=ha).json()["foto"]["referencia_url"] is None
+    lista = {e["id"]: e for e in cliente.get("/api/planta/revisiones?estado=todas", headers=ha).json()["elementos"]}
+    assert lista[ej["id"]]["foto"]["foto_url"] and lista[ej["id"]]["foto"]["referencia_url"] is None
+    r = cliente.post(f"{base}/revision", json={"decision": "aprobada"}, headers=ha)
+    assert r.status_code == 200 and r.json()["referencia_url"] is None and r.json()["foto_url"]
+    admin = {e["id"]: e for e in cliente.get("/api/planta/revisiones?estado=todas",
+                                             headers=cab(cliente, "admin")).json()["elementos"]}
+    assert admin[ej["id"]]["foto"]["referencia_url"]
+
+
+def test_supervisor_no_lee_respuestas_basadas_en_documentos_ajenos(cliente, bd, planta, recalculos):
+    """Las fuentes que la jefa de Oficina técnica no puede abrir se vacían, pero el texto del copiloto
+    también contaría lo que dicen: se oculta la respuesta que cita (o se apoya sin citar en) un
+    documento de Producción. La que solo cita lo suyo, o un documento ya retirado, sí la ve. La propia
+    persona y la administración lo ven todo."""
+    from cidia.modelos import Documento
+
+    t_ot, _ = crear_tarea_con_instruccion(bd, planta, "ot")
+    hm = cab(cliente, "marta")
+    ej = cliente.post("/api/planta/ejecuciones", json={"tarea_id": t_ot.id}, headers=hm).json()
+    docs = {}
+    for clave, dep, estado in (("ot", "ot", "listo"), ("prod", "prod", "listo"), ("retirado", "ot", "obsoleto")):
+        d = Documento(titulo=f"Documento {clave}", tipo="texto", departamento_id=planta.deps[dep].id, nivel_minimo=1,
+                      es_formacion=True, estado=estado)
+        bd.add(d)
+        docs[clave] = d
+    bd.flush()
+
+    def fuente(n: int, clave: str) -> dict[str, Any]:
+        return {"n": n, "documento_id": docs[clave].id, "titulo": docs[clave].titulo, "fragmento": f"Texto {clave}."}
+
+    casos = {  # pregunta: (respuesta, con_respaldo, fuentes)
+        "¿Cita lo suyo?": ("Usa el utillaje del manual [1].", True, [fuente(1, "ot"), fuente(2, "prod")]),
+        "¿Cita Producción?": ("En la línea 2 se aprieta a 25 N·m [2].", True, [fuente(1, "ot"), fuente(2, "prod")]),
+        "¿Sin citas?": ("Aprieta a 25 N·m.", True, [fuente(1, "prod")]),
+        "¿Versión retirada?": ("Según la versión anterior [1].", True, [fuente(1, "retirado")]),
+        "¿Sin respaldo?": ("No lo encuentro en la documentación.", False, [fuente(1, "prod")]),
+    }
+    for pregunta, (respuesta, respaldo, fuentes) in casos.items():
+        bd.add(Consulta(usuario_id=planta.personas["marta"].id, pregunta=pregunta, respuesta=respuesta, modo="planta",
+                        con_respaldo=respaldo, tarea_id=t_ot.id, paso_id=ej["pasos"][0]["id"], ejecucion_id=ej["id"],
+                        fuentes=fuentes))
+    bd.commit()
+
+    def historial(usuario: str) -> dict[str, dict[str, Any]]:
+        datos = cliente.get(f"/api/planta/ejecuciones/{ej['id']}", headers=cab(cliente, usuario)).json()
+        return {h["pregunta"]: h for h in datos["historial"]}
+
+    ana = historial("ana")
+    ocultas = {p for p, h in ana.items() if h["respuesta_oculta"]}
+    assert ocultas == {"¿Cita Producción?", "¿Sin citas?"}
+    assert all(ana[p]["respuesta"] is None for p in ocultas)
+    assert ana["¿Cita lo suyo?"]["respuesta"] == "Usa el utillaje del manual [1]."
+    assert ana["¿Versión retirada?"]["respuesta"] and ana["¿Sin respaldo?"]["respuesta"]
+    assert [f["disponible"] for f in ana["¿Cita Producción?"]["fuentes"]] == [True, False]
+    for quien in ("marta", "admin"):
+        todo = historial(quien)
+        assert all(h["respuesta"] == casos[p][0] and h["respuesta_oculta"] is False for p, h in todo.items()), quien
+
+
+def test_escribir_o_revisar_bloquea_la_ejecucion(cliente, bd, planta, recalculos):
+    """Avanzar en la ejecución (o revisar su foto) bloquea la fila hasta el commit: un «Finalizar»
+    repetido espera al primero y lo encuentra ya completada (409), en vez de cerrarla dos veces."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    from cidia.db import nueva_sesion
+    from cidia.modelos import Usuario
+    from cidia.seguridad import Actor
+    from cidia.servicios import planta as srv
+
+    tarea, _ = crear_tarea_con_instruccion(bd, planta, "prod")
+    ej = cliente.post("/api/planta/ejecuciones", json={"tarea_id": tarea.id}, headers=cab(cliente, "pedro")).json()
+
+    def bloqueada() -> bool:
+        with nueva_sesion() as otra:
+            try:
+                otra.execute(text("SELECT id FROM ejecuciones WHERE id = :i FOR UPDATE NOWAIT"), {"i": ej["id"]})
+                return False
+            except DBAPIError:
+                return True
+            finally:
+                otra.rollback()
+
+    for usuario, opciones in (("pedro", {"escribir": True}), ("javier", {"bloquear": True}), ("pedro", {})):
+        with nueva_sesion() as s:
+            actor = Actor(sesion=None, usuario=s.get(Usuario, planta.personas[usuario].id))  # type: ignore[arg-type]
+            srv.obtener_ejecucion(s, actor, ej["id"], **opciones)
+            assert bloqueada() is bool(opciones), (usuario, opciones)
+            s.rollback()
+    assert bloqueada() is False
+
+
+def test_foto_se_compara_en_segundo_plano(cliente, bd, planta, ia, monkeypatch, recalculos):
+    """Con un modelo pequeño la comparación tarda: la foto se guarda enseguida «comparando», la persona
+    puede finalizar y el veredicto llega después. Si entretanto repite la foto, el resultado de la
+    anterior se descarta; la revisión del jefe hecha mientras tanto se conserva."""
+    from cidia.servicios import planta as srv
+
+    pendientes: list[Any] = []
+    monkeypatch.setattr(srv, "lanzar_comparacion", pendientes.append)
+    ia.json = {"coincide": True, "observaciones": "Todo en su sitio.", "confianza": 0.9}
+    tarea, _ = crear_tarea_con_instruccion(bd, planta, "prod")
+    h = cab(cliente, "pedro")
+    ej = cliente.post("/api/planta/ejecuciones", json={"tarea_id": tarea.id}, headers=h).json()
+    base = f"/api/planta/ejecuciones/{ej['id']}"
+    v = cliente.post(f"{base}/foto", files={"imagen": ("r.png", PNG, "image/png")}, headers=h).json()
+    assert v["estado"] == "comparando" and v["foto_url"] and v["pendiente_revision"] is True
+    assert len(pendientes) == 1 and not [ll for ll in ia.llamadas if ll["tipo"] == "chat_json"]
+    # Repite la foto antes de que termine la primera comparación: esa ya no cuenta.
+    cliente.post(f"{base}/foto", files={"imagen": ("r.png", PNG, "image/png")}, headers=h)
+    assert len(pendientes) == 2
+    pendientes[0]()
+    assert cliente.get(base, headers=h).json()["foto"]["estado"] == "comparando"
+    # El jefe la revisa mientras se compara y luego llega el veredicto: se conservan los dos.
+    r = cliente.post(f"{base}/revision", json={"decision": "aprobada"}, headers=cab(cliente, "javier"))
+    assert r.status_code == 200 and r.json()["estado"] == "comparando"
+    pendientes[1]()
+    foto = cliente.get(base, headers=h).json()["foto"]
+    assert foto["estado"] == "comparada" and foto["coincide"] is True and foto["revision"]["estado"] == "aprobada"

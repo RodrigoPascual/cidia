@@ -49,7 +49,8 @@ export function GrabadorNota({ nota, onCambio, compacto }: {
     pulsado.current = false
     const duracion = inicio.current ? (Date.now() - inicio.current) / 1000 : 0
     const blob = await parar()
-    if (blob) onCambio({ blob, url: URL.createObjectURL(blob), segundos: Math.max(1, Math.min(MAX_SEGUNDOS, Math.round(duracion))) })
+    // Segundos enteros hacia abajo, como el reproductor (si no, «0:07» y el reproductor dice 0:06).
+    if (blob) onCambio({ blob, url: URL.createObjectURL(blob), segundos: Math.max(1, Math.min(MAX_SEGUNDOS, Math.floor(duracion))) })
     else if (duracion > 0 && duracion < 1.5) setPista('Ha sido muy corta: mantén pulsado el botón mientras hablas.')
   }
   soltarRef.current = soltar

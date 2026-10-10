@@ -4,7 +4,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   Activity, Award, BadgeCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CirclePlay, ClipboardCheck,
-  Download, Eye, FileText, Lightbulb, MessageSquare, ScrollText, Search, ShieldCheck, Upload, Video, X, XCircle,
+  Brain, Download, Eye, FileText, FolderPlus, GraduationCap, Lightbulb, MessageSquare, ScrollText, Search, Settings,
+  ShieldCheck, Star, Trash2, Undo2, Upload, Video, X, XCircle,
 } from 'lucide-react'
 import { fecha, get, hace } from '../../api'
 import {
@@ -36,17 +37,46 @@ const ICONO_VERBO: Record<string, [ReactNode, Tono]> = {
   certifico: [<Award />, 'amarillo'],
   subio: [<Upload />, 'azul'],
   fotografio: [<Camera />, ''],
+  valoro: [<Star />, 'amarillo'],
+  configuro: [<Settings />, ''],
+  borro: [<Trash2 />, 'rojo'],
+  uso_modelo: [<Brain />, ''],
+  probo_busqueda: [<Search />, 'azul'],
+  retiro: [<Undo2 />, ''],
+  asigno: [<GraduationCap />, 'azul'],
+  creo: [<FolderPlus />, 'verde'],
 }
 
 const NOMBRE_OBJETO: Record<string, string> = {
   sesion: 'Sesión', tarea: 'Tarea', documento: 'Documento', instruccion: 'Instrucción', paso: 'Paso',
   ejecucion: 'Ejecución', microleccion: 'Micro-lección', cuestionario: 'Cuestionario', aportacion: 'Aportación',
   consulta: 'Consulta', captura: 'Captura', observacion: 'Observación', formacion: 'Formación', laguna: 'Laguna',
+  formador: 'Formador', busqueda: 'Búsqueda', espacio: 'Espacio de trabajo', memoria: 'Memoria', modelo: 'Modelo',
+  pregunta: 'Pregunta',
+}
+
+/** Nombres de los cambios de administración tal y como se leen en la auditoría. */
+const NOMBRE_ACCION: Record<string, string> = {
+  anadir_modelo: 'Añadir modelo', quitar_modelo: 'Quitar modelo', cambiar_modelo: 'Cambiar modelo',
+  crear_departamento: 'Crear departamento', editar_departamento: 'Editar departamento', borrar_departamento: 'Borrar departamento',
+  crear_puesto: 'Crear puesto', editar_puesto: 'Editar puesto', borrar_puesto: 'Borrar puesto',
+  crear_tarea: 'Crear tarea', editar_tarea: 'Editar tarea', borrar_tarea: 'Borrar tarea',
+  crear_nivel: 'Crear nivel', editar_nivel: 'Editar nivel', borrar_nivel: 'Borrar nivel', ordenar_niveles: 'Ordenar niveles',
+  editar_empresa: 'Editar empresa y reglas ILUO', crear_empleado: 'Alta de una persona', editar_empleado: 'Editar persona',
+  desactivar_empleado: 'Desactivar cuenta', activar_empleado: 'Reactivar cuenta', restablecer_contrasena: 'Restablecer contraseña',
+  asignar_formacion: 'Asignar formación', completar_formacion: 'Completar formación', cancelar_formacion: 'Cancelar formación',
+  validar_aportacion: 'Validar aportación', rechazar_aportacion: 'Rechazar aportación', editar_aportacion: 'Editar aportación',
+  descartar_laguna: 'Descartar laguna', reabrir_laguna: 'Reabrir laguna', exportar_xapi: 'Exportar xAPI',
+  publicar_instruccion: 'Publicar instrucción', ajustar_nivel_iluo: 'Ajustar nivel ILUO', borrar_captura: 'Borrar captura',
+  sembrar_demo: 'Cargar datos de demostración',
 }
 
 /** Nombre legible de una acción de auditoría: «crear_departamento» → «Crear departamento». */
 function nombreAccion(accion: string): string {
-  const t = accion.replace(/_/g, ' ')
+  if (NOMBRE_ACCION[accion]) return NOMBRE_ACCION[accion]
+  // «documento.borrar» → «Borrar documento»; «crear_algo» → «Crear algo».
+  const [entidad, verbo] = accion.includes('.') ? accion.split('.', 2) : [null, null]
+  const t = (entidad && verbo ? `${verbo} ${entidad}` : accion).replace(/[_.]/g, ' ').replace(/\banadir\b/g, 'añadir')
   return t.charAt(0).toUpperCase() + t.slice(1)
 }
 
@@ -102,13 +132,14 @@ function Paginacion({ pagina, paginas, total, unidad, onPagina }: {
 function Fechas({ desde, hasta, setDesde, setHasta }: {
   desde: string; hasta: string; setDesde: (v: string) => void; setHasta: (v: string) => void
 }) {
+  // El rango va junto: si no cabe en la fila, baja entero (y no se queda «hasta» suelto).
   return (
-    <>
+    <div className="adm-rango">
       <span className="etiqueta-fecha">Desde</span>
       <Entrada type="date" className="entrada fecha" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} aria-label="Desde" />
       <span className="etiqueta-fecha">hasta</span>
       <Entrada type="date" className="entrada fecha" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} aria-label="Hasta" />
-    </>
+    </div>
   )
 }
 
@@ -222,11 +253,16 @@ function Evento({ s, abierta, onAlternar }: { s: SentenciaXapi; abierta: boolean
       <div className={`adm-evento-icono ${tono}`}>{icono}</div>
       <div className="adm-evento-texto">
         <div className="frase">
-          <strong>{s.actor_nombre ?? 'Alguien'}</strong> {s.verbo_texto} <strong>{s.objeto_nombre ?? NOMBRE_OBJETO[s.objeto_tipo] ?? s.objeto_tipo}</strong>
+          <strong>{s.actor_nombre ?? 'Alguien'}</strong> {s.verbo_texto}{' '}
+          {/* «alcanzó el nivel U en Montaje…», no «alcanzó el nivel Montaje…» */}
+          {s.verbo === 'certifico' && typeof r.nivel === 'string' && <><strong>{r.nivel}</strong> en </>}
+          {s.objeto_tipo === 'sesion'
+            ? 'sesión' /* «inició sesión», no «inició Inicio de sesión» */
+            : <strong>{s.objeto_nombre ?? NOMBRE_OBJETO[s.objeto_tipo] ?? s.objeto_tipo}</strong>}
         </div>
         <div className="adm-evento-meta">
           <Etiqueta>{NOMBRE_OBJETO[s.objeto_tipo] ?? s.objeto_tipo}</Etiqueta>
-          {exito !== null && <Etiqueta tono={exito ? 'verde' : 'roja'}>{exito ? 'superado' : 'no superado'}</Etiqueta>}
+          {exito !== null && <Etiqueta tono={exito ? 'verde' : 'roja'}>{exito ? 'Superado' : 'No superado'}</Etiqueta>}
           {nota !== null && <Etiqueta tono="amarilla">{nota} %</Etiqueta>}
           <span title={fecha(s.momento, true)}>{hace(s.momento)}</span>
           <span>·</span>

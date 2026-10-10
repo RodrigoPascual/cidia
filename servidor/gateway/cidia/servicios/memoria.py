@@ -2,7 +2,7 @@
 
 Cada persona decide en su perfil si la activa. Los recuerdos se guardan en el servidor, la
 propia persona puede verlos y borrarlos, y solo se usan en sus conversaciones. Ninguna
-función hace commit salvo el trabajo en segundo plano `extraer_trabajo`.
+función hace commit (el del trabajo en segundo plano `extraer_trabajo` lo hace trabajos.py).
 """
 
 from __future__ import annotations
@@ -190,7 +190,13 @@ def extraer(bd: Session, usuario_id: int, pregunta: str, respuesta: str) -> list
     if not activa(bd, usuario_id):
         return []
     conocidos = [m.contenido for m in listar(bd, usuario_id)[:30]]
-    datos = llm.chat_json(prompts.mensajes_extraer_memoria(pregunta, respuesta, conocidos), bd=bd)
+    try:
+        datos = llm.chat_json(prompts.mensajes_extraer_memoria(pregunta, respuesta, conocidos), bd=bd)
+    except llm.ErrorModelo as e:
+        # Los modelos pequeños a veces no devuelven un JSON válido ni al segundo intento: esta vez
+        # no se recuerda nada (no es un fallo del trabajo).
+        log.info("Sin recuerdos que extraer: %s", e)
+        return []
     return [anadir(bd, usuario_id, r, origen="copiloto") for r in _recuerdos_propuestos(datos)]
 
 

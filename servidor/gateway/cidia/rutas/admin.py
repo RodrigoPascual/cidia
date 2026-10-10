@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from typing import Any, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -63,6 +64,21 @@ def texto_limpio(valor: str | None, campo: str, maximo: int, obligatorio: bool =
     if len(v) > maximo:
         raise HTTPException(400, f"El campo {campo} no puede superar {maximo} caracteres.")
     return v or None
+
+
+_CON_TILDE = "áàäâãéèëêíìïîóòöôõúùüûñç"
+_SIN_TILDE = "aaaaaeeeeiiiiooooouuuunc"
+
+
+def sin_tildes(texto: str) -> str:
+    """«Logística» → «logistica»: lo que escribe quien busca, en minúsculas y sin tildes."""
+    t = unicodedata.normalize("NFKD", texto.strip().lower())
+    return "".join(c for c in t if not unicodedata.combining(c))
+
+
+def columna_sin_tildes(expr: Any) -> Any:
+    """La misma normalización en SQL, para buscar sin distinguir tildes ni mayúsculas."""
+    return func.translate(func.lower(expr), _CON_TILDE, _SIN_TILDE)
 
 
 def obtener(bd: Session, modelo: type[T], ident: int | None, nombre: str) -> T:

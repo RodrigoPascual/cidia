@@ -22,7 +22,8 @@ instalación de verdad.
 `sembrar_si_vacio()` la llama arranque.py cuando CIDIA_CREAR_SEMILLA=true: comprueba si hace falta
 y encola la siembra como trabajo en segundo plano, para no retrasar el arranque del servidor. Si
 una siembra anterior quedó a medias (el servidor se reinició mientras sembraba), la repite desde
-cero: la marca de empresa.config demuestra que esos datos son de la semilla.
+cero: la marca de empresa.config demuestra que esos datos son de la semilla. Un cerrojo de
+PostgreSQL impide dos siembras a la vez (la del arranque y otra lanzada a mano).
 
 Contraseña común de las cuentas de demostración: la de CIDIA_DEMO_CONTRASENA o, si no existe, una
 aleatoria que se guarda en <dir_datos>/usuarios-demo.txt (solo legible por su propietario). Nunca
@@ -52,10 +53,12 @@ from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import delete, event, func, insert, select, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from cidia import trabajos, xapi
 from cidia.config import ajustes
+from cidia.conocimiento import motor
 from cidia.conocimiento.extraccion import tipo_por_extension
 from cidia.db import Base, sesion_bd
 from cidia.ficheros import relativa
@@ -103,6 +106,7 @@ FICHERO_CONTRASENA = "usuarios-demo.txt"
 DIR_AUDIO = Path(__file__).resolve().parent / "semilla_datos" / "audio"
 PIE_PDF = "Metalúrgica Arlanza, S. L. (ficticia) · Documento sintético de demostración"
 VERSION_SEMILLA = 1
+CERROJO = 7_301_412_026  # clave del cerrojo de PostgreSQL: una sola siembra a la vez en la base
 
 # Tablas de contenido que se vacían con forzar=True (la organización y las cuentas ajenas se conservan).
 TABLAS_CONTENIDO = [
@@ -242,7 +246,10 @@ def contrasena_demo() -> tuple[str, str]:
     env = (os.environ.get("CIDIA_DEMO_CONTRASENA", "").strip()
            or str(getattr(ajustes(), "demo_contrasena", "") or "").strip())
     if env:
-        ruta.unlink(missing_ok=True)  # una contraseña generada antes ya no vale: que no confunda
+        try:
+            ruta.unlink(missing_ok=True)  # una contraseña generada antes ya no vale: que no confunda
+        except OSError as e:  # (fichero bloqueado o de solo lectura: no impide sembrar)
+            log.warning("No se pudo borrar %s, que ya no vale: %s", ruta, e)
         if len(env) < 8:
             log.warning("CIDIA_DEMO_CONTRASENA es muy corta (menos de 8 caracteres): úsala solo en una red de pruebas")
         return env, "la variable CIDIA_DEMO_CONTRASENA"
@@ -272,6 +279,38 @@ def exportar_documentos(destino: Path) -> int:
     for d in DOCS.DOCUMENTOS:
         (destino / d["fichero"]).write_bytes(contenido_documento(d))
     return len(DOCS.DOCUMENTOS)
+
+
+# --------------------------------------------------------------------------- una siembra a la vez
+
+
+OCUPADA = "Ya hay otra siembra de los datos de demostración en marcha. Espera a que termine."
+
+
+@contextmanager
+def _cerrojo(base: Engine) -> Iterator[bool]:
+    """Cerrojo de PostgreSQL (pg_try_advisory_lock) mientras dura una siembra. Da False si otra lo tiene.
+
+    Dos siembras a la vez se pisarían: la del arranque (que puede pasar minutos esperando al
+    modelo) y un `python -m cidia.semilla --forzar` lanzado a mano en el servidor, que vaciaría lo
+    que la otra está creando. El cerrojo vive en una conexión propia, porque la sesión de la
+    siembra hace commit por etapas y puede cambiar de conexión. Si no se puede soltar, la conexión
+    se descarta y PostgreSQL lo suelta al cerrarse; también si el proceso muere a mitad.
+    """
+    conexion = base.connect()
+    conseguido = False
+    try:
+        conseguido = bool(conexion.execute(select(func.pg_try_advisory_lock(CERROJO))).scalar())
+        conexion.commit()  # el cerrojo es de la conexión, no de la transacción: no se queda una abierta
+        yield conseguido
+    finally:
+        try:
+            if conseguido:
+                conexion.execute(select(func.pg_advisory_unlock(CERROJO)))
+                conexion.commit()
+        except Exception:  # noqa: BLE001
+            conexion.invalidate()
+        conexion.close()
 
 
 # --------------------------------------------------------------------------- servicios con alternativa
@@ -556,17 +595,17 @@ class _Semilla:
             self.personas[usuario] = u
         bd.flush()
         for f in ORG.FORMACIONES:
-            u, jefe = self.personas[f["usuario"]], self.personas[f["asignada_por"]]
+            u, quien = self.personas[f["usuario"]], self.personas[f["asignada_por"]]
             dep, puesto = self.deps[f["departamento"]], self.puestos[f["puesto"]]
             inicio = self.hace(f["inicio"], 7.2)
             fin = self.base - timedelta(days=f["fin_previsto"])
             fo = Formacion(usuario_id=u.id, departamento=dep, puesto=puesto, estado=f["estado"], inicio=inicio,
-                           fin_previsto=fin, asignada_por_id=jefe.id)
+                           fin_previsto=fin, asignada_por_id=quien.id)
             bd.add(fo)
             self.xapi(inicio, u, "inicio", "formacion", fo, f"Formación en {dep.nombre} · {puesto.nombre}",
-                      contexto={"departamento_id": dep.id, "puesto_id": puesto.id, "asignada_por": jefe.nombre})
+                      contexto={"departamento_id": dep.id, "puesto_id": puesto.id, "asignada_por": quien.nombre})
             if inicio >= self.implantacion():
-                self.auditar(inicio, jefe, "asignar_formacion", "formacion", fo, {
+                self.auditar(inicio, quien, "asignar_formacion", "formacion", fo, {
                     "resumen": f"Asignó a {u.nombre} una formación en {dep.nombre} ({puesto.nombre})",
                     "usuario_id": u.id, "fin_previsto": fin.date().isoformat(),
                 })
@@ -1227,7 +1266,17 @@ def vaciar(bd: Session) -> None:
     cuentas = Usuario.usuario.in_(usuarios)
     if "usuarios" not in marca:
         cuentas = cuentas & Usuario.email.ilike(f"%@{ORG.DOMINIO_CORREO}")
-    bd.execute(text(f"TRUNCATE TABLE {', '.join(TABLAS_CONTENIDO)} RESTART IDENTITY CASCADE"))
+    # Con un motor externo (WeKnora) los documentos viven también allí: se retiran antes, para no
+    # dejar conocimiento huérfano. El motor propio no lo necesita: sus fragmentos son una tabla más.
+    for doc in bd.scalars(select(Documento).where(Documento.motor_id.is_not(None))).all():
+        try:
+            with bd.begin_nested():
+                motor().borrar(bd, doc)
+        except Exception as e:  # noqa: BLE001
+            log.warning("No se pudo retirar «%s» del motor de conocimiento: %s", doc.titulo, e)
+    # Sin RESTART IDENTITY: los ids nuevos no reutilizan los antiguos, así que nada de lo que se
+    # conserva (historial de trabajos, auditoría, enlaces guardados) acaba apuntando a otra fila.
+    bd.execute(text(f"TRUNCATE TABLE {', '.join(TABLAS_CONTENIDO)} CASCADE"))
     bd.execute(delete(Usuario).where(cuentas).execution_options(synchronize_session=False))
     bd.execute(delete(Departamento).where(Departamento.nombre.in_(departamentos))
                .execution_options(synchronize_session=False))
@@ -1245,8 +1294,17 @@ def sembrar(bd: Session, forzar: bool = False, progreso: Callable[..., None] | N
     """Siembra los datos de demostración. Devuelve un resumen con los recuentos (sin la contraseña).
 
     Si la base ya está sembrada (marca de la semilla o su cuenta «ana») no hace nada, salvo con `forzar=True`.
-    En una base con datos propios no hace nada nunca (ni con `forzar`). Hace commit por etapas.
+    En una base con datos propios no hace nada nunca (ni con `forzar`). Si ya hay otra siembra en
+    marcha (estado «ocupada»), tampoco: se espera a que termine. Hace commit por etapas.
     """
+    with _cerrojo(bd.get_bind().engine) as libre:
+        if not libre:
+            log.warning("Ya hay otra siembra de los datos de demostración en marcha: no se empieza otra")
+            return {"sembrado": False, "estado": "ocupada", "motivo": OCUPADA}
+        return _sembrar(bd, forzar, progreso)
+
+
+def _sembrar(bd: Session, forzar: bool, progreso: Callable[..., None] | None) -> dict[str, Any]:
     estado = estado_base(bd)
     if estado == "con_datos":
         log.warning("La base tiene datos propios: no se cargan los datos de demostración")
@@ -1366,9 +1424,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{n} documentos escritos en {args.exportar}")
         return 0
     from cidia.arranque import administrador_inicial, valores_por_defecto
-    from cidia.db import inicializar_bd
+    from cidia.db import inicializar_bd, motor_bd
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    # Antes de tocar el esquema: inicializar_bd altera la tabla de usuarios y, con otra siembra a
+    # mitad de una etapa, esperaría a que terminase y dejaría esperando a todo el servidor.
+    with _cerrojo(motor_bd()) as libre:
+        if not libre:
+            print(f"No se ha sembrado: {OCUPADA}")
+            return 1
     inicializar_bd()
     valores_por_defecto()
     administrador_inicial()  # como al arrancar: la cuenta de CIDIA_ADMIN_CONTRASENA conserva su contraseña
@@ -1376,9 +1440,10 @@ def main(argv: list[str] | None = None) -> int:
     with sesion_bd() as bd:
         resumen = sembrar(bd, forzar=args.forzar)
     if not resumen.get("sembrado"):
-        consejo = "" if resumen.get("estado") == "con_datos" else " Usa --forzar para empezar de cero."
+        estado = resumen.get("estado")
+        consejo = " Usa --forzar para empezar de cero." if estado in ("sembrada", "incompleta") else ""
         print(f"No se ha sembrado: {resumen.get('motivo')}{consejo}")
-        return 0 if resumen.get("estado") != "con_datos" else 1
+        return 1 if estado in ("con_datos", "ocupada") else 0
     print("Datos de demostración cargados:")
     for clave, valor in resumen.items():
         if clave not in ("sembrado", "avisos"):

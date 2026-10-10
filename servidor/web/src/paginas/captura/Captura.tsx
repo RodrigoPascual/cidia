@@ -240,7 +240,7 @@ export default function PaginaCaptura() {
         <Tarjeta className="cap-via">
           <div className="cap-via-icono voz"><Mic /></div>
           <h3>Nota de voz</h3>
-          <p>Para lo que no se ve con las manos: trucos, averías, criterios. CidIA la ordena en una ficha que revisas antes de publicar.</p>
+          <p>Para lo que no se ve en un vídeo: trucos, averías, criterios. CidIA la ordena en una ficha que revisas antes de publicar.</p>
           <div className="cap-via-accion">
             {subiendoAudio ? (
               <div className="cap-subiendo">
@@ -317,7 +317,8 @@ function EstadoCaptura({ c }: { c: Captura }) {
   if (c.estado === 'error') return <Etiqueta tono="roja">Error</Etiqueta>
   if (!c.borrador) return <Etiqueta>Borrador descartado</Etiqueta>
   if (c.borrador.estado === 'publicada') return <Etiqueta tono="verde" icono={<Check />}>Publicada</Etiqueta>
-  if (c.borrador?.estado === 'obsoleta') return <Etiqueta tono="oscura">Obsoleta</Etiqueta>
+  // La instrucción que salió de esta captura ya tiene una versión más nueva (como «Sustituido» en Documentos).
+  if (c.borrador?.estado === 'obsoleta') return <Etiqueta tono="oscura">Sustituida</Etiqueta>
   return <Etiqueta tono="naranja">Por revisar</Etiqueta>
 }
 
@@ -340,7 +341,8 @@ function FilaCaptura({ c, resaltada, onRevisar, onBorrar, onReintentar, onContin
         </div>
         <div className="pequeno apagado cap-fila-meta">
           <span>{NOMBRE_TIPO[c.tipo]}</span>
-          {c.tarea && <span>{textoTarea(c.tarea)}</span>}
+          {/* Si la tarea se llama como la captura, basta con su código (el nombre ya es el título). */}
+          {c.tarea && <span>{c.tarea.nombre === c.titulo && c.tarea.codigo ? c.tarea.codigo : textoTarea(c.tarea)}</span>}
           {c.duracion ? <span>{mmss(c.duracion)}</span> : null}
           {c.entrevista && c.estado === 'en_curso' && <span>{c.entrevista.respuestas} respuestas</span>}
           <span>{hace(c.creada)}</span>

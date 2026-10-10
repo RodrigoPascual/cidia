@@ -98,6 +98,26 @@ def test_generar_preguntas_con_respuestas_raras_del_modelo(bd, planta, ia):
     assert primero.opciones[primero.correcta] == "Colocarla en el útil"
 
 
+def test_generar_preguntas_descarta_pasos_copiados(bd, planta, ia):
+    """Con el modelo real diminuto salió como «pregunta» el texto del paso 1 copiado, con opciones
+    «3», «2», «0», «1»: eso no llega a la experta; se completa con preguntas desde los pasos."""
+    tarea = nueva_tarea(bd, planta, "ot")
+    ins = nueva_instruccion(bd, tarea)
+    paso = ins.pasos[0]
+    copiado = f"{paso.orden}. {paso.titulo}: {paso.texto or ''} " + "Deja la pieza preparada y revisa el útil. " * 4
+    ia.json = {"preguntas": [
+        {"enunciado": copiado, "opciones": ["3", "2", "0", "1"], "correcta": 2, "paso": 1},
+        {"enunciado": "2. Apretar los cuatro tornillos", "opciones": ["Sí", "No", "A veces"], "correcta": 0},
+        {"enunciado": "¿A qué par se aprietan los tornillos de la brida?", "opciones": ["25 N·m", "10 N·m", "40 N·m"],
+         "correcta": 0, "paso": 2},
+    ]}
+    assert evaluacion.generar_preguntas(bd, ins.id, n=3) == 3
+    bd.commit()
+    enunciados = bd.scalars(select(PreguntaEval.enunciado).where(PreguntaEval.instruccion_id == ins.id)).all()
+    assert "¿A qué par se aprietan los tornillos de la brida?" in enunciados
+    assert all("?" in e for e in enunciados) and not any(e.startswith(("1. ", "2. ")) for e in enunciados)
+
+
 def test_generar_preguntas_sin_modelo_usa_los_pasos(bd, planta, ia):
     tarea = nueva_tarea(bd, planta, "ot")
     ins = nueva_instruccion(bd, tarea)

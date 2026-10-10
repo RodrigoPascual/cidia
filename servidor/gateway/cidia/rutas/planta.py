@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from cidia.db import obtener_bd
+from cidia.modelos import Instruccion
 from cidia.seguridad import Actor, usuario_actual
 from cidia.servicios import consulta, planta
 
@@ -119,10 +120,18 @@ async def preguntar(ejecucion_id: int, datos: PreguntaPlanta, actor: Actor = Dep
 @router.post("/ejecuciones/{ejecucion_id}/foto")
 def foto(ejecucion_id: int, imagen: UploadFile = File(...), actor: Actor = Depends(usuario_actual),
          bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
-    """Foto del resultado. Si hay modelo con visión se compara con la imagen del experto."""
+    """Foto del resultado. Si hay modelo con visión se compara con la imagen del experto en segundo
+    plano: la respuesta llega enseguida con estado «comparando» y la pantalla consulta la ejecución
+    hasta tener el veredicto."""
     ej = planta.obtener_ejecucion(bd, actor, ejecucion_id, escribir=True)
     veredicto = planta.guardar_foto(bd, actor, ej, imagen)
     bd.commit()
+    if veredicto.get("estado") == planta.COMPARANDO:
+        ins = bd.get(Instruccion, ej.instruccion_id)
+        planta.comparar_en_segundo_plano(ej, ins)
+        bd.expire_all()  # si ya ha terminado (en las pruebas se compara en el mismo hilo), su veredicto
+        ej = planta.obtener_ejecucion(bd, actor, ejecucion_id)
+        veredicto = planta.veredicto_dict(ej, bd.get(Instruccion, ej.instruccion_id)) or veredicto
     return veredicto or {}
 
 
@@ -137,7 +146,7 @@ def revisiones(estado: Literal["pendientes", "revisadas", "todas"] = Query("pend
 def revisar(ejecucion_id: int, datos: Revision, actor: Actor = Depends(usuario_actual),
             bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
     """El jefe da por buena la foto del resultado o la rechaza con un comentario."""
-    ej = planta.obtener_ejecucion(bd, actor, ejecucion_id)  # 404 a quien no puede verla
+    ej = planta.obtener_ejecucion(bd, actor, ejecucion_id, bloquear=True)  # 404 a quien no puede verla
     veredicto = planta.revisar_foto(bd, actor, ej, datos.decision, datos.comentario)
     bd.commit()
     return veredicto

@@ -144,7 +144,7 @@ export function duracion(segundos: number): string {
   if (s < 60) return `${s} s`
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
-  if (h) return `${h} h ${m} min`
+  if (h) return m ? `${h} h ${m} min` : `${h} h`
   const r = s % 60
   return r ? `${m} min ${r} s` : `${m} min`
 }

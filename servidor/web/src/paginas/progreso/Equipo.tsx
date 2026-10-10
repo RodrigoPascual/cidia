@@ -117,7 +117,7 @@ function ModalCelda({ usuarioId, tareaId, onCerrar, onCambio }: {
       {error ? <ErrorCarga error={error} reintentar={recargar} /> : !d ? (
         <div className="columna" style={{ gap: 12 }}><Esqueleto alto={120} /><Esqueleto alto={200} /></div>
       ) : (
-        <div className="columna" style={{ gap: 12 }}>
+        <div className="columna mz-modal" style={{ gap: 12 }}>
           {ajustando && d.acciones.ajustar && (
             <Tarjeta titulo="Ajuste manual del nivel" icono={<SlidersHorizontal size={18} />}>
               <FormAjuste d={d} alGuardar={() => { setAjustando(false); recargar(); onCambio() }} />

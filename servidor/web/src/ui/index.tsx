@@ -7,7 +7,9 @@ import {
 } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AlertTriangle, CheckCircle2, Info, Loader2, UploadCloud, WifiOff, X, XCircle } from 'lucide-react'
+import {
+  AlertTriangle, CheckCircle2, Info, Loader2, Lock, RefreshCw, SearchX, UploadCloud, WifiOff, X, XCircle,
+} from 'lucide-react'
 import { ErrorApi } from '../api'
 
 // ------------------------------------------------------------------ marca
@@ -79,7 +81,7 @@ export function Tarjeta({ titulo, icono, acciones, pie, children, relleno = true
           {acciones && <div className="fila">{acciones}</div>}
         </div>
       )}
-      {children !== undefined && <div className={titulo || acciones ? 'tarjeta-cuerpo' : relleno ? 'tarjeta-cuerpo' : ''}>{children}</div>}
+      {children !== undefined && <div className={relleno ? 'tarjeta-cuerpo' : 'tarjeta-cuerpo sin-relleno'}>{children}</div>}
       {pie && <div className="tarjeta-pie">{pie}</div>}
     </div>
   )
@@ -158,12 +160,18 @@ export function BarraProgreso({ valor, tono }: { valor: number; tono?: 'amarilla
 
 export function ErrorCarga({ error, reintentar }: { error: unknown; reintentar?: () => void }) {
   const msg = error instanceof ErrorApi || error instanceof Error ? error.message : String(error)
-  const sinConexion = error instanceof ErrorApi && (error.estado === 0 || error.estado >= 502)
+  const estado = error instanceof ErrorApi ? error.estado : -1
+  const sinConexion = estado === 0 || estado >= 502
+  // Reintentar no arregla un «no existe» ni un «no tienes acceso»: ahí no se ofrece.
+  const [icono, titulo, conReintento] =
+    sinConexion ? [<WifiOff key="i" />, 'Sin conexión con el servidor', true]
+      : estado === 404 ? [<SearchX key="i" />, 'No lo encontramos', false]
+        : estado === 403 ? [<Lock key="i" />, 'No tienes acceso a esto', false]
+          : [<XCircle key="i" />, 'No se ha podido cargar', true]
   return (
-    <div role="alert">
-      <Vacio icono={sinConexion ? <WifiOff /> : <XCircle />}
-        titulo={sinConexion ? 'Sin conexión con el servidor' : 'No se ha podido cargar'}
-        accion={reintentar && <Boton onClick={reintentar}>Reintentar</Boton>}>
+    <div role="alert" className={`error-carga ${sinConexion || estado >= 500 ? 'grave' : ''}`}>
+      <Vacio icono={icono} titulo={titulo}
+        accion={reintentar && conReintento && <Boton icono={<RefreshCw />} onClick={reintentar}>Reintentar</Boton>}>
         {msg}
       </Vacio>
     </div>
@@ -480,6 +488,31 @@ export const NOMBRE_ILUO = ['Sin iniciar', 'En formación', 'Ejecuta con apoyo',
 // ------------------------------------------------------------------ voz
 
 /** Grabación de voz «mantén pulsado para hablar». Devuelve un Blob webm/ogg al soltar. */
+/** ¿Va embebida en la app de escritorio? Allí el micrófono lo pone el marco principal. */
+function enAppDeEscritorio(): boolean {
+  try { return window.location.protocol === 'dsh-app:' && window.parent !== window } catch { return false }
+}
+
+type RespuestaMicro = { estado: 'grabando' | 'lista' | 'cancelada' | 'error'; audio?: Blob; duracion_ms?: number; mensaje?: string }
+
+/** Pide al plugin de la app que haga una acción de grabación y espera su respuesta. */
+function pedirAlPuente(id: string, accion: 'empezar' | 'parar' | 'cancelar', esperar: RespuestaMicro['estado'][]): Promise<RespuestaMicro> {
+  return new Promise((resolver) => {
+    const temporizador = window.setTimeout(() => { window.removeEventListener('message', alMensaje); resolver({ estado: 'error', mensaje: 'La app no responde al pedir el micrófono.' }) }, accion === 'empezar' ? 20000 : 15000)
+    function alMensaje(e: MessageEvent) {
+      if (e.origin !== window.location.origin || e.source !== window.parent) return
+      const d = e.data
+      if (!d || d.tipo !== 'cidia:microfono' || d.id !== id) return
+      if (!esperar.includes(d.estado) && d.estado !== 'error') return
+      window.clearTimeout(temporizador)
+      window.removeEventListener('message', alMensaje)
+      resolver(d as RespuestaMicro)
+    }
+    window.addEventListener('message', alMensaje)
+    window.parent.postMessage({ tipo: 'cidia:microfono', id, accion }, window.location.origin)
+  })
+}
+
 export function useGrabadora() {
   const [grabando, setGrabando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -488,9 +521,14 @@ export function useGrabadora() {
   const resolver = useRef<((b: Blob | null) => void) | null>(null)
   const inicio = useRef(0)
   const flujoActual = useRef<MediaStream | null>(null)
+  const idPuente = useRef<string | null>(null)
 
   // Al desmontar el componente se apaga el micrófono si seguía grabando.
   useEffect(() => () => {
+    if (idPuente.current) {
+      try { window.parent.postMessage({ tipo: 'cidia:microfono', id: idPuente.current, accion: 'cancelar' }, window.location.origin) } catch { /* sin app */ }
+      idPuente.current = null
+    }
     flujoActual.current?.getTracks().forEach((t) => t.stop())
     if (grabador.current && grabador.current.state !== 'inactive') {
       resolver.current = null
@@ -500,6 +538,19 @@ export function useGrabadora() {
 
   const empezar = useCallback(async () => {
     setError(null)
+    if (enAppDeEscritorio()) {
+      const id = `micro-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      idPuente.current = id
+      inicio.current = Date.now()
+      setGrabando(true)
+      const r = await pedirAlPuente(id, 'empezar', ['grabando'])
+      if (r.estado !== 'grabando') {
+        idPuente.current = null
+        setGrabando(false)
+        setError(r.mensaje ?? 'No se puede usar el micrófono. Revisa los permisos de Windows.')
+      }
+      return
+    }
     try {
       const flujo = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
       flujoActual.current = flujo
@@ -524,6 +575,16 @@ export function useGrabadora() {
   }, [])
 
   const parar = useCallback((): Promise<Blob | null> => {
+    const id = idPuente.current
+    if (id) {
+      idPuente.current = null
+      setGrabando(false)
+      return pedirAlPuente(id, 'parar', ['lista', 'cancelada']).then((r) => {
+        if (r.estado === 'error') { setError(r.mensaje ?? 'No se ha podido grabar.'); return null }
+        if (r.estado !== 'lista' || !r.audio) return null
+        return (r.duracion_ms ?? Date.now() - inicio.current) < 400 ? null : r.audio
+      })
+    }
     return new Promise((res) => {
       const g = grabador.current
       if (!g || g.state === 'inactive') return res(null)
@@ -545,8 +606,9 @@ export function useConfirmar() {
   const dialogo = estado && (
     <Modal abierto titulo={estado.titulo} onCerrar={() => { estado.res(false); setEstado(null) }}
       pie={<>
-        <Boton onClick={() => { estado.res(false); setEstado(null) }}>Cancelar</Boton>
-        <Boton variante={estado.peligro ? 'peligro' : 'primario'} onClick={() => { estado.res(true); setEstado(null) }}>Confirmar</Boton>
+        <Boton autoFocus={estado.peligro} onClick={() => { estado.res(false); setEstado(null) }}>Cancelar</Boton>
+        <Boton autoFocus={!estado.peligro} variante={estado.peligro ? 'peligro' : 'primario'}
+          onClick={() => { estado.res(true); setEstado(null) }}>Confirmar</Boton>
       </>}>
       <div className="apagado">{estado.texto}</div>
     </Modal>

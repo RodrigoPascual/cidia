@@ -449,6 +449,8 @@ def test_historial_propio_y_paginado(cliente, planta, docs):
     # «%» y «_» se buscan tal cual, no como comodines.
     assert cliente.get("/api/consulta/historial?q=%25", headers=h).json()["total"] == 0
     assert cliente.get("/api/consulta/historial?q=_", headers=h).json()["total"] == 0
+    # Una página absurda no llega a la base de datos.
+    assert cliente.get(f"/api/consulta/historial?pagina={10**20}", headers=h).status_code == 422
 
 
 def test_historial_oculta_fuentes_que_ya_no_puedo_ver(cliente, bd, planta, ia):
@@ -486,6 +488,39 @@ def test_historial_oculta_fuentes_que_ya_no_puedo_ver(cliente, bd, planta, ia):
     e = next(x for x in cliente.get("/api/consulta/historial?por_pagina=20", headers=h).json()["elementos"]
              if x["id"] == r["consulta_id"])
     assert next(x for x in e["fuentes"] if x["n"] == n)["disponible"] is False
+
+
+def test_historial_marca_la_version_sustituida(cliente, bd, planta, ia):
+    """Al publicar otra versión, el documento de la anterior pasa a «obsoleto» y sale del buscador, pero
+    la fila se conserva para la trazabilidad: la respuesta antigua sigue mostrando su fuente, marcada
+    como versión sustituida, a quien podría verla. A quien no, sigue sin existir."""
+    d = _doc(bd, "Cambio de cuchillas de la cizalla 2", "Las cuchillas de la cizalla 2 se cambian con la máquina "
+             "consignada y guantes anticorte de nivel 5.", planta.deps["prod"], 1)
+    try:
+        h = cab(cliente, "pedro")
+        ia.respuesta = "Con la máquina consignada y guantes anticorte de nivel 5 [1]."
+        r = cliente.post("/api/consulta/simple", json={"pregunta": "¿Cómo cambio las cuchillas de la cizalla 2?"},
+                         headers=h).json()
+        n = next(f["n"] for f in r["fuentes"] if f["titulo"] == d.titulo)
+        d.estado = "obsoleto"
+        bd.commit()
+
+        def fuente(cabeceras):
+            e = next(x for x in cliente.get("/api/consulta/historial?por_pagina=20", headers=cabeceras).json()["elementos"]
+                     if x["id"] == r["consulta_id"])
+            return next(x for x in e["fuentes"] if x["n"] == n)
+
+        f = fuente(h)
+        assert f["disponible"] is True and f["obsoleta"] is True and "anticorte" in f["fragmento"] and f["url"] is None
+        # Si además Pedro deja de tener acceso (nivel 3), la versión sustituida tampoco se ve.
+        d.nivel_minimo = 3
+        bd.commit()
+        f = fuente(h)
+        assert f["disponible"] is False and "anticorte" not in json.dumps(f)
+    finally:
+        bd.rollback()
+        documentos.borrar(bd, bd.get(type(d), d.id))
+        bd.commit()
 
 
 # --------------------------------------------------------------------------- invitados
@@ -636,6 +671,28 @@ def test_planta_cuenta_cada_consulta_una_sola_vez(cliente, bd, planta, docs, ia,
     assert len(c) == 1 and c[0].modo == "planta" and c[0].paso_id == critico.id
 
 
+def test_consulta_directa_cuenta_en_el_paso_y_no_en_ejecuciones_cerradas(cliente, bd, planta, docs, ia, ejecucion):
+    """/api/consulta con un ejecucion_id suma con incrementos en SQL: la segunda pregunta del mismo paso
+    se suma sobre la fila que creó la primera, y una ejecución ya terminada no cuenta más."""
+    ej, ins = ejecucion
+    paso = ins.pasos[0]  # no crítico
+    h = cab(cliente, "pedro")
+    cuerpo = {"pregunta": "¿Qué junta coloco?", "modo": "planta", "contexto": {"ejecucion_id": ej.id, "paso_id": paso.id}}
+    for _ in range(2):
+        assert cliente.post("/api/consulta/simple", json=cuerpo, headers=h).status_code == 200
+    bd.expire_all()
+    fila = bd.get(Ejecucion, ej.id)
+    assert (fila.consultas, fila.consultas_criticos) == (2, 0)
+    pasos = bd.scalars(select(EjecucionPaso).where(EjecucionPaso.ejecucion_id == ej.id,
+                                                   EjecucionPaso.paso_id == paso.id)).all()
+    assert len(pasos) == 1 and pasos[0].consultas == 2
+    fila.estado = "completada"
+    bd.commit()
+    assert cliente.post("/api/consulta/simple", json=cuerpo, headers=h).status_code == 200
+    bd.expire_all()
+    assert bd.get(Ejecucion, ej.id).consultas == 2  # cerrada: la pregunta se guarda, pero no cuenta
+
+
 def test_contexto_de_tarea_respeta_nivel_y_borradores(cliente, bd, planta, ejecucion):
     _, publicada = ejecucion
     tarea = Tarea(puesto_id=planta.puestos["prod"].id, codigo="IT-900", nombre="Ajuste del robot de soldadura",
@@ -779,6 +836,59 @@ def test_memoria_con_modelo_que_devuelve_basura(cliente, bd, planta, docs, ia):
     cliente.put("/api/memoria", json={"activa": False}, headers=h)
 
 
+def test_extraccion_con_json_imposible_no_es_un_fallo(cliente, bd, planta, docs, ia):
+    """Si el modelo no devuelve un JSON válido ni al reintentar (chat_json lanza ErrorModelo), no se
+    recuerda nada y el trabajo en segundo plano termina bien (no queda como error)."""
+    from cidia.ia import llm
+    from cidia.modelos import Trabajo
+
+    def roto(_mensajes):
+        raise llm.ErrorModelo("El modelo no devolvió un JSON válido.")
+
+    h = cab(cliente, "javier")
+    cliente.put("/api/memoria", json={"activa": True}, headers=h)
+    try:
+        ia.json = roto
+        r = cliente.post("/api/consulta/simple", headers=h,
+                         json={"pregunta": "Soy el jefe del turno de noche, ¿qué hago si se atasca la prensa 3?"})
+        assert r.status_code == 200
+        assert cliente.get("/api/memoria", headers=h).json()["total"] == 0
+        t = bd.scalars(select(Trabajo).where(Trabajo.tipo == "memoria_extraer",
+                                             Trabajo.usuario_id == planta.personas["javier"].id)
+                       .order_by(Trabajo.id.desc())).first()
+        assert t is not None and t.estado == "completado" and t.resultado == {"recuerdos": 0}
+    finally:
+        cliente.put("/api/memoria", json={"activa": False}, headers=h)
+
+
+def test_modelo_que_responde_algo_raro(cliente, bd, planta, docs, ia, monkeypatch):
+    """Una respuesta del servidor de modelos con otra forma (sin «choices») o un fallo inesperado a mitad
+    del streaming se explican a la persona; lo que llegó a escribirse queda guardado."""
+    from cidia.ia import llm
+    from cidia.servicios import consulta as srv
+
+    def sin_choices(*a, **k):
+        raise KeyError("choices")
+
+    monkeypatch.setattr(llm, "chat", sin_choices)
+    r = cliente.post("/api/consulta/simple", json={"pregunta": "¿Qué hago si se atasca la prensa 3?"},
+                     headers=cab(cliente, "pedro"))
+    assert r.status_code == 503 and "modelo" in r.json()["detail"]
+
+    async def se_rompe(*a, **k):
+        yield "Para la máquina y limpia el sensor S4 "
+        raise RuntimeError("fallo inesperado")
+
+    monkeypatch.setattr(llm, "chat_stream", se_rompe)
+    monkeypatch.setattr(srv, "lanzar_en_segundo_plano", lambda f: f())
+    pregunta = "La prensa 3 se ha vuelto a atascar, ¿qué hago ahora?"
+    eventos = _eventos(cliente, {"pregunta": pregunta}, cab(cliente, "pedro"))
+    assert eventos[0][0] == "fuentes" and eventos[-1][0] == "error" and "fin" not in [e for e, _ in eventos]
+    bd.expire_all()
+    c = bd.scalars(select(Consulta).where(Consulta.pregunta == pregunta)).one()
+    assert c.respuesta.startswith("Para la máquina")
+
+
 # --------------------------------------------------------------------------- voz
 
 
@@ -795,6 +905,21 @@ def test_voz_transcribir(cliente, planta, ia):
         assert r.status_code == 200, tipo
     r = cliente.post("/api/voz/transcribir", files={"audio": ("foto.png", b"x" * 2000, "image/png")}, headers=h)
     assert r.status_code == 400 and "audio" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("oido, esperado", [
+    ("Subtítulos realizados por la comunidad de Amara.org", ""),
+    ("¡Gracias por ver el vídeo!", ""),
+    ("[Música]", ""),
+    ("  (aplausos) ", ""),
+    ("¿Cuántos tornillos lleva   la brida B?", "¿Cuántos tornillos lleva la brida B?"),
+    ("Gracias", "Gracias"),  # un «gracias» de verdad sí se envía
+])
+def test_voz_descarta_lo_que_whisper_oye_en_el_silencio(cliente, planta, ia, oido, esperado):
+    ia.transcripcion = oido
+    r = cliente.post("/api/voz/transcribir", files={"audio": ("voz.webm", b"x" * 2000, "audio/webm")},
+                     headers=cab(cliente, "pedro"))
+    assert r.status_code == 200 and r.json()["texto"] == esperado
 
 
 def test_voz_servicio_caido(cliente, planta, monkeypatch):
@@ -909,6 +1034,17 @@ def test_respuesta_vacia_del_modelo_no_es_laguna(cliente, bd, planta, docs, ia):
                      headers=cab(cliente, "pedro")).json()
     assert d["respuesta"].startswith("No he podido generar") and "think" not in d["respuesta"]
     assert d["con_respaldo"] is False and d["laguna_id"] is None  # había documentación: falló el modelo
+
+
+@pytest.mark.parametrize("bruto", ["SIN_RESPALDO", "**SIN_RESPALDO**", "[SIN_RESPALDO]\n"])
+def test_solo_la_marca_es_no_encontrado_y_laguna(cliente, bd, planta, docs, ia, bruto):
+    """qwen3:0.6b a veces escribe solo la marca. Es un «no lo encuentro» (laguna y aviso), no un fallo
+    del modelo: no debe decir «No he podido generar una respuesta»."""
+    ia.respuesta = bruto
+    d = cliente.post("/api/consulta/simple", json={"pregunta": "¿Cada cuántos ciclos se limpia el sensor S4 de la prensa 3?"},
+                     headers=cab(cliente, "pedro")).json()
+    assert d["respuesta"].startswith("No lo he encontrado") and "SIN_RESPALDO" not in d["respuesta"]
+    assert d["con_respaldo"] is False and d["laguna_id"] and d["aviso_sin_respaldo"] is True
 
 
 def test_puesto_en_el_prompt_solo_si_habla_de_si(cliente, planta, docs, ia):

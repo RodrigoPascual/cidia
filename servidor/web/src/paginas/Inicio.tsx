@@ -358,7 +358,7 @@ function MisTareas({ d }: { d: DatosInicio }) {
                   </div>
                 </div>
                 <div className="ini-nivel">
-                  <strong>{LETRA_ILUO[t.nivel]}</strong>
+                  {t.nivel > 0 && <strong>{LETRA_ILUO[t.nivel]}</strong>}
                   {NOMBRE_ILUO[t.nivel]}
                 </div>
               </Link>
@@ -440,15 +440,16 @@ function AccesosAdmin() {
 function EsqueletoInicio() {
   return (
     <>
-      <div className="ini-portada" style={{ minHeight: 190 }}>
+      <div className="ini-portada" style={{ minHeight: 230 }} role="status" aria-label="Cargando tu panel">
         <div className="columna">
           <Esqueleto alto={14} ancho={160} />
           <Esqueleto alto={34} ancho="70%" />
           <Esqueleto alto={14} ancho={220} />
         </div>
-        <Esqueleto alto={150} />
+        <Esqueleto alto={174} />
       </div>
       <div className="ini-accesos">{[0, 1, 2, 3].map((i) => <Esqueleto key={i} alto={148} />)}</div>
+      <div className="ini-cifras ini-seccion">{[0, 1, 2, 3].map((i) => <Esqueleto key={i} alto={82} />)}</div>
       <div className="ini-dos">
         <div className="columna">{[0, 1, 2, 3].map((i) => <Esqueleto key={i} alto={52} />)}</div>
         <Esqueleto alto={220} />

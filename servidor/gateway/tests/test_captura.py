@@ -184,6 +184,34 @@ def test_post_api_captura_es_la_subida_de_video(cliente, planta):
     assert r.status_code == 403
 
 
+def test_manifiesto_disfrazado_no_lee_otros_videos(cliente, bd, planta, ia, ffmpeg):
+    """Un manifiesto DASH guardado como «.mp4» haría que ffmpeg abriera otro vídeo del servidor por su
+    ruta (p. ej., el de otro departamento) y devolviera sus fotogramas y clips a quien lo subió."""
+    victima = video_sintetico(ffmpeg, "de_otro_departamento.webm")
+    mpd = (
+        '<?xml version="1.0"?>\n<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" '
+        'mediaPresentationDuration="PT12S" minBufferTime="PT1S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">'
+        '<Period><AdaptationSet mimeType="video/webm"><Representation id="1" bandwidth="1000">'
+        f"<BaseURL>file:{victima.resolve().as_posix()}</BaseURL></Representation></AdaptationSet></Period></MPD>\n"
+    ).encode()
+    trampa = victima.with_name("trampa.mp4")
+    trampa.write_bytes(mpd)
+    assert video.info(victima)["tiene_video"]  # el vídeo de verdad se sigue leyendo
+    with pytest.raises(video.ErrorVideo):
+        video.info(trampa)
+    with pytest.raises(video.ErrorVideo):
+        video.fotograma(trampa, 1.0, trampa.with_name("robado.jpg"))
+    assert not trampa.with_name("robado.jpg").exists()
+    # Por la API: la captura queda en error, sin miniatura ni pasos sacados del otro vídeo.
+    h = cab(cliente, "carmen")
+    d = cliente.post("/api/captura/video", headers=h, files={"fichero": ("trampa.mp4", mpd, "video/mp4")}).json()
+    assert d["estado"] == "error" and d["miniatura_url"] is None and d["instruccion_id"] is None
+    bd.expire_all()
+    carpeta = _fichero(bd, bd.get(Captura, d["id"]).ruta_original).parent
+    assert [p.name for p in carpeta.iterdir()] == ["trampa.mp4"]
+    assert cliente.delete(f"/api/captura/{d['id']}", headers=h).status_code == 200
+
+
 def test_captura_sin_fichero_no_sale_de_la_carpeta_de_datos():
     """Sin fichero, ruta_absoluta("") sería la carpeta de datos y el trabajo escribiría en la de encima."""
     with pytest.raises(captura.ErrorCaptura):
@@ -321,6 +349,11 @@ def test_ficha_envuelta_y_con_claves_en_ingles(cliente, planta, ia):
     ficha = cliente.get(f"/api/captura/{d['id']}", headers=h).json()["ficha"]
     assert ficha["titulo"] == "Pérdida de presión en la prensa 2" and ficha["etiquetas"] == ["prensa", "junta"]
     assert ficha["contenido"].startswith("## Causa") and d["origen_borrador"] == "modelo"
+    # La ficha dentro de una lista ([{...}]) también sirve.
+    ia.json = [{"titulo": "Junta tórica", "contenido": "## Causa\n\nLa junta tórica está gastada.", "etiquetas": True}]
+    d = cliente.post("/api/captura/audio", headers=h, files={"fichero": ("n.webm", b"a", "audio/webm")}).json()
+    ficha = cliente.get(f"/api/captura/{d['id']}", headers=h).json()["ficha"]
+    assert ficha["titulo"] == "Junta tórica" and ficha["etiquetas"] == [] and d["origen_borrador"] == "modelo"
 
 
 def test_ficha_de_otro_departamento_no_se_toca(cliente, bd, planta, ia):
@@ -352,6 +385,94 @@ def test_ficha_de_otro_departamento_no_se_toca(cliente, bd, planta, ia):
     assert cliente.get(f"/api/captura/{d['id']}", headers=hj).status_code == 200
     assert cliente.put(f"/api/captura/{d['id']}/ficha", headers=hj, json={"titulo": "Cambio de molde"}).status_code == 200
     assert cliente.get(f"/api/captura/{d['id']}", headers=cab(cliente, "admin")).status_code == 200
+
+
+def test_autora_que_cambia_de_departamento_no_crea_ni_borra_borradores_alli(cliente, bd, planta, ia):
+    """Tras cambiarse de departamento, la autora no borra el borrador que revisa su antiguo jefe, ni
+    reintenta, ni sigue o termina una entrevista de una tarea de allí (crearía borradores ajenos)."""
+    u = bd.scalar(select(Usuario).where(Usuario.usuario == "experta_movil"))
+    if u is None:
+        u = Usuario(usuario="experta_movil", nombre="Experta que cambia", rol="empleado", es_experto=True,
+                    nivel_id=planta.niveles[2].id, hash_contrasena=hash_contrasena(CONTRASENA))
+        bd.add(u)
+    u.departamento_id = planta.deps["prod"].id
+    bd.commit()
+    h = cab(cliente, "experta_movil")
+    t = nueva_tarea(bd, planta, "prod")
+    # Una entrevista terminada con su borrador de instrucción, otra a medias y un vídeo que ha fallado.
+    hecha = cliente.post("/api/captura/entrevista", headers=h, json={"tarea_id": t.id}).json()
+    ia.json = {"repreguntar": False, "pregunta": "¿Qué preparas?"}
+    cliente.post(f"/api/captura/{hecha['id']}/entrevista/responder", headers=h, json={"texto": "Purgo el filtro."})
+    ia.json = {"titulo": "Purga del filtro", "pasos": [{"titulo": "Abrir la purga"}]}
+    hecha = cliente.post(f"/api/captura/{hecha['id']}/entrevista/finalizar", headers=h,
+                         json={"generar": "instruccion"}).json()
+    assert hecha["estado"] == "borrador_listo", hecha["mensaje"]
+    a_medias = cliente.post("/api/captura/entrevista", headers=h, json={"tarea_id": t.id}).json()
+    rota = cliente.post("/api/captura/video", headers=h, data={"tarea_id": str(t.id)},
+                        files={"fichero": ("roto.mp4", b"no soy un video", "video/mp4")}).json()
+    assert rota["estado"] == "error"
+
+    u.departamento_id = planta.deps["ot"].id
+    bd.commit()
+    assert cliente.delete(f"/api/captura/{hecha['id']}", headers=h).status_code == 403
+    assert cliente.get(f"/api/instrucciones/{hecha['instruccion_id']}", headers=cab(cliente, "carmen")).status_code == 200
+    ruta = f"/api/captura/{a_medias['id']}/entrevista"
+    assert cliente.post(f"{ruta}/responder", headers=h, json={"texto": "Algo más."}).status_code == 403
+    assert cliente.post(f"{ruta}/finalizar", headers=h, json={"generar": "instruccion"}).status_code == 403
+    assert cliente.post(f"/api/captura/{rota['id']}/reintentar", headers=h).status_code == 403
+    # Lo que no deja borradores sí lo puede borrar; el jefe de Producción, todo.
+    assert cliente.delete(f"/api/captura/{rota['id']}", headers=h).status_code == 200
+    assert cliente.delete(f"/api/captura/{a_medias['id']}", headers=h).status_code == 200
+    hj = cab(cliente, "javier")
+    assert cliente.delete(f"/api/captura/{hecha['id']}", headers=hj).status_code == 200
+    assert cliente.get(f"/api/instrucciones/{hecha['instruccion_id']}", headers=hj).status_code == 404
+
+
+def test_tarea_dada_de_baja_no_se_captura(cliente, bd, planta):
+    t = nueva_tarea(bd, planta, "prod")
+    t.activa = False
+    bd.commit()
+    h = cab(cliente, "carmen")
+    r = cliente.post("/api/captura/entrevista", headers=h, json={"tarea_id": t.id})
+    assert r.status_code == 400 and "dada de baja" in r.json()["detail"]
+    r = cliente.post("/api/captura/audio", headers=h, data={"tarea_id": str(t.id)},
+                     files={"fichero": ("n.webm", b"a", "audio/webm")})
+    assert r.status_code == 400
+
+
+def test_nota_de_voz_demasiado_grande(cliente, planta, monkeypatch):
+    monkeypatch.setattr(captura, "MAX_AUDIO", 10)
+    carpeta = ajustes().dir_datos / "capturas"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    antes = set(carpeta.iterdir())
+    r = cliente.post("/api/captura/audio", headers=cab(cliente, "carmen"),
+                     files={"fichero": ("larga.webm", b"x" * 11, "audio/webm")})
+    assert r.status_code == 413 and "demasiado grande" in r.json()["detail"]
+    assert set(carpeta.iterdir()) == antes  # no queda nada en disco
+
+
+def test_respuesta_por_voz_con_el_servicio_de_voz_roto(cliente, planta, ia, monkeypatch):
+    """Cualquier fallo del servicio de voz (no solo ErrorVoz) se explica con un 503, nunca un 500."""
+    from cidia.ia import asr
+
+    h = cab(cliente, "carmen")
+    d = cliente.post("/api/captura/entrevista", headers=h, json={"tema": "Ajuste de la guía"}).json()
+
+    def roto(*a, **k):
+        raise ValueError("respuesta que no es JSON")
+
+    monkeypatch.setattr(asr, "transcribir", roto)
+    r = cliente.post(f"/api/captura/{d['id']}/entrevista/responder-audio", headers=h,
+                     files={"fichero": ("r.webm", b"voz", "audio/webm")})
+    assert r.status_code == 503 and "transcribir" in r.json()["detail"]
+    # La conversación no crece sin fin: pasado el máximo, hay que terminarla.
+    monkeypatch.setattr(captura, "MAX_MENSAJES", 3)
+    ruta = f"/api/captura/{d['id']}/entrevista/responder"
+    assert cliente.post(ruta, headers=h, json={"texto": "Se ajusta cada lunes."}).status_code == 200
+    r = cliente.post(ruta, headers=h, json={"texto": "Y algo más."})
+    assert r.status_code == 409 and "Termínala" in r.json()["detail"]
+    assert cliente.post(f"/api/captura/{d['id']}/entrevista/finalizar", headers=h).status_code == 200
+    assert cliente.delete(f"/api/captura/{d['id']}", headers=h).status_code == 200
 
 
 def test_nota_de_voz_sin_voz(cliente, planta, ia):
@@ -605,6 +726,11 @@ def test_propuesta_con_claves_en_ingles_y_titulos_repetidos():
     assert q and [x["titulo"] for x in q["pasos"]] == ["A", "B"]
     # El mismo título y el mismo texto en todos: atasco del modelo, se usa el plan B.
     assert captura.normalizar_propuesta({"pasos": [{"titulo": "Paso", "texto": "Igual."}] * 3}, 10) is None
+    # La instrucción entera dentro de una lista no es un único paso; «true» en un campo de texto no vale.
+    r = captura.normalizar_propuesta([{"titulo": "Montaje", "epis": True, "resumen": True,
+                                       "pasos": [{"titulo": "A", "texto": True}, {"titulo": "B"}]}], 10.0)
+    assert r and r["titulo"] == "Montaje" and [x["titulo"] for x in r["pasos"]] == ["A", "B"]
+    assert r["epis"] == "" and r["resumen"] == "" and r["pasos"][0]["texto"] == ""
 
 
 def test_transcripcion_larga_llega_entera_al_modelo():

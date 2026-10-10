@@ -166,6 +166,8 @@ async def chat_completions(request: Request, actor: Actor = Depends(actor_actual
         return _error(400, "El cuerpo de la petición no es un JSON válido.")
     if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("messages"), list) or not cuerpo["messages"]:
         return _error(400, "Falta la lista de mensajes (messages).")
+    if cuerpo.get("model") is not None and not isinstance(cuerpo["model"], str):
+        return _error(400, "El modelo (model) tiene que ser un texto.")
     try:
         salida, ref = await run_in_threadpool(_preparar, bd, actor, cuerpo)
     except llm.ErrorModelo as e:

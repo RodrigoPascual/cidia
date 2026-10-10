@@ -23,7 +23,7 @@ export function RespuestaCopiloto({ respuesta, pensando = 'Buscando en la docume
       {respuesta.error && <div className="mt-1"><Aviso tono="alerta">{respuesta.error}</Aviso></div>}
       {respuesta.terminado && !respuesta.texto && !respuesta.error && (
         <div className="apagado pequeno">
-          {respuesta.oculta ? 'La respuesta no se muestra: se basa en material de otro departamento.' : 'Sin respuesta.'}
+          {respuesta.oculta ? 'La respuesta no se muestra: se basa en documentación a la que no tienes acceso.' : 'Sin respuesta.'}
         </div>
       )}
       {fuentes.length > 0 && (

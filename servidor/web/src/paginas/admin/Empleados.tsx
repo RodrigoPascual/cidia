@@ -1,12 +1,13 @@
 // Administración · Empleados: cuentas, roles, contraseñas (se muestran una sola vez) y
 // formaciones en otros departamentos.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   CalendarClock, CheckCircle2, Copy, GraduationCap, KeyRound, Lock, Plus, Save, Search, ShieldCheck, UserCheck, UserCog,
   UserPlus, UserX, Users, XCircle,
 } from 'lucide-react'
 import { fecha, get, hace, post, put } from '../../api'
+import { useSesion } from '../../sesion'
 import {
   Aviso, Avatar, Boton, Cabecera, Campo, Entrada, ErrorCarga, Esqueleto, Etiqueta, Interruptor, Modal, Pestanas, Selector,
   Tarjeta, Vacio, useAvisarError, useAvisos, useConfirmar, useDatos,
@@ -27,6 +28,9 @@ function hayDialogoEncima(): boolean {
 }
 
 export default function Empleados() {
+  const { perfil, puede } = useSesion()
+  // Un jefe ve a su equipo en modo lectura; la administración gestiona todas las cuentas.
+  const esAdmin = puede('empleados')
   const [texto, setTexto] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [dep, setDep] = useState('')
@@ -46,16 +50,19 @@ export default function Empleados() {
     activo: estado === 'todos' ? undefined : estado === 'activos',
   })
   const lista = useDatos((s) => get<ListaEmpleados>(`/api/admin/empleados${qs}`, s), [qs])
-  const org = useDatos((s) => get<Organizacion>('/api/admin/organizacion', s).catch(() => null), [])
-  const soloLectura = lista.datos?.solo_lectura ?? false
+  // La organización (para los filtros y el formulario) solo la consulta la administración.
+  const org = useDatos((s) => (esAdmin ? get<Organizacion>('/api/admin/organizacion', s).catch(() => null) : Promise.resolve(null)), [esAdmin])
+  const soloLectura = lista.datos?.solo_lectura ?? !esAdmin
   const filtrando = !!(busqueda || dep || rol || estado !== 'activos')
 
   return (
     <>
       <Cabecera
-        antetitulo={<><UserCog size={14} /> Administración</>}
-        titulo="Empleados"
-        subtitulo="Cuentas, roles y formaciones. Las contraseñas las genera CidIA y se muestran una sola vez."
+        antetitulo={esAdmin ? <><UserCog size={14} /> Administración</> : <><Users size={14} /> Mi equipo</>}
+        titulo={esAdmin ? 'Empleados' : `Personas${perfil?.departamento ? ` de ${perfil.departamento.nombre}` : ' de tu equipo'}`}
+        subtitulo={esAdmin
+          ? 'Cuentas, roles y formaciones. Las contraseñas las genera CidIA y se muestran una sola vez.'
+          : 'Quién forma tu equipo, su nivel y las formaciones que tiene en curso.'}
         acciones={!soloLectura && (
           <Boton variante="primario" icono={<UserPlus />} onClick={() => setPanel({ id: null })}>Nueva persona</Boton>
         )}
@@ -66,11 +73,13 @@ export default function Empleados() {
           <Search />
           <Entrada placeholder="Buscar por nombre, usuario o correo" value={texto} onChange={(e) => setTexto(e.target.value)} />
         </div>
-        <Selector value={dep} onChange={(e) => setDep(e.target.value)} vacio="Todos los departamentos"
-          opciones={(org.datos?.departamentos ?? []).map((d) => ({ valor: d.id, texto: d.nombre }))} />
-        <Selector value={rol} onChange={(e) => setRol(e.target.value)} vacio="Todos los roles"
+        {esAdmin && (
+          <Selector value={dep} onChange={(e) => setDep(e.target.value)} vacio="Todos los departamentos" aria-label="Departamento" className="selector adm-filtro-ancho"
+            opciones={(org.datos?.departamentos ?? []).map((d) => ({ valor: d.id, texto: d.nombre }))} />
+        )}
+        <Selector value={rol} onChange={(e) => setRol(e.target.value)} vacio="Todos los roles" aria-label="Rol"
           opciones={(Object.keys(NOMBRE_ROL_ADMIN) as Rol[]).map((r) => ({ valor: r, texto: NOMBRE_ROL_ADMIN[r] }))} />
-        <Selector value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)}
+        <Selector value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)} aria-label="Estado de la cuenta"
           opciones={[{ valor: 'activos', texto: 'Activas' }, { valor: 'inactivos', texto: 'Desactivadas' }, { valor: 'todos', texto: 'Todas' }]} />
       </div>
 
@@ -228,6 +237,8 @@ function PanelEmpleado({ id, org, soloLectura, onCerrar, onCambio, onCreado, onC
         <ErrorCarga error={detalle.error} reintentar={detalle.recargar} />
       ) : id !== null && !emp ? (
         <div className="columna"><Esqueleto alto={40} /><Esqueleto alto={40} /><Esqueleto alto={40} /></div>
+      ) : soloLectura && emp && pestana === 'datos' ? (
+        <FichaLectura emp={emp} />
       ) : pestana === 'datos' || id === null ? (
         <FormEmpleado key={emp?.id ?? 'nuevo'} emp={emp ?? undefined} org={org} soloLectura={soloLectura}
           onGuardado={(e) => { detalle.setDatos({ ...e, formaciones: emp?.formaciones }); onCambio() }}
@@ -236,6 +247,43 @@ function PanelEmpleado({ id, org, soloLectura, onCerrar, onCambio, onCreado, onC
         <Formaciones emp={emp} org={org} soloLectura={soloLectura} onCambio={() => { detalle.recargar(); onCambio() }} />
       ) : null}
     </Modal>
+  )
+}
+
+/** Ficha de una persona para quien solo puede consultarla (un jefe con su equipo). */
+function FichaLectura({ emp }: { emp: Empleado }) {
+  const filas: [string, ReactNode][] = [
+    ['Usuario', <span className="mono">{emp.usuario}</span>],
+    ['Correo electrónico', emp.email ? <a href={`mailto:${emp.email}`}>{emp.email}</a> : <span className="apagado">Sin correo</span>],
+    ['Departamento', emp.departamento
+      ? <span className="adm-dep"><span className="adm-color" style={{ background: emp.departamento.color ?? undefined }} />{emp.departamento.nombre}</span>
+      : <span className="apagado">Sin departamento</span>],
+    ['Puesto', emp.puesto?.nombre ?? <span className="apagado">Sin puesto concreto</span>],
+    ['Nivel', emp.nivel ? `${emp.nivel.orden} · ${emp.nivel.nombre}` : <span className="apagado">Sin nivel</span>],
+    ['Rol', <>{NOMBRE_ROL_ADMIN[emp.rol]}{emp.es_experto ? ' · experto en su puesto' : ''}</>],
+  ]
+  return (
+    <>
+      <div className="fila envolver mb-2" style={{ gap: 14 }}>
+        <Avatar nombre={emp.nombre} iniciales={emp.iniciales} tamano="g" />
+        <div className="crece">
+          <div className="fila envolver" style={{ gap: 6 }}>
+            <Etiqueta tono={TONO_ROL[emp.rol]}>{NOMBRE_ROL_ADMIN[emp.rol]}</Etiqueta>
+            {emp.es_experto && <Etiqueta tono="amarilla">Experto</Etiqueta>}
+            {emp.activo ? <Etiqueta tono="verde">Activa</Etiqueta> : <Etiqueta tono="roja">Desactivada</Etiqueta>}
+          </div>
+          <div className="pequeno apagado mt-1">
+            Alta {fecha(emp.creado)} · {emp.ultimo_acceso ? `último acceso ${hace(emp.ultimo_acceso)}` : 'aún no ha entrado'}
+          </div>
+        </div>
+      </div>
+      <dl className="adm-ficha">
+        {filas.map(([k, v]) => (
+          <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+        ))}
+      </dl>
+      <div className="pequeno apagado mt-2">Para cambiar sus datos, su nivel o su puesto, pídeselo a la administración.</div>
+    </>
   )
 }
 

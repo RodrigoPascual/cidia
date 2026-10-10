@@ -118,7 +118,7 @@ def valorar(datos: PeticionValoracion, consulta_id: int = Path(ge=1, le=consulta
 
 @router.get("/historial")
 def historial(
-    pagina: int = Query(1, ge=1),
+    pagina: int = Query(1, ge=1, le=100_000),  # con tope: un número enorme desbordaría el OFFSET
     por_pagina: int = Query(20, ge=1, le=100),
     q: str | None = Query(None, max_length=200),
     actor: Actor = Depends(usuario_actual),

@@ -24,7 +24,10 @@ function textoHistorial(h: EntradaHistorial): { titulo: string; detalle?: string
     case 'ajuste':
       return { titulo: `Nivel ajustado de ${letra(h.nivel_anterior)} a ${letra(h.nivel)}${h.por ? ` por ${h.por}` : ''}`,
         detalle: h.motivo ? `Motivo: ${h.motivo}` : undefined }
-    default: return { titulo: 'Cambio de nivel' }
+    case 'importado':
+      return { titulo: `Nivel ${letra(h.nivel)} traído de la matriz anterior`,
+        detalle: 'Venía de la matriz de competencias en papel, de antes de CidIA.' }
+    default: return { titulo: h.nivel ? `Cambio de nivel: ${letra(h.nivel)}` : 'Cambio de nivel' }
   }
 }
 

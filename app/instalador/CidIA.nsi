@@ -12,6 +12,7 @@
 ; SALIDA y PLANTILLAS (include generado a partir de app\perfil).
 ;
 ; Uso sin ventanas:  CidIA-Setup.exe /S /SERVIDOR=http://servidor-cidia:18700
+;                   (código 2: CidIA está abierta; 3: la carpeta /D= tiene otros ficheros)
 ; Desinstalar:       "Desinstalar CidIA.exe" [/S] [/BORRARDATOS]
 
 Unicode true
@@ -90,7 +91,8 @@ Var BorrarDatos
 
 Page custom PaginaServidor PaginaServidorSalir
 
-!define MUI_DIRECTORYPAGE_TEXT_TOP "CidIA se instalará en esta carpeta. Tus datos se guardan aparte, en $LOCALAPPDATA\CidIA."
+!define MUI_DIRECTORYPAGE_TEXT_TOP "CidIA se instalará en esta carpeta, que debe estar vacía o ser la de una instalación anterior de CidIA. Tus datos se guardan aparte, en $LOCALAPPDATA\CidIA."
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE CarpetaSalir
 !insertmacro MUI_PAGE_DIRECTORY
 
 !define MUI_INSTFILESPAGE_FINISHHEADER_TEXT "Instalación terminada"
@@ -186,6 +188,11 @@ Function NormalizarServidor
       ${ExitDo}
     ${EndIf}
   ${Loop}
+  ; Solo el esquema («http://» sin servidor) no vale.
+  ${If} $0 == "http:"
+  ${OrIf} $0 == "https:"
+    StrCpy $0 ""
+  ${EndIf}
   ${If} $0 != ""
     StrCpy $1 $0 7
     ${If} $1 != "http://"
@@ -210,9 +217,52 @@ Function NormalizarServidor
       StrCpy $0 ""
     ${EndIf}
     ClearErrors
+    ; Ni barras invertidas (rompen la capa home: YAML entre comillas dobles y JavaScript).
+    ${WordFind} "$0" "\" "E#" $1
+    ${IfNot} ${Errors}
+      StrCpy $0 ""
+    ${EndIf}
+    ClearErrors
+    ; Y con algo detrás del esquema que pueda ser un servidor.
+    StrCpy $1 $0 8
+    ${If} $1 == "https://"
+      StrCpy $1 $0 1 8
+    ${Else}
+      StrCpy $1 $0 1 7
+    ${EndIf}
+    ${If} $1 == ""
+    ${OrIf} $1 == "/"
+    ${OrIf} $1 == ":"
+      StrCpy $0 ""
+    ${EndIf}
   ${EndIf}
   Pop $1
   Exch $0
+FunctionEnd
+
+; --------------------------------------------------------------------------------- carpeta
+; El instalador sustituye app\ y plugins\cidia\, y el desinstalador borra app\, plugins\,
+; plantillas\ y textos\: en una carpeta con otros ficheros podrían ser de la persona. Solo se
+; admite una carpeta que no existe, vacía o con una instalación anterior de CidIA.
+;   -> $R1 = "1" si se puede instalar en $INSTDIR
+Function CarpetaAdmitida
+  Push $0
+  StrCpy $R1 "1"
+  ${DirState} "$INSTDIR" $0
+  ${If} $0 == 1
+  ${AndIfNot} ${FileExists} "$INSTDIR\CidIA.exe"
+  ${AndIfNot} ${FileExists} "$INSTDIR\Desinstalar CidIA.exe"
+    StrCpy $R1 "0"
+  ${EndIf}
+  Pop $0
+FunctionEnd
+
+Function CarpetaSalir
+  Call CarpetaAdmitida
+  ${If} $R1 != "1"
+    MessageBox MB_ICONEXCLAMATION|MB_OK "La carpeta $INSTDIR ya tiene otros ficheros.$\r$\n$\r$\nElige una carpeta vacía o la de una instalación anterior de CidIA, por ejemplo $LOCALAPPDATA\Programs\CidIA"
+    Abort
+  ${EndIf}
 FunctionEnd
 
 ; --------------------------------------------------------------------------------- servidor
@@ -282,6 +332,17 @@ Section "CidIA" SeccionCidia
   SectionIn RO
   ${If} $Servidor == ""
     StrCpy $Servidor "${SERVIDOR}"
+  ${EndIf}
+
+  ; Sin ventanas (/D=) no pasa por la página de la carpeta: se comprueba aquí también.
+  Call CarpetaAdmitida
+  ${If} $R1 != "1"
+    ${If} ${Silent}
+      SetErrorLevel 3
+    ${Else}
+      MessageBox MB_ICONSTOP|MB_OK "No se puede instalar CidIA en $INSTDIR: la carpeta ya tiene otros ficheros."
+    ${EndIf}
+    Quit
   ${EndIf}
 
   ; CidIA no puede estar abierta mientras se sustituyen sus ficheros.

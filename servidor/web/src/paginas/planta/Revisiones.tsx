@@ -24,6 +24,7 @@ const FILTROS: { id: Filtro; texto: string }[] = [
 
 function motivo(f: FotoPorRevisar): string {
   const v = f.foto
+  if (v.estado === 'comparando') return 'Comparando con la referencia…'
   if (v.estado === 'sin_vision') return 'Sin modelo con visión'
   if (v.estado === 'sin_referencia') return 'Sin imagen de referencia'
   if (v.estado === 'error') return 'No se pudo comparar'

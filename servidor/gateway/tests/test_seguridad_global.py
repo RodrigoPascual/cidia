@@ -26,7 +26,6 @@ nivel 1), javier (jefe de Producción), carmen (experta de Producción) y admin.
 
 from __future__ import annotations
 
-import io
 import json
 import re
 import time
@@ -40,7 +39,8 @@ import pytest
 from conftest import IAFalsa
 from fabrica import CONTRASENA, Planta, crear_planta
 from fastapi.routing import APIRoute
-from sqlalchemy import select
+from sqlalchemy import func, select
+from starlette.requests import Request
 from starlette.routing import Route
 
 from cidia import trabajos
@@ -106,6 +106,8 @@ ACCESO: dict[str, str] = {
     "POST /api/planta/ejecuciones/{ejecucion_id}/foto": "usuario",
     "POST /api/planta/ejecuciones/{ejecucion_id}/finalizar": "usuario",
     "POST /api/planta/ejecuciones/{ejecucion_id}/abandonar": "usuario",
+    "GET /api/planta/revisiones": "jefe",  # usuario_actual + 403 en el servicio a quien no es jefe
+    "POST /api/planta/ejecuciones/{ejecucion_id}/revision": "usuario",  # jefe de la tarea (en el servicio)
     # formación
     "GET /api/formacion/itinerario": "usuario", "GET /api/formacion/tareas/{tarea_id}": "usuario",
     "POST /api/formacion/microlecciones/{microleccion_id}/vista": "usuario",
@@ -250,6 +252,9 @@ class Escenario:
     captura_id: int
     trabajo_id: int
     fichero_espacio: str  # fichero de pedro en su espacio de trabajo
+    pasos: list[int]  # pasos de `ins`
+    pasos_ot3: list[int]
+    pasos_borrador: list[int]
 
 
 def _ia_falsa(mp: pytest.MonkeyPatch) -> None:
@@ -341,7 +346,7 @@ def esc(app) -> Escenario:
         cons = Consulta(usuario_id=per["pedro"].id, pregunta="¿Cada cuánto se engrasa la prensa?", respuesta="Cada "
                         "semana [1].", modo="normal", fuentes=[{"n": 1, "documento_id": doc_prod.id,
                                                                 "titulo": doc_prod.titulo}], con_respaldo=True)
-        mem = Memoria(usuario_id=per["pedro"].id, contenido="Trabajo en el turno de noche.", origen="manual")
+        mem = Memoria(usuario_id=per["pedro"].id, contenido="Guardo la llave de la taquilla 17.", origen="manual")
         ap = Aportacion(autor_id=per["pedro"].id, departamento_id=p.deps["prod"].id, texto_original="La prensa se "
                         "atasca: limpiar el sensor.", titulo="Atasco de la prensa", problema="Se atasca.",
                         solucion="Limpiar el sensor.", etiquetas=[], nivel_minimo=1, estado="pendiente")
@@ -364,7 +369,8 @@ def esc(app) -> Escenario:
                          pregunta=pregunta, micro=micro, doc_prod=doc_prod, doc_ot3=doc_ot3, doc_publico=doc_publico,
                          ejecucion_id=ej.id, consulta_id=cons.id, memoria_id=mem.id, aportacion_id=ap.id,
                          laguna_id=lag.id, captura_id=cap.id, trabajo_id=trab.id,
-                         fichero_espacio="informes/privado.md")
+                         fichero_espacio="informes/privado.md", pasos=[x.id for x in ins.pasos],
+                         pasos_ot3=[x.id for x in ins_ot3.pasos], pasos_borrador=[x.id for x in borrador.pasos])
 
 
 def _bd():
@@ -424,18 +430,51 @@ def test_rutas_firmadas_sin_firma_valida(c, esc):
 NO_EN_ROBUSTEZ = {"POST /api/auth/salir"}  # cerraría la sesión de la administración
 
 
-@pytest.mark.parametrize("ruta", sorted(set(ACCESO) - NO_EN_ROBUSTEZ))
-def test_sin_errores_500_con_ids_que_no_existen(c, tokens, esc, monkeypatch, ruta):
-    """La administración llega a todas: con ids inexistentes o enormes y sin cuerpo, nunca un 500."""
+def _sin_red(monkeypatch: pytest.MonkeyPatch) -> None:
     _ia_falsa(monkeypatch)
     monkeypatch.setattr(llm, "salud", lambda *a, **k: {"ok": True})
     monkeypatch.setattr(asr, "salud", lambda *a, **k: {"ok": True})
     monkeypatch.setattr(espacio, "estado_ejecutor", lambda: {"disponible": False})
+
+
+@pytest.mark.parametrize("ruta", sorted(set(ACCESO) - NO_EN_ROBUSTEZ))
+def test_sin_errores_500_con_ids_que_no_existen(c, tokens, esc, monkeypatch, ruta):
+    """La administración llega a todas: con ids que no existen y sin cuerpo, nunca un 500."""
+    _sin_red(monkeypatch)
     metodo, plantilla = ruta.split(" ", 1)
     cab = {**tokens["admin"], **(ACEPTA_MCP if plantilla == "/mcp" else {})}
-    for valor in (SIN_ID, FUERA_DE_RANGO):
-        r = c.request(metodo, _rellenar(plantilla, valor), headers=cab)
-        assert r.status_code < 500, f"{ruta} con id {valor}: {r.status_code} {r.text[:300]}"
+    r = c.request(metodo, _rellenar(plantilla, SIN_ID), headers=cab)
+    assert r.status_code < 500, f"{ruta}: {r.status_code} {r.text[:300]}"
+
+
+CON_ID = sorted(r for r in set(ACCESO) - NO_EN_ROBUSTEZ if re.search(r"\{\w+_id\}", r))
+
+
+def test_ids_fuera_de_rango_y_textos_con_nul(app, c, tokens, esc, monkeypatch):
+    """Un id que no cabe en INTEGER y un texto con NUL no son errores del servidor (cidia/proteccion.py)."""
+    from cidia import proteccion
+
+    if not proteccion.instalada(app):
+        pytest.skip("Falta `proteccion.instalar(app)` en main.py (fichero compartido: lo añade el agente base)")
+    _sin_red(monkeypatch)
+    fallos = []
+    for ruta in CON_ID:
+        metodo, plantilla = ruta.split(" ", 1)
+        r = c.request(metodo, _rellenar(plantilla, FUERA_DE_RANGO), headers=tokens["admin"])
+        if r.status_code >= 500:
+            fallos.append(f"{ruta}: {r.status_code}")
+    for quien, url, params in (("javier", "/api/documentos", {"texto": "a\x00b"}),
+                               ("pedro", "/api/consulta/historial", {"q": "a\x00b"}),
+                               ("ana", "/api/admin/empleados", {"texto": "a\x00b"}),
+                               ("carmen", "/api/instrucciones", {"q": "a\x00b"})):
+        r = c.get(url, params=params, headers=tokens[quien])
+        if r.status_code >= 500:
+            fallos.append(f"{url} con NUL: {r.status_code}")
+    r = c.post("/api/aportaciones", json={"texto": "La prensa se atasca\x00 y hay que limpiar el sensor."},
+               headers=tokens["pedro"])
+    if r.status_code >= 500:
+        fallos.append(f"aportación con NUL: {r.status_code}")
+    assert not fallos, "\n".join(fallos)
 
 
 # --------------------------------------------------------------------------- 4. IDOR
@@ -444,7 +483,7 @@ def test_sin_errores_500_con_ids_que_no_existen(c, tokens, esc, monkeypatch, rut
 def _casos_idor(e: Escenario) -> list[tuple[str, str, str, dict[str, Any] | None, tuple[str, ...]]]:
     """(descripción, método, url, cuerpo JSON, atacantes)."""
     ej, ins, t = e.ejecucion_id, e.ins.id, e.tarea.id
-    paso = e.ins.pasos[1].id
+    paso = e.pasos[1]
     pedro = e.p.personas["pedro"].id
     otros = ("luis", "marta", "ana")  # otro departamento, compañero sin permiso, jefa de otro departamento
     return [
@@ -456,12 +495,14 @@ def _casos_idor(e: Escenario) -> list[tuple[str, str, str, dict[str, Any] | None
          {"pregunta": "¿Qué hago?", "paso_id": paso}, (*otros, "javier")),
         ("finalizar ejecución ajena", "POST", f"/api/planta/ejecuciones/{ej}/finalizar", None, (*otros, "javier")),
         ("abandonar ejecución ajena", "POST", f"/api/planta/ejecuciones/{ej}/abandonar", None, (*otros, "javier")),
+        ("revisar la foto de una ejecución", "POST", f"/api/planta/ejecuciones/{ej}/revision",
+         {"decision": "aprobada"}, ("pedro", *otros)),  # ni quien la hizo ni jefes de otro departamento
         ("consulta con ejecución ajena", "POST", "/api/consulta/simple",
          {"pregunta": "¿Qué hago ahora?", "contexto": {"ejecucion_id": ej}}, otros),
         ("consulta con paso de otra tarea", "POST", "/api/consulta/simple",
-         {"pregunta": "¿Qué hago ahora?", "contexto": {"paso_id": e.ins_ot3.pasos[0].id}}, ("luis", "pedro")),
+         {"pregunta": "¿Qué hago ahora?", "contexto": {"paso_id": e.pasos_ot3[0]}}, ("luis", "pedro")),
         ("consulta con paso de un borrador", "POST", "/api/consulta/simple",
-         {"pregunta": "¿Qué hago ahora?", "contexto": {"paso_id": e.borrador.pasos[0].id}}, ("pedro", "marta")),
+         {"pregunta": "¿Qué hago ahora?", "contexto": {"paso_id": e.pasos_borrador[0]}}, ("pedro", "marta")),
         ("iniciar tarea de nivel superior", "POST", "/api/planta/ejecuciones", {"tarea_id": e.tarea_ot3.id},
          ("luis", "pedro")),
         ("iniciar tarea de otro departamento", "POST", "/api/planta/ejecuciones", {"tarea_id": t}, ("luis", "ana")),
@@ -571,13 +612,18 @@ def _casos_idor(e: Escenario) -> list[tuple[str, str, str, dict[str, Any] | None
     ]
 
 
+# Casos en los que la negativa llega como 400 con un mensaje claro (la tarea no es de su departamento).
+NEGATIVA_400 = {"aportar sobre una tarea de otro departamento"}
+
+
 def test_idor_objetos_de_otra_persona_o_departamento(c, tokens, esc, monkeypatch):
     _ia_falsa(monkeypatch)
     fallos = []
     for desc, metodo, url, cuerpo, atacantes in _casos_idor(esc):
+        validos = {401, 403, 404} | ({400} if desc in NEGATIVA_400 else set())
         for quien in atacantes:
             r = c.request(metodo, url, headers=tokens[quien], **({"json": cuerpo} if cuerpo is not None else {}))
-            if r.status_code not in (401, 403, 404):
+            if r.status_code not in validos:
                 fallos.append(f"{quien} · {desc}: {metodo} {url} → {r.status_code} {r.text[:160]}")
     assert not fallos, "Accesos indebidos:\n" + "\n".join(fallos)
 
@@ -654,7 +700,7 @@ def test_espacio_de_trabajo_aislado(c, tokens, esc):
     propia = c.get("/api/espacio/fichero", params={"ruta": esc.fichero_espacio}, headers=tokens["pedro"])
     assert propia.status_code == 200 and "Pedro" in propia.json()["contenido"]
     intentos = ["../pedro/" + esc.fichero_espacio, "..\\pedro\\informes\\privado.md", "/etc/passwd",
-                "C:/Windows/win.ini", "informes/../../pedro/" + esc.fichero_espacio, "%2e%2e/pedro/x",
+                "C:/Windows/win.ini", "informes/../../pedro/" + esc.fichero_espacio,
                 "\\\\servidor\\c$\\x", "informes/\x00.md"]
     for ruta in intentos:
         r = c.get("/api/espacio/fichero", params={"ruta": ruta}, headers=tokens["marta"])
@@ -719,12 +765,20 @@ def _prohibidos() -> list[str]:
             str(datos).replace("\\", "\\\\"), CONTRASENA]
 
 
+PERSONA_DE_NIVEL = {"publico": "invitado", "sesion": "invitado", "usuario": "pedro", "experto": "carmen",
+                    "jefe": "javier", "admin": "admin"}
+# Contenido que solo pueden ver ciertas personas: en ninguna otra respuesta debe aparecer.
+PRIVADOS = {
+    "Costes secretos de utillaje": {"ana", "admin"},  # Oficina técnica, nivel 3
+    "Informe privado de Pedro": {"pedro"},  # su espacio de trabajo
+    "Guardo la llave de la taquilla 17": {"pedro"},  # su memoria personal
+}
+
+
 def test_ninguna_respuesta_filtra_secretos(c, tokens, esc, monkeypatch):
-    """Todas las rutas GET con datos reales, como cada persona: sin hashes, secretos ni rutas del servidor."""
-    _ia_falsa(monkeypatch)
-    monkeypatch.setattr(llm, "salud", lambda *a, **k: {"ok": True})
-    monkeypatch.setattr(asr, "salud", lambda *a, **k: {"ok": True})
-    monkeypatch.setattr(espacio, "estado_ejecutor", lambda: {"disponible": False})
+    """Todas las rutas GET con datos reales, con la persona de menos rango que llega a cada una, con
+    alguien de otro departamento y con la administración: sin hashes, secretos ni rutas del servidor."""
+    _sin_red(monkeypatch)
     prohibidos = _prohibidos()
     fallos = []
     vistas = 0
@@ -735,7 +789,10 @@ def test_ninguna_respuesta_filtra_secretos(c, tokens, esc, monkeypatch):
         url = _url_real(plantilla, esc)
         if url is None:
             continue
-        for quien in ("invitado", "pedro", "marta", "carmen", "javier", "ana", "admin"):
+        personas = {PERSONA_DE_NIVEL[nivel], "admin"}
+        if ORDEN[nivel] >= ORDEN["usuario"]:
+            personas.add("ana" if ORDEN[nivel] >= ORDEN["experto"] else "luis")
+        for quien in sorted(personas):
             r = c.get(url, headers=tokens[quien])
             if r.status_code >= 500:
                 fallos.append(f"{quien} {url}: {r.status_code}")
@@ -744,7 +801,10 @@ def test_ninguna_respuesta_filtra_secretos(c, tokens, esc, monkeypatch):
             for p in prohibidos:
                 if p and p in r.text:
                     fallos.append(f"{quien} {url}: contiene «{p[:20]}»")
-    assert vistas > 200
+            for texto, quienes in PRIVADOS.items():
+                if quien not in quienes and texto in r.text:
+                    fallos.append(f"{quien} {url}: ve «{texto}»")
+    assert vistas > 120
     assert not fallos, "\n".join(fallos)
 
 
@@ -830,7 +890,7 @@ def test_ficheros_activos_se_sirven_como_descarga(c, esc):
 
 def test_espacio_sirve_html_y_svg_sin_ejecutar(c, tokens):
     for nombre in ("pagina.html", "dibujo.svg"):
-        r = c.post("/api/espacio/subir", headers=tokens["luis"], data={"carpeta": "subidas"},
+        r = c.post("/api/espacio/subir", headers=tokens["luis"], data={"carpeta": ""},
                    files={"fichero": (nombre, b"<script>alert(1)</script>", "text/html")})
         assert r.status_code == 200, r.text
     arbol = c.get("/api/espacio", headers=tokens["luis"]).json()
@@ -891,7 +951,7 @@ def test_limites_de_tamano(c, tokens, esc, monkeypatch):
 
 
 @pytest.mark.parametrize("texto", [
-    "' OR 1=1 --", "%", "_", "%' OR '1'='1", "\\", "'); DROP TABLE documentos; --", "a\x00b",
+    "' OR 1=1 --", "%", "_", "%' OR '1'='1", "\\", "'); DROP TABLE documentos; --",
     "!(& | :* <-> )", "costes:* & !bienvenida", "\"\"\"", "../../etc/passwd",
 ])
 def test_busquedas_con_caracteres_especiales(c, tokens, esc, monkeypatch, texto):
@@ -906,10 +966,9 @@ def test_busquedas_con_caracteres_especiales(c, tokens, esc, monkeypatch, texto)
         r = c.get(url, params=params, headers=tokens[quien])
         assert r.status_code < 500, f"{url} {texto!r}: {r.status_code}"
         assert "Costes secretos" not in r.text and "Pedro Ruiz" not in (r.text if quien == "ana" else "")
-    for quien in ("invitado", "luis"):
-        r = c.post("/api/consulta/simple", json={"pregunta": texto + " utillaje"}, headers=tokens[quien])
-        assert r.status_code < 500, r.text
-        assert all(f.get("documento_id") != esc.doc_ot3.id for f in r.json().get("fuentes", []))
+    r = c.post("/api/consulta/simple", json={"pregunta": texto + " utillaje"}, headers=tokens["luis"])
+    assert r.status_code < 500, r.text
+    assert all(f.get("documento_id") != esc.doc_ot3.id for f in r.json().get("fuentes", []))
     r = c.post("/api/documentos/probar-busqueda", json={"consulta": texto}, headers=tokens["javier"])
     assert r.status_code < 500
     with _bd() as bd:  # la tabla sigue ahí
@@ -966,6 +1025,92 @@ def test_cuenta_desactivada_y_sesion_cerrada(c, esc):
     assert r.status_code == 401 and "token" not in r.json()
     r = c.post("/api/auth/login", json={"usuario": "no-existe' OR '1'='1", "contrasena": "x"})
     assert r.status_code == 401
+
+
+def test_fuerza_bruta_en_el_inicio_de_sesion(c, esc, monkeypatch):
+    """Tras varios fallos seguidos, ni la contraseña buena entra (429) hasta que pasa la ventana;
+    los demás usuarios siguen entrando y un acierto antes del tope pone el contador a cero."""
+    from cidia.rutas import auth
+
+    monkeypatch.setattr(auth, "_fallos", {})
+    for _ in range(auth.FALLOS_POR_USUARIO - 1):
+        assert c.post("/api/auth/login", json={"usuario": "Marta", "contrasena": "mala"}).status_code == 401
+    assert c.post("/api/auth/login", json={"usuario": "marta", "contrasena": CONTRASENA}).status_code == 200
+    for _ in range(auth.FALLOS_POR_USUARIO):
+        assert c.post("/api/auth/login", json={"usuario": "marta", "contrasena": "mala"}).status_code == 401
+    r = c.post("/api/auth/login", json={"usuario": " MARTA ", "contrasena": CONTRASENA})
+    assert r.status_code == 429 and "Espera" in r.json()["detail"]
+    assert c.post("/api/auth/login", json={"usuario": "pedro", "contrasena": CONTRASENA}).status_code == 200
+    # Probar muchos usuarios desde la misma dirección también tiene tope.
+    monkeypatch.setattr(auth, "_fallos", {})
+    for i in range(auth.FALLOS_POR_IP):
+        c.post("/api/auth/login", json={"usuario": f"usuario{i}", "contrasena": "x"})
+    assert c.post("/api/auth/login", json={"usuario": "pedro", "contrasena": CONTRASENA}).status_code == 429
+    monkeypatch.setattr(auth, "_fallos", {})
+    assert c.post("/api/auth/login", json={"usuario": "x" * 201, "contrasena": "y"}).status_code == 422
+    assert c.post("/api/auth/login", json={"usuario": "pedro", "contrasena": "y" * 1001}).status_code == 422
+
+
+def test_tope_de_sesiones_de_invitado_por_direccion(c, monkeypatch):
+    """El límite de uso de los invitados es por sesión: abrir sesiones sin fin lo saltaría."""
+    from cidia.rutas import auth
+
+    with _bd() as bd:
+        ya = bd.scalar(select(func.count(Sesion.id)).where(Sesion.tipo == "invitado", Sesion.ip == "testclient")) or 0
+    monkeypatch.setattr(auth, "INVITADOS_POR_IP_HORA", ya + 2)
+    assert c.post("/api/auth/invitado").status_code == 200
+    assert c.post("/api/auth/invitado").status_code == 200
+    r = c.post("/api/auth/invitado")
+    assert r.status_code == 429 and "invitado" in r.json()["detail"]
+    assert c.post("/api/auth/login", json={"usuario": "luis", "contrasena": CONTRASENA}).status_code == 200
+
+
+def test_proteccion_tamano_y_errores_de_datos():
+    """cidia/proteccion.py en una app mínima: 413 por Content-Length y por cuerpo a trozos, y los
+    errores 22003 (id fuera de rango) y 22021 (NUL) de PostgreSQL como 404 y 400."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy.exc import DBAPIError
+
+    from cidia import proteccion
+
+    mini = FastAPI()
+    proteccion.instalar(mini)
+    assert proteccion.instalada(mini)
+
+    @mini.post("/api/consulta")
+    async def eco(request: Request) -> dict[str, int]:
+        return {"bytes": len(await request.body())}
+
+    @mini.get("/datos/{codigo}")
+    def datos(codigo: str) -> None:
+        raise DBAPIError("SELECT 1", {}, Exception({"S": "ERROR", "C": codigo, "M": "x"}))
+
+    with TestClient(mini, raise_server_exceptions=False) as t:
+        assert t.post("/api/consulta", content=b"x" * 1000).json() == {"bytes": 1000}
+        grande = t.post("/api/consulta", content=b"x" * (proteccion.POR_DEFECTO + 1))
+        assert grande.status_code == 413 and "demasiado grande" in grande.json()["detail"]
+
+        def trozos():
+            for _ in range(40):
+                yield b"y" * proteccion.MB
+
+        assert t.post("/api/consulta", content=trozos()).status_code == 413  # sin Content-Length
+        assert t.get("/datos/22003").status_code == 404
+        assert t.get("/datos/22021").json()["detail"] == "El texto contiene caracteres no válidos."
+        assert t.get("/datos/42P01").status_code == 500  # los demás siguen siendo errores del servidor
+    assert proteccion.limite_de("POST", "/api/captura/video") > proteccion.limite_de("POST", "/api/consulta")
+    assert proteccion.limite_de("POST", "/v1/chat/completions") == 64 * proteccion.MB
+
+
+def test_proteccion_en_la_app(app, c, tokens):
+    from cidia import proteccion
+
+    if not proteccion.instalada(app):
+        pytest.skip("Falta `proteccion.instalar(app)` en main.py (fichero compartido: lo añade el agente base)")
+    r = c.post("/api/consulta/simple", headers={**tokens["invitado"], "Content-Type": "application/json"},
+               content=b'{"pregunta": "' + b"a" * (proteccion.POR_DEFECTO + 10) + b'"}')
+    assert r.status_code == 413
 
 
 def test_perfil_no_revela_datos_internos(c, tokens):

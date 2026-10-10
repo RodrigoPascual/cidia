@@ -20,7 +20,9 @@ captura y las aportaciones por voz.
 * **A mano**: `python -m cidia.semilla` dentro del contenedor o del entorno del gateway.
   `python -m cidia.semilla --forzar` vacía el contenido de demostración y vuelve a sembrar
   (solo para servidores de demostración: borra todos los documentos, instrucciones y actividad,
-  también lo que se haya añadido después). En una base con datos propios se niega.
+  también lo que se haya añadido después). En una base con datos propios se niega. Si ya hay
+  otra siembra en marcha (por ejemplo, la del arranque mientras espera al modelo), no empieza
+  otra: avisa y hay que esperar a que termine.
 * **Contraseña**: todas las cuentas de demostración comparten la de la variable
   `CIDIA_DEMO_CONTRASENA` (del entorno o del fichero `.env` del gateway). Si no está definida,
   la semilla genera una aleatoria y la guarda en
@@ -52,7 +54,9 @@ captura y las aportaciones por voz.
 
 **Organización.** Cuatro departamentos con su color (Producción, Oficina técnica, Calidad y
 Mantenimiento), los cuatro niveles por defecto, 9 puestos y 23 tareas con código IT-0xx,
-criticidad y riesgos de prevención.
+criticidad y riesgos de prevención. Formaciones en otro departamento, asignadas por la
+administración: Marta en Oficina técnica e Irene en Producción (activas) y David en Oficina
+técnica (completada).
 
 **Documentos** (copias en `documentos/`, todos indexados para la búsqueda híbrida):
 

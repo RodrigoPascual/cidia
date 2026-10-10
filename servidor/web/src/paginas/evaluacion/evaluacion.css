@@ -5,6 +5,15 @@
 .ev-seccion { font-size: 15px; margin-bottom: 10px; }
 .ev-solo-movil { display: none; }
 
+/* Pestañas: en el móvil, texto corto y sin icono para que quepan las tres. */
+.ev-txt-corto { display: none; }
+@media (max-width: 560px) {
+  .ev-pestanas .ev-txt-largo { display: none; }
+  .ev-pestanas .ev-txt-corto { display: inline; }
+  .ev-pestanas .pestana { padding: 10px 10px; gap: 6px; }
+  .ev-pestanas .pestana > svg { display: none; }
+}
+
 /* ----------------------------------------------------------- mis cuestionarios */
 
 .ev-cuestionario { display: flex; flex-direction: column; }

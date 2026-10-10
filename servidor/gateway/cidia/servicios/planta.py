@@ -18,15 +18,20 @@ y las consultas al copiloto por paso (curva de autonomía).
 from __future__ import annotations
 
 import logging
+import math
 import mimetypes
-from collections.abc import Iterable
+import re
+import threading
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from cidia import ficheros, xapi
+from cidia import ficheros, trabajos, xapi
+from cidia.db import sesion_bd
 from cidia.ia import llm
 from cidia.modelos import (
     Consulta,
@@ -42,9 +47,9 @@ from cidia.modelos import (
     Usuario,
     ahora,
 )
-from cidia.permisos import alcance_de, puede_ver
+from cidia.permisos import Alcance, alcance_de, puede_ver
 from cidia.seguridad import Actor, url_fichero
-from cidia.servicios import iluo
+from cidia.servicios import consulta, iluo
 
 log = logging.getLogger("cidia.planta")
 
@@ -261,15 +266,19 @@ def _supervisa(bd: Session, actor: Actor, ej: Ejecucion) -> bool:
 
 
 def obtener_ejecucion(bd: Session, actor: Actor, ejecucion_id: int, escribir: bool = False,
-                      exigir_tarea: bool = True) -> Ejecucion:
+                      exigir_tarea: bool = True, bloquear: bool = False) -> Ejecucion:
     """Ejecución con control de acceso.
 
     Leer: la propia persona y quien la supervisa (ver `_supervisa`).
     Escribir: solo la propia persona y, salvo para abandonarla (`exigir_tarea=False`), mientras
     siga teniendo acceso a la tarea (si se le cancela la formación, no puede seguir sumando
     evidencias). A quien no puede verla se le responde 404 (no se revela que existe).
+    Para escribir (o con `bloquear`, la revisión del jefe) se bloquea la fila hasta el commit: dos
+    «Finalizar» seguidos (un reintento de la red) no cierran la ejecución dos veces, y la revisión
+    no pisa el veredicto que la comparación en segundo plano guarde mientras tanto.
     """
-    ej = bd.get(Ejecucion, ejecucion_id) if id_valido(ejecucion_id) else None
+    bloqueo = escribir or bloquear
+    ej = bd.get(Ejecucion, ejecucion_id, with_for_update=bloqueo) if id_valido(ejecucion_id) else None
     if ej is None:
         raise HTTPException(404, "No encontramos esa ejecución.")
     if ej.usuario_id == actor.id:
@@ -473,33 +482,75 @@ def abandonar(bd: Session, actor: Actor, ej: Ejecucion) -> None:
 # --------------------------------------------------------------------------- foto del resultado
 
 
+# Pasos finales de papeleo («Registrar y etiquetar el conjunto», «Registro el número de serie»): su
+# imagen es un esquema del registro, no la pieza terminada, y no sirve para comparar la foto.
+_RE_PASO_PAPELEO = re.compile(r"^\s*(registr|etiquet|anot|document|archiv|firm|rellen)", re.I)
+
+
 def _paso_referencia(ins: Instruccion) -> Paso | None:
-    """Imagen de referencia del resultado: la del último paso (o la última que haya)."""
-    for p in reversed(ins.pasos):
-        if p.imagen_ruta:
+    """Imagen de referencia del resultado: la del último paso con imagen, saltando los pasos finales
+    de papeleo si antes hay otro con imagen (en IT-023, la inspección visual final y no el registro)."""
+    con_imagen = [p for p in ins.pasos if p.imagen_ruta]
+    for p in reversed(con_imagen):
+        if not _RE_PASO_PAPELEO.match(p.titulo or ""):
             return p
-    return None
+    return con_imagen[-1] if con_imagen else None
+
+
+_SI = {"true", "si", "sí", "yes", "1", "coincide", "verdadero", "correcto", "cierto"}
+_NO = {"false", "no", "0", "falso", "incorrecto"}
 
 
 def _a_bool(v: Any) -> bool | None:
+    """Sí/no del modelo. Como texto vale «Sí», «sí, coincide», «No» o «no coincide»; lo dudoso
+    («no sé», «sí, pero no del todo», «puede») queda en None, y la foto la revisa una persona."""
     if isinstance(v, bool):
         return v
     if isinstance(v, (int, float)):
         return bool(v)
     if isinstance(v, str):
-        s = v.strip().lower().rstrip(".")
-        if s in ("true", "si", "sí", "yes", "1", "coincide", "verdadero", "correcto"):
-            return True
-        if s in ("false", "no", "0", "no coincide", "falso", "incorrecto"):
+        palabras = re.findall(r"\w+", v.lower())
+        if not palabras:
+            return None
+        if palabras[0] in _NO and (len(palabras) == 1 or palabras[1:] == ["coincide"]):
             return False
+        if palabras[0] in _SI and not _NO & set(palabras[1:]):
+            return True
     return None
+
+
+# Confianza escrita con palabras: se traduce a la escala 0-1 (por debajo de UMBRAL_CONFIANZA,
+# la foto la revisa una persona aunque el modelo diga que coincide).
+_CONFIANZA_PALABRAS = {"muy baja": 0.1, "baja": 0.3, "poca": 0.3, "media": 0.5, "moderada": 0.5,
+                       "alta": 0.85, "muy alta": 0.95}
+
+
+def _a_confianza(v: Any) -> float | None:
+    """Confianza entre 0 y 1. Los modelos pequeños la escriben de muchas formas: 0.85, 85, «85 %»,
+    «0,85» (coma decimal) o «alta». Lo que no se entiende (o un NaN) queda en None."""
+    if isinstance(v, bool) or v is None:
+        return None
+    if isinstance(v, str):
+        s = " ".join(re.findall(r"[\w.,%]+", v.lower())).rstrip(".")
+        if s in _CONFIANZA_PALABRAS:
+            return _CONFIANZA_PALABRAS[s]
+        porcentaje = s.endswith("%")
+        try:
+            v = float(s.rstrip("%").strip().replace(",", ".")) / (100 if porcentaje else 1)
+        except ValueError:
+            return None
+    if not isinstance(v, (int, float)) or not math.isfinite(v):
+        return None
+    v = float(v) / 100 if v > 1 else float(v)
+    return max(0.0, min(1.0, v))
 
 
 def _veredicto_modelo(r: Any) -> dict[str, Any]:
     """Normaliza el JSON del modelo de visión: {coincide, observaciones, confianza}.
 
     Tolerante con los modelos pequeños: una lista con el objeto dentro, el objeto anidado en
-    otra clave ({"resultado": {...}}) o el sí/no escrito como texto.
+    otra clave ({"resultado": {...}}), el sí/no escrito como texto o la confianza en porcentaje,
+    con coma decimal o con palabras.
     """
     if isinstance(r, list) and r:
         r = r[0]
@@ -510,15 +561,11 @@ def _veredicto_modelo(r: Any) -> dict[str, Any]:
     coincide = _a_bool(r.get("coincide"))
     if coincide is None:
         raise ValueError("Respuesta sin el campo «coincide»")
-    try:
-        confianza: float | None = float(r.get("confianza"))
-        if confianza is not None and confianza > 1:
-            confianza = confianza / 100
-        confianza = max(0.0, min(1.0, confianza)) if confianza is not None else None
-    except (TypeError, ValueError):
-        confianza = None
-    observaciones = str(r.get("observaciones") or "").strip()[:600]
-    return {"coincide": coincide, "observaciones": observaciones, "confianza": confianza}
+    observaciones = r.get("observaciones")
+    if isinstance(observaciones, list):  # a veces llega como lista de frases
+        observaciones = " ".join(str(x).strip() for x in observaciones if isinstance(x, (str, int, float)))
+    observaciones = observaciones.strip()[:600] if isinstance(observaciones, str) else ""
+    return {"coincide": coincide, "observaciones": observaciones, "confianza": _a_confianza(r.get("confianza"))}
 
 
 UMBRAL_CONFIANZA = 0.7  # por debajo, el modelo «duda» y la foto la revisa el jefe aunque diga que coincide
@@ -537,14 +584,36 @@ def necesita_revision(v: dict[str, Any] | None) -> bool:
     return isinstance(confianza, (int, float)) and confianza < UMBRAL_CONFIANZA
 
 
+COMPARANDO = "comparando"  # la foto está guardada y el modelo con visión la está comparando
+
+
+@dataclass(frozen=True)
+class Referencia:
+    """Lo que hace falta del paso de referencia para comparar fuera de la sesión de la petición."""
+
+    paso_id: int
+    titulo: str
+    criterio: str
+    imagen_ruta: str
+
+
+def _referencia(p: Paso) -> Referencia:
+    return Referencia(p.id, p.titulo, (p.criterio_aceptacion or "").strip(), p.imagen_ruta or "")
+
+
+def _base_veredicto(referencia: Paso | Referencia | None) -> dict[str, Any]:
+    pid = referencia.paso_id if isinstance(referencia, Referencia) else (referencia.id if referencia else None)
+    return {"revision_humana": True, "coincide": None, "observaciones": "", "confianza": None, "modelo": None,
+            "referencia_paso_id": pid}
+
+
 def comparar_foto(bd: Session, ruta_foto: str, referencia: Paso | None) -> dict[str, Any]:
     """Compara la foto con la imagen del experto si hay un modelo con visión permitido.
 
     El resultado es siempre orientativo. `revision_humana` indica que el jefe tiene que revisarla
     (ver `necesita_revision`); puede revisar también las demás desde la ejecución.
     """
-    base: dict[str, Any] = {"revision_humana": True, "coincide": None, "observaciones": "", "confianza": None,
-                            "modelo": None, "referencia_paso_id": referencia.id if referencia else None}
+    base = _base_veredicto(referencia)
     modelo = llm.modelo_vision(bd)
     if not modelo:
         return {**base, "estado": "sin_vision",
@@ -553,10 +622,16 @@ def comparar_foto(bd: Session, ruta_foto: str, referencia: Paso | None) -> dict[
         return {**base, "estado": "sin_referencia",
                 "mensaje": "La instrucción no tiene imagen de referencia del experto. La foto queda guardada y la "
                            "revisará una persona."}
+    return _comparar(modelo, ruta_foto, _referencia(referencia))
+
+
+def _comparar(modelo: str, ruta_foto: str, referencia: Referencia) -> dict[str, Any]:
+    """La comparación con el modelo de visión (lenta con modelos pequeños: no usa la base de datos)."""
+    base = _base_veredicto(referencia)
     try:
         ref = ficheros.ruta_absoluta(referencia.imagen_ruta)
         foto = ficheros.ruta_absoluta(ruta_foto)
-        criterio = (referencia.criterio_aceptacion or "").strip()
+        criterio = referencia.criterio
         texto = (
             "Compara dos fotos de una tarea industrial.\n"
             f"Imagen 1: referencia del experto (paso «{referencia.titulo}»).\n"
@@ -604,8 +679,50 @@ def tipo_imagen(cabecera: bytes) -> str | None:
     return None
 
 
+def _en_hilo(funcion: Callable[[], None]) -> None:
+    # Con la cola de trabajos en modo síncrono (las pruebas), también en el mismo hilo.
+    if getattr(trabajos, "_sincrono", False):
+        funcion()
+        return
+    threading.Thread(target=funcion, name="cidia-foto", daemon=True).start()
+
+
+# Cómo se lanza la comparación de la foto.
+lanzar_comparacion: Callable[[Callable[[], None]], None] = _en_hilo
+
+
+def comparar_en_segundo_plano(ej: Ejecucion, ins: Instruccion) -> None:
+    """Compara con el modelo de visión la foto que `guardar_foto` dejó «comparando» (después del
+    commit). Con un modelo pequeño puede tardar minutos: la persona no espera, puede finalizar la
+    tarea mientras tanto y la pantalla recoge el veredicto cuando llega. Si entretanto ha hecho otra
+    foto, el resultado de la anterior se descarta; una revisión del jefe hecha mientras tanto se
+    conserva. Si el servidor se reinicia a mitad, la foto queda «comparando», que cuenta como
+    pendiente de revisar por una persona (ver `necesita_revision`)."""
+    v = ej.foto_veredicto or {}
+    referencia = _paso_referencia(ins)
+    if v.get("estado") != COMPARANDO or not ej.foto_ruta or referencia is None or not v.get("modelo"):
+        return
+    ejecucion_id, ruta, modelo, datos_ref = ej.id, ej.foto_ruta, str(v["modelo"]), _referencia(referencia)
+
+    def comparar() -> None:
+        resultado = _comparar(modelo, ruta, datos_ref)
+        try:
+            with sesion_bd() as bd:
+                fila = bd.get(Ejecucion, ejecucion_id, with_for_update=True)
+                if fila is None or fila.foto_ruta != ruta:
+                    return
+                previo = fila.foto_veredicto or {}
+                fila.foto_veredicto = {**resultado, "revision": previo.get("revision")}
+        except Exception:  # noqa: BLE001  (sin veredicto, la foto sigue pendiente de una persona)
+            log.exception("No se pudo guardar el veredicto de la foto de la ejecución %s", ejecucion_id)
+
+    lanzar_comparacion(comparar)
+
+
 def guardar_foto(bd: Session, actor: Actor, ej: Ejecucion, subida: UploadFile) -> dict[str, Any]:
-    """Guarda la foto del resultado y la compara con la referencia. Devuelve el veredicto."""
+    """Guarda la foto del resultado y devuelve su veredicto. Sin visión o sin imagen de referencia el
+    veredicto es inmediato; con visión queda «comparando» y quien llama, tras el commit, lanza
+    `comparar_en_segundo_plano`."""
     _exigir_en_curso(ej)
     datos = subida.file.read(MAX_FOTO + 1)  # como mucho 25 MB en memoria: no se escribe nada más grande
     if not datos:
@@ -620,7 +737,13 @@ def guardar_foto(bd: Session, actor: Actor, ej: Ejecucion, subida: UploadFile) -
     ins = bd.get(Instruccion, ej.instruccion_id)
     tarea = bd.get(Tarea, ej.tarea_id)
     assert ins is not None
-    veredicto = comparar_foto(bd, ruta, _paso_referencia(ins))
+    referencia = _paso_referencia(ins)
+    modelo = llm.modelo_vision(bd)
+    if modelo and referencia is not None and referencia.imagen_ruta:
+        veredicto = {**_base_veredicto(referencia), "estado": COMPARANDO, "modelo": modelo,
+                     "mensaje": "Comparando la foto con la imagen del experto. Puedes finalizar mientras tanto."}
+    else:
+        veredicto = comparar_foto(bd, ruta, referencia)
     ej.foto_ruta = ruta
     ej.foto_veredicto = veredicto
     xapi.registrar(
@@ -703,7 +826,7 @@ def revisar_foto(bd: Session, actor: Actor, ej: Ejecucion, decision: str, coment
     bd.flush()
     if ej.estado == "completada":
         iluo.recalcular(bd, ej.usuario_id, ej.tarea_id)
-    return veredicto_dict(ej, ins) or {}
+    return veredicto_dict(ej, ins, contenido_restringido(bd, actor, ej)) or {}
 
 
 def revisiones(bd: Session, actor: Actor, estado: str = "pendientes", limite: int = 60) -> dict[str, Any]:
@@ -729,6 +852,9 @@ def revisiones(bd: Session, actor: Actor, estado: str = "pendientes", limite: in
     inss = {i.id: i for i in bd.scalars(select(Instruccion).where(Instruccion.id.in_({e.instruccion_id for e in filas}))
                                         .options(selectinload(Instruccion.pasos)))}
     permitido: dict[int, bool] = {}  # por persona: es de su departamento o se forma en él
+    # La imagen del experto solo sale si quien revisa puede abrir la tarea (como en la ejecución):
+    # un jefe de nivel 3 no ve la referencia de una tarea de nivel 4 de su departamento.
+    abre = set() if actor.es_admin else set(acceso_tareas(bd, actor))
 
     def puede(e: Ejecucion) -> bool:
         if actor.es_admin:
@@ -761,7 +887,7 @@ def revisiones(bd: Session, actor: Actor, estado: str = "pendientes", limite: in
             "tarea": {"id": t.id, "codigo": t.codigo, "nombre": t.nombre} if t else None,
             "instruccion": {"codigo": ins.codigo, "version": ins.version} if ins else None,
             "pendiente": pendiente,
-            "foto": veredicto_dict(e, ins),
+            "foto": veredicto_dict(e, ins, restringido=not actor.es_admin and e.tarea_id not in abre),
         })
     return {"elementos": elementos, "pendientes": pendientes}
 
@@ -789,34 +915,69 @@ def _paso_dict(p: Paso, ep: EjecucionPaso | None, numero: int, restringido: bool
     }
 
 
-def _fuentes_para(bd: Session, actor: Actor, consultas: list[Consulta]) -> dict[int, list[dict[str, Any]]]:
+def _numero(f: dict[str, Any], posicion: int) -> int:
+    """Número de cita de una fuente guardada ([n] en la respuesta); si falta, su posición."""
+    return f["n"] if isinstance(f.get("n"), int) else posicion
+
+
+def _fuentes_para(bd: Session, actor: Actor,
+                  consultas: list[Consulta]) -> tuple[dict[int, list[dict[str, Any]]], dict[int, set[int]]]:
     """Fuentes guardadas de cada consulta, vistas por quien mira ahora la ejecución.
 
     Las URLs guardadas caducan (se firmaron al preguntar) y pueden ser de documentos que quien
     mira no puede abrir (el jefe que revisa la ejecución de alguien que se forma en otro
     departamento). Se vuelven a firmar solo las de documentos que el actor puede ver; las demás
     se vacían, como si no existieran (igual que en la búsqueda).
+
+    Devuelve también, por consulta, los números de las fuentes «ajenas»: documentos que existen
+    pero quedan fuera del alcance de quien mira (otro departamento o más nivel). Un documento
+    borrado o retirado (versión obsoleta de una instrucción) también se vacía, pero no es ajeno:
+    no hay ninguna barrera que proteger en la respuesta (ver `_cita_ajena`).
     """
     guardadas = {c.id: [f for f in (c.fuentes or []) if isinstance(f, dict)] for c in consultas}
     ids = {f.get("documento_id") for lista in guardadas.values() for f in lista if f.get("documento_id")}
     docs = {d.id: d for d in bd.scalars(select(Documento).where(Documento.id.in_(ids)))} if ids else {}
     alcance = alcance_de(bd, actor) if docs else None
     salida: dict[int, list[dict[str, Any]]] = {}
+    ajenas: dict[int, set[int]] = {}
     for cid, lista in guardadas.items():
         salida[cid] = []
-        for f in lista:
+        for i, f in enumerate(lista, start=1):
             d = docs.get(f.get("documento_id"))
             if d is not None and alcance is not None and puede_ver(alcance, d):
                 salida[cid].append({**f, "url": url_fichero(d.ruta_fichero) if d.ruta_fichero else None,
                                     "disponible": True})
-            else:
-                salida[cid].append(_fuente_no_disponible(f))
-    return salida
+                continue
+            salida[cid].append(_fuente_no_disponible(f))
+            if d is not None and alcance is not None and not _en_alcance(alcance, d):
+                ajenas.setdefault(cid, set()).add(_numero(f, i))
+    return salida, ajenas
+
+
+def _en_alcance(alcance: Alcance, d: Documento) -> bool:
+    """¿Lo vería quien mira si el documento estuviera disponible? La misma regla de permisos.puede_ver,
+    sin mirar su estado (un documento retirado no es de otro departamento)."""
+    return puede_ver(alcance, Documento(estado="listo", es_publico=d.es_publico, departamento_id=d.departamento_id,
+                                        es_formacion=d.es_formacion, nivel_minimo=d.nivel_minimo))
 
 
 def _fuente_no_disponible(f: dict[str, Any]) -> dict[str, Any]:
     return {"n": f.get("n"), "documento_id": None, "titulo": "Documento no disponible", "fragmento": "",
             "url": None, "disponible": False}
+
+
+def _cita_ajena(c: Consulta, fuentes: list[dict[str, Any]], ajenas: set[int]) -> bool:
+    """¿Se apoya la respuesta en una fuente que quien mira no puede abrir?
+
+    Esas fuentes se vacían (`_fuentes_para`), pero el texto del copiloto contaría igualmente lo
+    que dicen: la jefa de Oficina técnica no debe leer, en la respuesta que recibió quien se forma
+    con ella, lo que pone un documento de Producción. Se oculta si la respuesta cita alguna de ellas
+    o si, sin citar ninguna, se dio por respaldada (no se sabe en qué fragmento se apoyó)."""
+    if not ajenas:
+        return False
+    total = max((_numero(f, i) for i, f in enumerate(fuentes, start=1)), default=0)
+    citas = set(consulta.citadas(c.respuesta or "", total))
+    return bool(citas & ajenas) or (not citas and bool(c.con_respaldo))
 
 
 def contenido_restringido(bd: Session, actor: Actor, ej: Ejecucion) -> bool:
@@ -843,10 +1004,16 @@ def a_dict(bd: Session, ej: Ejecucion, actor: Actor) -> dict[str, Any]:
     hechos = sum(1 for p in pasos if p["confirmado"])
     actual = next((i for i, p in enumerate(pasos) if not p["confirmado"]), max(0, len(pasos) - 1))
     historial = list(bd.scalars(select(Consulta).where(Consulta.ejecucion_id == ej.id).order_by(Consulta.creada)))
-    fuentes = {} if restringido else _fuentes_para(bd, actor, historial)
+    fuentes, ajenas = ({}, {}) if restringido else _fuentes_para(bd, actor, historial)
 
     def oculto(valor: Any) -> Any:
         return None if restringido else valor
+
+    def respuesta_oculta(c: Consulta) -> bool:
+        # La propia persona ve siempre lo que se le respondió; quien supervisa, solo lo que puede abrir.
+        if not c.respuesta or ej.usuario_id == actor.id:
+            return False
+        return restringido or _cita_ajena(c, fuentes.get(c.id, []), ajenas.get(c.id, set()))
 
     return {
         "id": ej.id,
@@ -870,6 +1037,8 @@ def a_dict(bd: Session, ej: Ejecucion, actor: Actor) -> dict[str, Any]:
             "epis": oculto(ins.epis),
             "herramientas": oculto(ins.herramientas),
             "video_url": oculto(url_fichero(ins.video_ruta)),
+            # La imagen con la que se comparará la foto del resultado (la misma regla que el servidor).
+            "referencia_url": oculto(url_fichero(ref.imagen_ruta) if (ref := _paso_referencia(ins)) else None),
         },
         "pasos": pasos,
         "total_pasos": len(pasos),
@@ -878,7 +1047,8 @@ def a_dict(bd: Session, ej: Ejecucion, actor: Actor) -> dict[str, Any]:
         "foto": veredicto_dict(ej, ins, restringido),
         "puede_revisar": bool(ej.foto_ruta) and ej.estado in ESTADOS_REVISABLES and puede_revisar(bd, actor, ej),
         "historial": [
-            {"id": c.id, "paso_id": c.paso_id, "pregunta": c.pregunta, "respuesta": oculto(c.respuesta),
+            {"id": c.id, "paso_id": c.paso_id, "pregunta": c.pregunta,
+             "respuesta": None if (oculta := respuesta_oculta(c)) else c.respuesta, "respuesta_oculta": oculta,
              "fuentes": fuentes.get(c.id, []), "con_respaldo": c.con_respaldo, "creada": c.creada.isoformat()}
             for c in historial
         ],

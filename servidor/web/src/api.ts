@@ -64,6 +64,20 @@ export function siSesionCaduca(f: Escuchador) {
   alCaducar.push(f)
 }
 
+/** Pide a la barra lateral que vuelva a contar lo pendiente (aportaciones, lagunas, borradores...). */
+export function refrescarContadores() {
+  window.dispatchEvent(new Event('cidia:contadores'))
+}
+
+// Tras cualquier cambio (POST, PUT, PATCH o DELETE) los contadores se refrescan solos, agrupando
+// los cambios seguidos en una sola petición.
+let esperaContadores: number | undefined
+function cambioHecho(ruta: string) {
+  if (ruta.startsWith('/api/auth/')) return
+  window.clearTimeout(esperaContadores)
+  esperaContadores = window.setTimeout(refrescarContadores, 1200)
+}
+
 function cabeceras(extra?: Record<string, string>): Record<string, string> {
   const h: Record<string, string> = { ...(extra ?? {}) }
   const t = token()
@@ -102,10 +116,12 @@ export async function api<T = unknown>(
   }
   if (r.status === 401) {
     const msg = await leerError(r)
-    if (token()) alCaducar.forEach((f) => f())
+    // Un 401 al iniciar sesión es «contraseña incorrecta», no una sesión caducada.
+    if (token() && !ruta.startsWith('/api/auth/login')) alCaducar.forEach((f) => f())
     throw new ErrorApi(401, msg)
   }
   if (!r.ok) throw new ErrorApi(r.status, await leerError(r))
+  if (metodo !== 'GET') cambioHecho(ruta)
   if (r.status === 204) return undefined as T
   const tipo = r.headers.get('content-type') ?? ''
   return (tipo.includes('application/json') ? await r.json() : await r.text()) as T
@@ -136,7 +152,7 @@ export function subir<T = unknown>(ruta: string, formulario: FormData, alProgres
       } catch {
         /* texto */
       }
-      if (xhr.status >= 200 && xhr.status < 300) resolver(datos as T)
+      if (xhr.status >= 200 && xhr.status < 300) { cambioHecho(ruta); resolver(datos as T) }
       else {
         const d = datos as { detail?: string }
         if (xhr.status === 401) alCaducar.forEach((f) => f())

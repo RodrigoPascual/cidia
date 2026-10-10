@@ -229,6 +229,22 @@ def _texto_opcion(o: Any) -> str:
     return PREFIJO_OPCION.sub("", texto).strip()[:500]
 
 
+def _parece_pregunta(enunciado: str, pasos: list[Paso]) -> bool:
+    """Descarta lo que no es una pregunta: los modelos pequeños a veces devuelven como enunciado
+    el propio paso copiado («1. Preparar el cambio: comprueba en el panel…»), sin interrogación."""
+    e = enunciado.strip()
+    if len(e) > 320 or ("?" not in e and len(e) > 160):
+        return False
+    if "?" not in e and re.match(r"^\d+\s*[.)-]\s*\S", e):
+        return False
+    normal = _normalizar(e)
+    for p in pasos:
+        texto = _normalizar(p.texto or "")
+        if len(texto) >= 60 and texto[:60] in normal:
+            return False
+    return True
+
+
 def _candidatas_llm(datos: Any, pasos: list[Paso], rng: random.Random) -> list[dict[str, Any]]:
     """Convierte la respuesta del modelo en preguntas válidas (descarta las mal formadas).
 
@@ -270,7 +286,7 @@ def _candidatas_llm(datos: Any, pasos: list[Paso], rng: random.Random) -> list[d
             if texto and _normalizar(texto) not in {_normalizar(x) for x in opciones}:
                 opciones.append(texto)
         correcta = next(i for i, o in enumerate(opciones) if _normalizar(o) == clave_correcta)
-        if len(enunciado) < 8 or len(opciones) < 3:
+        if len(enunciado) < 8 or len(opciones) < 3 or not _parece_pregunta(enunciado, pasos):
             continue
         if _normalizar(enunciado) in {_normalizar(o) for o in opciones}:
             continue  # los modelos pequeños a veces repiten el enunciado como opción

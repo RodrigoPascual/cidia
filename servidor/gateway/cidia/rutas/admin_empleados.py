@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from cidia.db import obtener_bd
 from cidia.modelos import Departamento, Formacion, Nivel, Puesto, Sesion, Tarea, Usuario
-from cidia.rutas.admin import cambios, obtener, texto_limpio
+from cidia.rutas.admin import cambios, columna_sin_tildes, obtener, sin_tildes, texto_limpio
 from cidia.seguridad import Actor, hash_contrasena, requiere_admin, requiere_jefe
 from cidia.servicios import iluo
 from cidia.xapi import auditar, registrar
@@ -151,9 +151,10 @@ def listar(
     if activo is not None:
         q = q.where(Usuario.activo.is_(activo))
     if texto and texto.strip():
-        patron = f"%{texto.strip().lower()}%"
-        q = q.where(or_(func.lower(Usuario.nombre).like(patron), func.lower(Usuario.usuario).like(patron),
-                        func.lower(func.coalesce(Usuario.email, "")).like(patron)))
+        # Sin distinguir tildes ni mayúsculas: «garcia» encuentra a «Luis García».
+        patron = f"%{sin_tildes(texto)}%"
+        q = q.where(or_(columna_sin_tildes(Usuario.nombre).like(patron), columna_sin_tildes(Usuario.usuario).like(patron),
+                        columna_sin_tildes(func.coalesce(Usuario.email, "")).like(patron)))
     # Departamento, nivel y puesto en tres consultas en total (no tres por persona).
     q = q.options(selectinload(Usuario.departamento), selectinload(Usuario.nivel), selectinload(Usuario.puesto))
     filas = bd.scalars(q.order_by(Usuario.activo.desc(), Usuario.nombre).limit(2000)).all()

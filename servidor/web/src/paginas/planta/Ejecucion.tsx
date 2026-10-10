@@ -131,7 +131,8 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
   const [indice, setIndice] = useState(Math.max(0, Math.min(inicial.paso_actual, total - 1)))
   const [atras, setAtras] = useState(false)
   const [fase, setFase] = useState<Fase>(() => {
-    if (!inicial.es_mia) return aRevisar && inicial.foto && inicial.pasos.every((p) => p.confirmado) ? 'cierre' : 'pasos'
+    // Quien revisa entra directo en la foto, aunque falte algún paso por confirmar.
+    if (!inicial.es_mia) return aRevisar && inicial.foto ? 'cierre' : 'pasos'
     if (inicial.estado === 'completada') return 'fin'
     return inicial.estado === 'en_curso' && inicial.pasos.every((p) => p.confirmado) ? 'cierre' : 'pasos'
   })
@@ -141,12 +142,13 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
   const [faltaMarcar, setFaltaMarcar] = useState<number | null>(null) // paso crítico sin marcar al pulsar «Hecho»
   const [resumen, setResumen] = useState<ResumenFin | null>(null)
   const [salir, setSalir] = useState(false)
-  const [ampliada, setAmpliada] = useState<string | null>(null)
+  const [ampliada, setAmpliada] = useState<{ url: string; titulo?: string } | null>(null)
   const restringido = !!inicial.contenido_restringido
   const [mensajes, setMensajes] = useState<Mensaje[]>(() => inicial.historial.map((h) => ({
     id: `h${h.id}`, pasoId: h.paso_id, pregunta: h.pregunta,
     respuesta: {
-      texto: h.respuesta ?? '', fuentes: h.fuentes ?? [], terminado: true, conRespaldo: h.con_respaldo, oculta: restringido,
+      texto: h.respuesta ?? '', fuentes: h.fuentes ?? [], terminado: true, conRespaldo: h.con_respaldo,
+      oculta: h.respuesta_oculta ?? restringido,
     },
   })))
   const segundos = useSegundos(inicial.duracion_s, ej.estado === 'en_curso')
@@ -154,6 +156,8 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
   const paso: PasoEjecucion | undefined = ej.pasos[indice]
   const confirmados = ej.pasos.filter((p) => p.confirmado).length
   const todosHechos = confirmados === total
+  // En solo lectura se llega al resultado con todos los pasos hechos o si ya hay foto que revisar.
+  const hayResultado = todosHechos || (soloLectura && !!ej.foto)
   const primerPendiente = ej.pasos.findIndex((p) => !p.confirmado)
   const delPaso = useMemo(() => mensajes.filter((m) => m.pasoId === paso?.id), [mensajes, paso?.id])
   const progreso = fase === 'pasos' ? (confirmados / Math.max(1, total)) * 100 : 100
@@ -179,7 +183,7 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
 
   function siguiente(pasos: PasoEjecucion[]) {
     if (indice < total - 1) irA(indice + 1)
-    else if (pasos.every((p) => p.confirmado)) setFase('cierre') // en solo lectura, para ver la foto del resultado
+    else if (pasos.every((p) => p.confirmado) || (soloLectura && ej.foto)) setFase('cierre') // en solo lectura, para ver la foto
   }
 
   async function hecho() {
@@ -247,9 +251,15 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
       consultas_criticos: e.consultas_criticos + (critico ? n : 0),
       pasos: e.pasos.map((p) => (p.id === pasoId ? { ...p, consultas: p.consultas + n } : p)),
     }))
+    // Las dos últimas preguntas del mismo paso viajan como historial: así se entiende una repregunta
+    // («¿y si no tengo esa llave?») sin repetir el contexto.
+    const historial = mensajes
+      .filter((m) => m.pasoId === pasoId && m.respuesta.terminado && !m.respuesta.error && m.respuesta.texto)
+      .slice(-2)
+      .flatMap((m) => [{ rol: 'usuario', texto: m.pregunta }, { rol: 'asistente', texto: m.respuesta.texto }])
     setMensajes((ms) => [...ms, { id: idm, pasoId, pregunta: texto, respuesta: { ...RESPUESTA_VACIA } }])
     contar(1)
-    consumirRespuesta(`/api/planta/ejecuciones/${ej.id}/preguntar`, { pregunta: texto, paso_id: pasoId },
+    consumirRespuesta(`/api/planta/ejecuciones/${ej.id}/preguntar`, { pregunta: texto, paso_id: pasoId, historial },
       (r) => setMensajes((ms) => ms.map((m) => (m.id === idm ? { ...m, respuesta: r } : m))))
       .then((r) => { if (r.rechazada) contar(-1) })
   }
@@ -260,10 +270,43 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
   const [subiendo, setSubiendo] = useState(false)
   const [previa, setPrevia] = useState<string | null>(null)
   useEffect(() => () => { if (previa) URL.revokeObjectURL(previa) }, [previa])
+  // La imagen con la que se comparará la foto la decide el servidor (salta los pasos finales de papeleo);
+  // con un servidor anterior, la del último paso con imagen.
   const referencia = useMemo(() => {
+    if (ej.instruccion.referencia_url !== undefined) return ej.instruccion.referencia_url
     for (let i = ej.pasos.length - 1; i >= 0; i--) if (ej.pasos[i].imagen_url) return ej.pasos[i].imagen_url
     return null
-  }, [ej.pasos])
+  }, [ej.instruccion.referencia_url, ej.pasos])
+
+  // La comparación con el modelo de visión va en segundo plano: mientras siga «comparando», se
+  // consulta la ejecución cada pocos segundos (como mucho diez minutos) hasta tener el veredicto.
+  const comparando = ej.foto?.estado === 'comparando'
+  useEffect(() => {
+    if (!comparando) return
+    const inicio = Date.now()
+    const t = setInterval(async () => {
+      if (Date.now() - inicio > 10 * 60_000) { clearInterval(t); return }
+      try {
+        const d = await get<EjecucionDatos>(`/api/planta/ejecuciones/${ej.id}`)
+        if (d.foto && d.foto.estado !== 'comparando') {
+          clearInterval(t)
+          setEj((x) => ({ ...x, foto: d.foto }))
+        }
+      } catch {
+        /* se reintenta en la siguiente vuelta */
+      }
+    }, 4000)
+    return () => clearInterval(t)
+  }, [comparando, ej.id])
+
+  // Cada paso empieza arriba: título y aviso crítico a la vista (en el móvil desplaza toda la
+  // pantalla; en el ordenador, la columna del paso).
+  const cuerpoRef = useRef<HTMLElement>(null)
+  const columnaRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    cuerpoRef.current?.scrollTo({ top: 0 })
+    columnaRef.current?.scrollTo({ top: 0 })
+  }, [indice, resumen])
 
   async function subirFoto(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -352,16 +395,16 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
             </div>
             <div className="ej-comparar">
               <figure>
-                {ref ? <img src={ref} alt="Referencia del experto" /> : (
+                {ref ? <img src={ref} alt="Referencia del experto" onClick={() => setAmpliada({ url: ref, titulo: 'Así debe quedar (referencia del experto)' })} /> : (
                   <div className="sin-ref">
-                    {restringido ? 'La imagen del experto es de otro departamento' : 'La instrucción no tiene imagen de referencia'}
+                    {restringido ? 'No tienes acceso a la imagen del experto' : 'La instrucción no tiene imagen de referencia'}
                   </div>
                 )}
                 <figcaption>Así debe quedar</figcaption>
               </figure>
               <figure>
                 {foto ? (
-                  <img src={foto} alt="Foto del resultado" />
+                  <img src={foto} alt="Foto del resultado" onClick={() => setAmpliada({ url: foto, titulo: soloLectura ? `Resultado de ${quien}` : 'Tu resultado' })} />
                 ) : soloLectura ? (
                   <div className="sin-ref">Sin foto del resultado</div>
                 ) : (
@@ -376,7 +419,7 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
             </div>
             <div className="mt-2">
               {subiendo ? (
-                <div className="fila apagado"><Loader2 className="girando" size={18} /> Comparando con la referencia…</div>
+                <div className="fila apagado"><Loader2 className="girando" size={18} /> Subiendo la foto…</div>
               ) : ej.foto ? (
                 <VeredictoAviso v={ej.foto} propia={ej.es_mia} />
               ) : !soloLectura ? (
@@ -389,7 +432,7 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
               </div>
             )}
             {ej.foto?.revision && !ej.puede_revisar && (
-              <div className="mt-2"><EstadoRevision r={ej.foto.revision} propia={ej.es_mia} /></div>
+              <div className="mt-2"><EstadoRevision r={ej.foto.revision} propia={ej.es_mia} enCurso={ej.estado === 'en_curso'} /></div>
             )}
             {!soloLectura && (
               <input ref={entradaFoto} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden
@@ -407,7 +450,11 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
                 ? 'Revisa el resumen y pulsa «Finalizar» para registrar la ejecución en tu progreso.'
                 : ej.estado === 'completada'
                   ? `Completada el ${fecha(ej.fin, true)}.`
-                  : 'Ha confirmado todos los pasos, pero todavía no la ha finalizado.'}
+                  : ej.estado === 'abandonada'
+                    ? `Se abandonó${ej.fin ? ` el ${fecha(ej.fin, true)}` : ''} sin completarse.`
+                    : todosHechos
+                      ? 'Ha confirmado todos los pasos, pero todavía no la ha finalizado.'
+                      : `Lleva ${confirmados} de ${total} pasos confirmados y todavía no la ha finalizado.`}
             </div>
             <div className="ej-cifras">
               <Cifra valor={`${confirmados}/${total}`} etiqueta="Pasos confirmados" />
@@ -431,8 +478,8 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
     const riesgos = unirRiesgos(ins.riesgos, ej.tarea.riesgos_prl)
     const antes = indice === 0 && (ins.epis || ins.herramientas || riesgos)
     cuerpo = (
-      <main className="planta-cuerpo">
-        <section className="ej-columna">
+      <main className="planta-cuerpo" ref={cuerpoRef}>
+        <section className="ej-columna" ref={columnaRef}>
           <article key={paso.id} className={`ej-paso ${atras ? 'atras' : ''}`}>
             <div className="ej-paso-cabecera">
               <span className="ej-paso-numero">Paso {indice + 1} de {total}</span>
@@ -472,7 +519,7 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
               </div>
             )}
             {paso.texto && <div className="planta-texto"><TextoFormato texto={paso.texto} /></div>}
-            <Media paso={paso} onAmpliar={setAmpliada} />
+            <Media paso={paso} onAmpliar={(url) => setAmpliada({ url })} />
             {!paso.es_critico && paso.criterio_aceptacion && (
               <div className="ej-criterio"><strong>Cómo saber que está bien</strong>{paso.criterio_aceptacion}</div>
             )}
@@ -513,7 +560,7 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
           <Eye /> Estás viendo la ejecución de {ej.persona?.nombre ?? 'otra persona'}
           {ej.estado === 'completada' ? ' (completada)' : ej.estado === 'abandonada' ? ' (abandonada)' : ' (en curso)'}.
           Solo lectura.
-          {restringido && ' La tarea es de otro departamento: ves el avance y las consultas, no el contenido de la instrucción.'}
+          {restringido && ' No tienes acceso a esta tarea (es de otro departamento o pide más nivel): ves el avance y las consultas, no el contenido de la instrucción.'}
         </div>
       )}
 
@@ -546,8 +593,8 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
           {fase === 'pasos' ? (
             <Boton variante="verde" tamano="enorme" cargando={enviando}
               icono={paso!.confirmado || soloLectura ? <ArrowRight /> : <Check />}
-              disabled={soloLectura && indice === total - 1 && !todosHechos} onClick={hecho}>
-              {paso!.confirmado || soloLectura ? (indice === total - 1 && todosHechos ? 'Resultado' : 'Siguiente') : 'Hecho'}
+              disabled={soloLectura && indice === total - 1 && !hayResultado} onClick={hecho}>
+              {paso!.confirmado || soloLectura ? (indice === total - 1 && hayResultado ? 'Resultado' : 'Siguiente') : 'Hecho'}
             </Boton>
           ) : soloLectura ? (
             <Boton variante="secundario" tamano="enorme" icono={<X />} onClick={pedirSalida}>Salir</Boton>
@@ -571,8 +618,9 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
         </div>
       </Modal>
 
-      <Modal abierto={!!ampliada} titulo={paso ? `Paso ${indice + 1}: ${paso.titulo}` : 'Imagen'} onCerrar={() => setAmpliada(null)} ancho>
-        {ampliada && <img src={ampliada} alt="" style={{ width: '100%', borderRadius: 12, display: 'block' }} />}
+      <Modal abierto={!!ampliada} titulo={ampliada?.titulo ?? (paso ? `Paso ${indice + 1}: ${paso.titulo}` : 'Imagen')}
+        onCerrar={() => setAmpliada(null)} ancho>
+        {ampliada && <img src={ampliada.url} alt="" style={{ width: '100%', borderRadius: 12, display: 'block' }} />}
       </Modal>
     </div>
   )
@@ -612,6 +660,17 @@ function Cifra({ valor, etiqueta, tono }: { valor: ReactNode; etiqueta: string; 
 function VeredictoAviso({ v, propia }: { v: Veredicto; propia: boolean }) {
   const confianza = v.confianza != null ? ` Confianza del modelo: ${Math.round(v.confianza * 100)} %.` : ''
   const quien = propia ? 'tu responsable' : 'el responsable'
+  if (v.estado === 'comparando') {
+    return (
+      <div className="ej-comparando" role="status">
+        <Loader2 className="girando" />
+        <div>
+          <strong>Comparando con la imagen del experto…</strong>
+          {propia ? 'Puede tardar un poco. Puedes finalizar mientras tanto: el resultado quedará registrado.' : 'El resultado llegará en unos momentos.'}
+        </div>
+      </div>
+    )
+  }
   if (v.estado === 'comparada' && v.coincide && !v.revision_humana) {
     return <Aviso tono="exito" titulo="Se parece a la referencia">{v.observaciones || v.mensaje}{confianza} Decide siempre una persona.</Aviso>
   }
@@ -621,11 +680,11 @@ function VeredictoAviso({ v, propia }: { v: Veredicto; propia: boolean }) {
   if (v.estado === 'comparada') {
     return <Aviso tono="amarillo" titulo="Revisa el resultado">{v.observaciones || v.mensaje}{confianza} Si tienes dudas, avisa a {quien}.</Aviso>
   }
-  return <Aviso titulo={`La revisará ${quien}`}>{v.mensaje}</Aviso>
+  return <Aviso titulo={propia ? 'La revisará tu responsable' : 'Sin comparación automática'}>{v.mensaje}</Aviso>
 }
 
 /** Decisión del jefe sobre la foto, tal y como la ve quien hizo la tarea (o quien supervisa). */
-function EstadoRevision({ r, propia }: { r: RevisionFoto; propia: boolean }) {
+function EstadoRevision({ r, propia, enCurso = false }: { r: RevisionFoto; propia: boolean; enCurso?: boolean }) {
   const cuando = fecha(r.fecha, true)
   if (r.estado === 'aprobada') {
     return (
@@ -637,7 +696,13 @@ function EstadoRevision({ r, propia }: { r: RevisionFoto; propia: boolean }) {
   return (
     <Aviso tono="alerta" titulo={`${r.revisor} ha rechazado la foto`}>
       {r.comentario ? `«${r.comentario}»` : 'Sin comentario.'} · {cuando}
-      {propia && <div className="mt-1">Corrige lo que indica y, si lo necesitas, pregúntale cómo hacerlo.</div>}
+      {propia && (
+        <div className="mt-1">
+          {enCurso
+            ? 'Corrige lo que indica y repite la foto antes de finalizar. Si tienes dudas, pregúntale.'
+            : 'Tenlo en cuenta la próxima vez que hagas la tarea. Si tienes dudas, pregúntale.'}
+        </div>
+      )}
     </Aviso>
   )
 }
@@ -738,7 +803,7 @@ function Exito({ ej, resumen, onVolver, onProgreso }: {
         </div>
         <div className="ej-cifras">
           <Cifra valor={duracion(r.duracion_s)} etiqueta="Tiempo" />
-          <Cifra valor={r.pasos} etiqueta={`Pasos (${r.pasos_criticos} críticos)`} />
+          <Cifra valor={r.pasos} etiqueta={`Pasos (${r.pasos_criticos} ${r.pasos_criticos === 1 ? 'crítico' : 'críticos'})`} />
           <Cifra valor={r.consultas} etiqueta="Consultas al copiloto" />
           <Cifra valor={r.consultas_criticos} etiqueta="En pasos críticos" tono={r.consultas_criticos ? 'alerta' : undefined} />
         </div>

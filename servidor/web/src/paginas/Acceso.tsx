@@ -135,7 +135,9 @@ export default function Acceso() {
       navegar(destino, { replace: true })
     } catch (err) {
       setError((err as Error).message)
+      // La contraseña se borra: el foco vuelve a ese campo para escribirla otra vez sin buscarlo.
       setContrasena('')
+      requestAnimationFrame(() => document.getElementById('contrasena')?.focus())
       servidor.comprobar()
     } finally {
       setEnviando(false)
@@ -175,7 +177,7 @@ export default function Acceso() {
         </div>
         <div className="campo">
           <label htmlFor="contrasena">Contraseña</label>
-          <CampoContrasena id="contrasena" valor={contrasena} onCambio={setContrasena} autoComplete="current-password" placeholder="••••••••" />
+          <CampoContrasena id="contrasena" valor={contrasena} onCambio={setContrasena} autoComplete="current-password" placeholder="Tu contraseña" />
         </div>
         <Boton variante="primario" tamano="grande" bloque type="submit" cargando={enviando} disabled={!usuario.trim() || !contrasena}>
           Iniciar sesión

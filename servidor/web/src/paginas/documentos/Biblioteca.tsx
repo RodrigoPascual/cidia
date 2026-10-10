@@ -71,8 +71,8 @@ function Fila({ d, maxNivel, acciones, onAbrir }: {
         <Globe className={d.es_publico ? 'si' : 'no'} />
       </td>
       <td><EstadoEtiqueta estado={d.estado} mensaje={d.mensaje_estado} interrumpido={d.interrumpido} /></td>
-      <td className="ocultar-t">{d.autor ?? d.subido_por ?? <span className="apagado">-</span>}</td>
-      <td className="ocultar-m" title={fecha(d.creado, true)}><span className="pequeno">{hace(d.creado)}</span></td>
+      <td className="ocultar-t ocultar-p">{d.autor ?? d.subido_por ?? <span className="apagado">-</span>}</td>
+      <td className="ocultar-m doc-fecha" title={fecha(d.creado, true)}><span className="pequeno">{hace(d.creado)}</span></td>
       <td className="doc-acciones" onClick={parar}>
         {d.url_descarga && (
           <a className="boton fantasma pequeno icono" href={urlServidor(d.url_descarga)} download
@@ -220,7 +220,7 @@ export default function Biblioteca({ opciones, version, acciones, onAbrir, onSub
                     <th className="col-icono ocultar-t" title="Material de formación">Form.</th>
                     <th className="col-icono ocultar-t" title="Público">Púb.</th>
                     <th>Estado</th>
-                    <th className="ocultar-t">Autor</th>
+                    <th className="ocultar-t ocultar-p">Autor</th>
                     <th className="ocultar-m">Subido</th>
                     <th><span className="sr-solo">Acciones</span></th>
                   </tr>

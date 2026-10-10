@@ -2,7 +2,8 @@
 
 Ciclo de vida: borrador → publicada → obsoleta (cuando se publica una versión posterior). Hay
 como mucho una versión publicada por tarea. Las imágenes y clips de los pasos se comparten entre
-versiones (una versión nueva copia sus rutas), así que editar un borrador nunca borra ficheros.
+versiones (una versión nueva copia sus rutas), así que editar un borrador solo borra las imágenes
+subidas a mano que ya no usa ningún paso de ninguna versión.
 
 Permisos: gestionan instrucciones los expertos, los jefes y la administración; expertos y jefes,
 solo las de las tareas de su propio departamento.
@@ -25,7 +26,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from cidia.conocimiento import motor
 from cidia.ficheros import guardar_subida, ruta_absoluta
-from cidia.modelos import Captura, Documento, Instruccion, Paso, Puesto, Tarea, ahora
+from cidia.modelos import Captura, Documento, Instruccion, Paso, Puesto, Tarea, Trabajo, ahora
 from cidia.seguridad import Actor, url_fichero
 from cidia.servicios import documentos
 from cidia.xapi import auditar, registrar
@@ -346,6 +347,8 @@ def crear_manual(bd: Session, actor: Actor, datos: dict[str, Any]) -> Instruccio
     if not datos.get("tarea_id"):
         raise HTTPException(400, "Elige la tarea de la instrucción.")
     tarea = tarea_gestionable(bd, actor, int(datos["tarea_id"]))
+    if not tarea.activa:
+        raise HTTPException(400, "Esa tarea está dada de baja. Elige otra o pide a la administración que la reactive.")
     bloquear_tarea(bd, tarea.id)
     existente = _borrador_de(bd, tarea.id)
     if existente:
@@ -391,6 +394,7 @@ def _sincronizar_pasos(ins: Instruccion, entrada: list[dict[str, Any]]) -> None:
 
 def editar(bd: Session, actor: Actor, instruccion_id: int, datos: dict[str, Any]) -> Instruccion:
     ins = _borrador_bloqueado(bd, actor, instruccion_id)
+    propias = imagenes_propias(ins)  # por si se quita un paso con una imagen subida a mano
     for campo, maximo in CAMPOS_TEXTO.items():
         if campo in datos and datos[campo] is not None:
             valor = _texto(datos[campo], maximo)
@@ -402,6 +406,7 @@ def editar(bd: Session, actor: Actor, instruccion_id: int, datos: dict[str, Any]
     if datos.get("pasos") is not None:
         _sincronizar_pasos(ins, datos["pasos"])
     bd.commit()
+    borrar_imagenes_sin_uso(bd, propias)  # las que ya no usa ningún paso (de ninguna versión)
     bd.refresh(ins)
     return ins
 
@@ -506,6 +511,8 @@ def borrar_borrador(bd: Session, actor: Actor, instruccion_id: int) -> None:
     bd.execute(update(Captura).where(Captura.instruccion_id == ins.id).values(instruccion_id=None))
     auditar(bd, actor, "borrar_borrador", "instruccion", ins.id,
             {"tarea_id": ins.tarea_id, "version": ins.version, "titulo": ins.titulo})
+    registrar(bd, actor, "borro", "instruccion", ins.id, f"{ins.codigo} v{ins.version} · {ins.titulo}",
+              contexto={"tarea_id": ins.tarea_id, "version": ins.version})
     bd.delete(ins)
     bd.commit()
     borrar_imagenes_sin_uso(bd, propias)
@@ -534,6 +541,12 @@ def texto_indexable(ins: Instruccion) -> tuple[str, list[tuple[str, dict[str, An
             lineas.append(f"Criterio de aceptación: {p.criterio_aceptacion}")
         partes.append(("\n".join(lineas), {**base, "paso": p.orden, "paso_id": p.id}))
     return "\n\n".join(t for t, _ in partes), partes
+
+
+def _indexando(bd: Session, documento_id: int) -> bool:
+    """¿Tiene el documento un indexado pendiente o en curso en la cola de trabajos?"""
+    return bd.scalar(select(Trabajo.id).where(Trabajo.entidad == "documento", Trabajo.entidad_id == documento_id,
+                                              Trabajo.estado.in_(("pendiente", "en_curso"))).limit(1)) is not None
 
 
 def _retirar_documento(bd: Session, documento_id: int) -> None:
@@ -579,6 +592,12 @@ def publicar_con_detalle(bd: Session, actor: Actor, instruccion_id: int) -> tupl
     if any(o.version > ins.version and o.estado not in EDITABLES for o in otras):
         ins.version = max(o.version for o in otras) + 1
     anteriores = [o for o in otras if o.estado == "publicada"]
+    # Si la vigente aún se está indexando, su trabajo terminaría después de retirarla y la dejaría otra
+    # vez al alcance del copiloto junto a la nueva: hay que esperar a que acabe.
+    indexando = [o for o in anteriores if o.documento_id and _indexando(bd, o.documento_id)]
+    if indexando:
+        raise HTTPException(409, f"La versión {indexando[0].version} todavía se está preparando para el copiloto. "
+                                 "Espera a que termine (suele tardar uno o dos minutos) y vuelve a publicar.")
     for o in anteriores:
         o.estado = "obsoleta"
         if o.documento_id:

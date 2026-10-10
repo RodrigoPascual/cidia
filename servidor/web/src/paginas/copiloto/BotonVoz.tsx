@@ -8,6 +8,7 @@ import { Loader2, Mic, MicOff } from 'lucide-react'
 import { enviarFormulario } from '../../api'
 import { useAvisarError, useAvisos, useGrabadora } from '../../ui'
 import { motivoSinMicrofono } from '../planta/copiloto'
+import './voz.css'
 
 export default function BotonVoz({ onTexto, deshabilitado, grande, onSinMicrofono }: {
   onTexto: (texto: string) => void

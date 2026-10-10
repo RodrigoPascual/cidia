@@ -26,6 +26,8 @@ export interface Fuente {
   url?: string | null
   /** false: en el historial, documento que ya no puedes ver (o que se ha borrado) */
   disponible?: boolean
+  /** en el historial, versión de una instrucción que ya se ha sustituido por otra más reciente */
+  obsoleta?: boolean
 }
 
 export interface Mensaje {
@@ -43,6 +45,8 @@ export interface Mensaje {
   citadas?: number[]
   valoracion?: 1 | -1 | null
   error?: string
+  /** el error no se arregla reintentando (límite de uso, permiso o pregunta no válida) */
+  sinReintento?: boolean
   modo?: Modo
   voz?: boolean
   duracion_ms?: number
@@ -89,10 +93,10 @@ export function nombreTipo(tipo?: string | null): string {
   return (tipo && NOMBRE_TIPO[tipo]) || 'Documento'
 }
 
-/** «v2 · paso 3 · pág. 4»: dónde está el dato dentro del documento. */
+/** «v2 · paso 3 · pág. 4»: dónde está el dato dentro del documento (el código solo si el título no lo lleva ya). */
 export function ubicacion(f: Fuente): string {
   const partes: string[] = []
-  if (f.codigo) partes.push(f.codigo)
+  if (f.codigo && !f.titulo?.includes(f.codigo)) partes.push(f.codigo)
   if (f.version) partes.push(`v${f.version}`)
   // El «paso 0» de una instrucción es su cabecera: resumen, riesgos, EPI y herramientas.
   if (f.paso === 0) partes.push('datos generales')

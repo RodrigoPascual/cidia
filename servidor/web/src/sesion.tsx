@@ -41,7 +41,7 @@ const Contexto = createContext<ContextoSesion | null>(null)
 function avisarApp(t: string | null, perfil: Perfil | null) {
   if (window.parent === window) return
   try {
-    window.parent.postMessage({ tipo: 'cidia:sesion', token: t, perfil }, '*')
+    window.parent.postMessage({ tipo: 'cidia:sesion', token: t, perfil }, window.location.origin)
   } catch {
     /* sin app anfitriona */
   }

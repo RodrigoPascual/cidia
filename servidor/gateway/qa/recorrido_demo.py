@@ -380,6 +380,7 @@ class Recorrido:
         with self.inf.paso("Procesado del vídeo hasta el borrador") as p:
             fases: dict[str, float] = {}
             t0 = time.perf_counter()
+            reintentos = [1]  # como la experta en la interfaz: «Reintentar» una vez si se interrumpe
 
             def listo() -> dict[str, Any] | None:
                 cap = self.c.get("experta", f"/api/captura/{self.ids['captura_id']}")
@@ -388,22 +389,36 @@ class Recorrido:
                     fases[fase] = round(time.perf_counter() - t0, 1)
                     print(f"    {fases[fase]:6.1f} s  {fase} ({cap.get('progreso')} %)", flush=True)
                 if cap["estado"] == "error":
+                    if reintentos and "interrump" in (cap.get("mensaje") or "").lower():
+                        reintentos.pop()
+                        print(f"    se reintenta: {cap.get('mensaje')}", flush=True)
+                        fases.clear()
+                        self.c.post("experta", f"/api/captura/{self.ids['captura_id']}/reintentar")
+                        return None
                     raise FalloPaso(f"La captura ha fallado: {cap.get('mensaje')}")
                 return cap if cap["estado"] == "borrador_listo" and cap.get("instruccion_id") else None
 
             cap = esperar("borrador de la captura", listo, self.args.espera, cada=5)
+            if not reintentos:
+                p.datos["reintentada"] = True
             self.ids["instruccion_id"] = cap["instruccion_id"]
-            p.datos = {"fases_s": fases, "origen_borrador": cap.get("origen_borrador"),
+            p.datos |= {"fases_s": fases, "origen_borrador": cap.get("origen_borrador"),
                        "escenas": len(cap.get("escenas") or []), "transcripcion": recortar(cap.get("transcripcion"), 300)}
             p.detalle = f"instrucción {cap['instruccion_id']} · borrador por {cap.get('origen_borrador') or '?'}"
 
+        if "instruccion_id" not in self.ids:
+            return  # sin borrador no hay nada que revisar ni publicar
         with self.inf.paso("Experta: revisa y corrige el borrador") as p:
             ins = self.c.get("experta", f"/api/instrucciones/{self.ids['instruccion_id']}")
             pasos = ins.get("pasos") or []
             if not pasos:
                 raise FalloPaso("El borrador no tiene pasos")
             # El paso del par de apriete (o el tercero) queda como crítico, como en el guion.
-            critico = next((i for i, x in enumerate(pasos) if re.search(r"tornill|apriet|par\b|llave", (x.get("titulo") or "") + " " + (x.get("texto") or ""), re.I)), min(2, len(pasos) - 1))
+            # Primero el apriete en sí: el paso 1 («Preparo ... 4 tornillos») también nombra los tornillos.
+            critico = next((i for patron in (r"apriet|dinamom|newton|n\s*·\s*m\b|\bpar\b", r"tornill|llave")
+                            for i, x in enumerate(pasos)
+                            if re.search(patron, f"{x.get('titulo') or ''} {x.get('texto') or ''}", re.I)),
+                           min(2, len(pasos) - 1))
             nuevos = []
             for i, x in enumerate(pasos):
                 nuevos.append({"id": x["id"], "titulo": x.get("titulo") or f"Paso {i + 1}", "texto": x.get("texto"),
@@ -543,13 +558,26 @@ class Recorrido:
             t0 = time.perf_counter()
             v = self.c.post("aprendiz", f"/api/planta/ejecuciones/{ej['id']}/foto",
                             files={"imagen": ("resultado.png", foto, "image/png")})
-            t_foto = time.perf_counter() - t0
+            t_subida = time.perf_counter() - t0
             fin = self.c.post("aprendiz", f"/api/planta/ejecuciones/{ej['id']}/finalizar")
             if fin["estado"] != "completada":
                 raise FalloPaso(f"La ejecución quedó «{fin['estado']}»")
+            if v.get("estado") == "comparando":  # el modelo con visión compara en segundo plano
+
+                def veredicto() -> dict[str, Any] | None:
+                    f = self.c.get("aprendiz", f"/api/planta/ejecuciones/{ej['id']}").get("foto") or {}
+                    return f if f.get("estado") not in (None, "comparando") else None
+
+                try:
+                    v = esperar("veredicto de la foto", veredicto, self.args.espera_foto, cada=5)
+                except FalloPaso:
+                    v = {**v, "estado": "comparando (sin veredicto a tiempo)"}
+            t_foto = time.perf_counter() - t0
             p.datos = {"veredicto_foto": {k: v.get(k) for k in ("estado", "coincide", "confianza", "comentario")},
-                       "foto_s": round(t_foto, 1), "resumen": fin.get("resumen")}
-            p.detalle = f"foto: {v.get('estado')} ({t_foto:.1f} s) · ejecución completada"
+                       "subida_foto_s": round(t_subida, 1), "veredicto_foto_s": round(t_foto, 1),
+                       "resumen": fin.get("resumen")}
+            p.detalle = (f"foto: {v.get('estado')} (subida {t_subida:.1f} s, veredicto {t_foto:.1f} s) "
+                         "· ejecución completada")
 
         with self.inf.paso("Aprendiz: repite la tarea dos veces más") as p:
             for _ in range(2):
@@ -760,6 +788,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sin-video", action="store_true", help="La instrucción se escribe a mano (más rápido)")
     ap.add_argument("--espera", type=float, default=1500, help="Espera máxima de cada proceso largo (s)")
     ap.add_argument("--espera-preguntas", type=float, default=240, help="Espera máxima de las preguntas (s)")
+    ap.add_argument("--espera-foto", type=float, default=300, help="Espera máxima del veredicto de la foto (s)")
     ap.add_argument("--timeout", type=float, default=600, help="Tiempo máximo de cada petición (s)")
     ap.add_argument("--conservar", action="store_true", help="No borra la pregunta frecuente al terminar")
     ap.add_argument("--salida", type=Path, default=None, help="Fichero JSON del resumen")

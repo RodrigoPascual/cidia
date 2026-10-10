@@ -184,7 +184,10 @@ def test_filtros_y_paginacion(cliente, planta):
 def test_opciones(cliente, planta):
     o = cliente.get("/api/documentos/opciones", headers=cab(cliente, "javier")).json()
     gestionables = {d["nombre"] for d in o["departamentos"] if d["gestionable"]}
-    assert gestionables == {"Producción"} and "personas" not in o
+    assert gestionables == {"Producción"}
+    # un jefe puede «buscar como» las personas de su departamento (sin él mismo ni las de otros)
+    assert {p["departamento"] for p in o["personas"]} == {"Producción"}
+    assert "javier" not in {p["usuario"] for p in o["personas"]}
     assert [n["orden"] for n in o["niveles"]][:4] == [1, 2, 3, 4]
     assert o["departamento_propio"] == planta.deps["prod"].id and o["es_admin"] is False
     oa = cliente.get("/api/documentos/opciones", headers=cab(cliente, "admin")).json()

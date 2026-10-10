@@ -41,7 +41,10 @@ export default function Pasaporte({ datos, propio = false, acciones, tareaInicia
   tareaInicial?: number
 }) {
   const { persona, resumen, tareas } = datos
-  const [elegida, setElegida] = useState<number | null>(tareaInicial ?? tareas[0]?.tarea.id ?? null)
+  // Sin tarea pedida, se abre la que más enseña: la primera con curva de autonomía, si no la
+  // primera con nivel, y si no la primera (una tarea recién añadida no debe dejar la curva vacía).
+  const [elegida, setElegida] = useState<number | null>(() => tareaInicial
+    ?? (tareas.find((t) => t.curva.length > 0) ?? tareas.find((t) => t.nivel > 0) ?? tareas[0])?.tarea.id ?? null)
   const detalle = useRef<HTMLDivElement>(null)
   const actual = tareas.find((t) => t.tarea.id === elegida) ?? tareas[0]
 

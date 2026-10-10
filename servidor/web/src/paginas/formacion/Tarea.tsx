@@ -57,9 +57,15 @@ function Estado({ d }: { d: DetalleTarea }) {
   )
 }
 
+/** «1 crítico», «2 críticos». */
+function contar(n: number, uno: string, varios: string): string {
+  return `${n} ${n === 1 ? uno : varios}`
+}
+
 function Instruccion({ d }: { d: DetalleTarea }) {
   const ins = d.instruccion!
-  const riesgos = [ins.riesgos, d.riesgos_prl].filter(Boolean).join('\n')
+  // Los riesgos de la instrucción y los de prevención de la tarea suelen coincidir: sin repetir.
+  const riesgos = [...new Set([ins.riesgos, d.riesgos_prl].map((r) => r?.trim()).filter(Boolean))].join('\n')
   return (
     <Tarjeta titulo="La instrucción" icono={<ScrollText size={18} />}
       acciones={<Etiqueta>{ins.codigo ?? 'Instrucción'} · v{ins.version}</Etiqueta>}>
@@ -227,7 +233,7 @@ export default function Tarea() {
         antetitulo={<><GraduationCap size={14} /> {[d.codigo, d.departamento].filter(Boolean).join(' · ') || 'Formación'}</>}
         titulo={d.nombre}
         subtitulo={ins
-          ? `${ins.codigo ?? 'Instrucción'} · versión ${ins.version} · ${ins.pasos.length} pasos, ${ins.pasos.filter((p) => p.es_critico).length} críticos`
+          ? `${ins.codigo ?? 'Instrucción'} · versión ${ins.version} · ${contar(ins.pasos.length, 'paso', 'pasos')}, ${contar(ins.pasos.filter((p) => p.es_critico).length, 'crítico', 'críticos')}`
           : d.descripcion ?? 'Sin instrucción publicada todavía.'}
         acciones={<>
           {d.puede_generar && ins && (

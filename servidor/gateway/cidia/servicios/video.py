@@ -62,7 +62,11 @@ def _ejecutar(args: list[str], timeout: float) -> subprocess.CompletedProcess[st
 
 # Solo se leen ficheros locales: un vídeo subido podría ser en realidad una lista de reproducción
 # (HLS, concat) que apunte a URLs internas o a ficheros del servidor, y ffmpeg la seguiría.
-_SOLO_FICHEROS = ["-protocol_whitelist", "file"]
+# Además, solo se admiten formatos de vídeo y audio de verdad: un manifiesto DASH guardado como
+# «.mp4» hace que ffmpeg abra cualquier otro vídeo del servidor por su ruta (p. ej., el de otro
+# departamento) y devolvería sus fotogramas, su audio y sus clips a quien lo subió.
+FORMATOS_ENTRADA = "mov,matroska,webm,avi,mpeg,mpegts,asf,flv,ogg,mp3,wav,aac,flac,amr,amrnb,amrwb,caf,w64"
+_SOLO_FICHEROS = ["-protocol_whitelist", "file", "-format_whitelist", FORMATOS_ENTRADA]
 
 
 def _entrada(ruta: str | Path) -> list[str]:

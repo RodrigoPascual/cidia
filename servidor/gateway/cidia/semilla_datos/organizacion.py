@@ -193,12 +193,13 @@ PERSONAS = [
 
 ADMIN = ("admin", "Administración", None, 4, "admin", False, None)
 
-# Formaciones cruzadas: dan acceso al material de formación del otro departamento.
+# Formaciones cruzadas: dan acceso al material de formación del otro departamento. Las asigna la
+# administración, como en CidIA (Administración › Empleados es la única que puede hacerlo).
 FORMACIONES = [
     {"usuario": "marta", "departamento": "ot", "puesto": "utillajes", "estado": "activa",
-     "inicio": 21, "fin_previsto": -35, "asignada_por": "ana"},
+     "inicio": 21, "fin_previsto": -35, "asignada_por": "admin"},
     {"usuario": "irene", "departamento": "prod", "puesto": "prensas", "estado": "activa",
-     "inicio": 9, "fin_previsto": -50, "asignada_por": "javier"},
+     "inicio": 9, "fin_previsto": -50, "asignada_por": "admin"},
     {"usuario": "david", "departamento": "ot", "puesto": "procesos", "estado": "completada",
-     "inicio": 150, "fin_previsto": 90, "asignada_por": "ana"},
+     "inicio": 150, "fin_previsto": 90, "asignada_por": "admin"},
 ]

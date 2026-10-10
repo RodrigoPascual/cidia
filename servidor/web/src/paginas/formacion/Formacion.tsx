@@ -162,12 +162,19 @@ export default function Formacion() {
         </section>
       )}
 
-      {dentro.map((f) => (
-        <section key={f.id} className="fm-seccion">
-          <div className="fm-seccion-titulo"><GraduationCap /> Formación en {f.puesto ?? f.departamento}</div>
-          <div className="fm-lista">{deFormacion(f).map((t) => <FilaTarea key={t.tarea_id} t={t} />)}</div>
-        </section>
-      ))}
+      {dentro.map((f) => {
+        const suyas = deFormacion(f)
+        return (
+          <section key={f.id} className="fm-seccion">
+            <div className="fm-seccion-titulo"><GraduationCap /> Formación en {f.puesto ?? f.departamento}</div>
+            {suyas.length ? (
+              <div className="fm-lista">{suyas.map((t) => <FilaTarea key={t.tarea_id} t={t} />)}</div>
+            ) : (
+              <div className="apagado pequeno">Esta formación todavía no tiene tareas con instrucción.</div>
+            )}
+          </section>
+        )
+      })}
 
       {otras.length > 0 && (
         <section className="fm-seccion">

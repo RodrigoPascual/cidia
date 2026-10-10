@@ -1,0 +1,44 @@
+/* Botón «mantén pulsado para hablar» (BotonVoz). Va en su propio fichero para que el botón se
+   pueda usar en otras pantallas sin cargar los estilos del copiloto. Animaciones con prefijo cop-. */
+
+.voz-envoltorio { position: relative; display: flex; }
+.boton-microfono {
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--linea); flex-shrink: 0;
+  background: var(--blanco); color: var(--tinta-2); display: grid; place-items: center; cursor: pointer;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: background var(--transicion), color var(--transicion), transform 120ms, box-shadow 120ms;
+}
+.boton-microfono svg { width: 19px; height: 19px; }
+.boton-microfono:hover:not(:disabled) { border-color: var(--acento); color: var(--tinta); }
+.boton-microfono:disabled { opacity: 0.5; cursor: not-allowed; }
+.boton-microfono.grabando {
+  background: var(--alerta); border-color: var(--alerta); color: #fff; transform: scale(1.08);
+  animation: cop-latido 1.2s ease-out infinite;
+}
+.boton-microfono.grande { width: 84px; height: 84px; }
+.boton-microfono.grande svg { width: 34px; height: 34px; }
+@keyframes cop-latido {
+  0% { box-shadow: 0 0 0 0 rgba(200, 68, 47, 0.45); }
+  100% { box-shadow: 0 0 0 14px rgba(200, 68, 47, 0); }
+}
+.voz-globo {
+  position: absolute; bottom: calc(100% + 12px); right: -8px; white-space: nowrap; z-index: 6;
+  background: var(--tinta); color: #fff; font-size: 13px; padding: 7px 12px; border-radius: 10px;
+  box-shadow: var(--sombra-2); display: flex; align-items: center; gap: 8px; animation: subir 160ms ease-out;
+}
+.voz-globo::after {
+  content: ''; position: absolute; top: 100%; right: 22px; border: 6px solid transparent; border-top-color: var(--tinta);
+}
+.voz-onda { width: 8px; height: 8px; border-radius: 50%; background: #ff8f7d; animation: cop-latido 1.2s ease-out infinite; }
+
+/* Sin micrófono (http desde otro equipo): el botón sigue a la vista y explica por qué no graba. */
+.boton-microfono.no-disponible { color: var(--pizarra-2); border-style: dashed; touch-action: auto; }
+.boton-microfono.no-disponible:hover { border-color: var(--pizarra-2); color: var(--pizarra); }
+.voz-globo.voz-globo-aviso {
+  white-space: normal; width: min(340px, calc(100vw - 48px)); display: block; line-height: 1.45; padding: 10px 13px;
+}
+.voz-globo.voz-globo-aviso strong { display: block; margin-bottom: 2px; color: var(--acento); }
+
+@media (prefers-reduced-motion: reduce) {
+  .boton-microfono.grabando, .voz-onda, .voz-globo { animation: none; }
+}

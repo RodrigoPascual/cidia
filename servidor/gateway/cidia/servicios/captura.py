@@ -42,6 +42,7 @@ log = logging.getLogger("cidia.captura")
 EXT_VIDEO = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".3gp", ".mpeg", ".mpg", ".wmv"}
 EXT_AUDIO = {".webm", ".weba", ".ogg", ".oga", ".opus", ".mp3", ".wav", ".m4a", ".aac", ".flac", ".mp4", ".amr", ".3gp"}
 MAX_AUDIO_RESPUESTA = 25 * 1024 * 1024
+MAX_AUDIO = 300 * 1024 * 1024  # nota de voz subida (unas horas de audio comprimido)
 
 UMBRAL_ESCENAS = 10.0  # puntuación de scdet (0-100) para considerar un cambio de plano
 MAX_PASOS = 30
@@ -50,6 +51,7 @@ MAX_VISION = 15  # pasos que se describen con el modelo de visión
 TRAMO_MINIMO = 3.0  # segundos mínimos de un paso del plan B
 TRAMO_SIN_ESCENAS = 30.0  # sin cambios de plano, el plan B corta cada ~30 s respetando las frases
 MAX_REPREGUNTAS = 1  # repreguntas por tema en la entrevista
+MAX_MENSAJES = 150  # mensajes de una entrevista (el guion completo, con repreguntas, son unos 30)
 
 FASES: dict[str, list[tuple[str, str]]] = {
     "video": [("subiendo", "Subiendo"), ("extrayendo_audio", "Extrayendo audio"), ("transcribiendo", "Transcribiendo"),
@@ -83,7 +85,7 @@ _FRASE_DE_TIEMPOS = re.compile(r"\d+(?:[.,]\d+)?\s*(?:s|seg\.?|segundos)\b|\bpas
 
 
 def _limpio(v: Any, maximo: int) -> str:
-    if v is None or isinstance(v, (dict, list)):
+    if v is None or isinstance(v, (dict, list, bool)):  # «true» en un campo de texto tampoco es texto
         return ""
     t = re.sub(r"[ \t]+", " ", str(v)).strip()
     return "" if t.lower().strip(" .") in RELLENO else t[:maximo]
@@ -98,6 +100,8 @@ def _texto_libre(v: Any, maximo: int) -> str:
 
 def _lista(v: Any, maximo: int = 3000) -> str:
     """Lista o texto del modelo → texto con un elemento por línea (sin marcas de tiempo copiadas)."""
+    if isinstance(v, bool):  # «"epis": true»
+        return ""
     if isinstance(v, dict):  # {"1": "Guantes", "2": "Gafas"}
         v = list(v.values())
     elementos = v if isinstance(v, list) else str(v or "").splitlines()
@@ -264,11 +268,22 @@ def obtener(bd: Session, actor: Actor, captura_id: int) -> Captura:
     return cap
 
 
+def _exigir_departamento(bd: Session, actor: Actor, cap: Captura) -> None:
+    """Lo que genera borradores (reintentar, seguir o terminar una entrevista) exige poder gestionar
+    el departamento de lo capturado. Si la autora se ha cambiado de departamento, ya no crea
+    borradores en el anterior (igual que ya no edita ni publica su ficha)."""
+    if not instrucciones.puede_gestionar(actor, departamento_de_captura(bd, cap)):
+        raise HTTPException(403, "Esta captura es de otro departamento. Pide a su jefe que la revise.")
+
+
 def _tarea_para(bd: Session, actor: Actor, tarea_id: int | None) -> Tarea | None:
-    """Tarea elegida (comprobando que es de su departamento). Sin tarea se creará una nueva en su
-    departamento, así que hace falta que tenga uno."""
+    """Tarea elegida (comprobando que es de su departamento y que sigue activa). Sin tarea se creará
+    una nueva en su departamento, así que hace falta que tenga uno."""
     if tarea_id:
-        return instrucciones.tarea_gestionable(bd, actor, tarea_id)
+        tarea = instrucciones.tarea_gestionable(bd, actor, tarea_id)
+        if not tarea.activa:
+            raise HTTPException(400, "Esa tarea está dada de baja. Elige otra o pide a la administración que la reactive.")
+        return tarea
     if not actor.departamento_id:
         raise HTTPException(400, "Elige la tarea: tu usuario no pertenece a ningún departamento.")
     return None
@@ -396,10 +411,18 @@ def _crear_desde_fichero(bd: Session, actor: Actor, tipo: str, subida: UploadFil
         _comprobar_tipo(subida, EXT_VIDEO, "video/", "Sube un fichero de vídeo (MP4, MOV, WebM…).", ".mp4")
     else:
         _comprobar_tipo(subida, EXT_AUDIO, "audio/", "Sube un fichero de audio (WebM, OGG, MP3, WAV, M4A…).", ".webm")
+    # La nota de voz se envía entera al servicio de voz (en memoria): sin límite propio admitiría
+    # los 2 GB de un vídeo. Si se conoce el tamaño, se rechaza antes de escribir nada en disco.
+    demasiado = (413, f"La nota de voz es demasiado grande (máximo {MAX_AUDIO // (1024 * 1024)} MB). "
+                      "Si es una grabación muy larga, divídela en partes.")
+    if tipo == "audio" and (getattr(subida, "size", None) or 0) > MAX_AUDIO:
+        raise HTTPException(*demasiado)
     ruta, nombre, tam = guardar_subida(subida, "capturas")
-    if tam == 0:
+    if tam == 0 or (tipo == "audio" and tam > MAX_AUDIO):
         shutil.rmtree(ruta_absoluta(ruta).parent, ignore_errors=True)
-        raise HTTPException(400, "El fichero está vacío.")
+        if tam == 0:
+            raise HTTPException(400, "El fichero está vacío.")
+        raise HTTPException(*demasiado)
     cap = Captura(
         tipo=tipo, autor_id=actor.id, tarea_id=tarea.id if tarea else None,
         # Sin título ni tarea, lo pondrá el borrador (título de la propuesta o de la ficha).
@@ -428,6 +451,7 @@ def crear_nota_voz(bd: Session, actor: Actor, subida: UploadFile, tarea_id: int 
 
 def reintentar(bd: Session, actor: Actor, captura_id: int) -> Captura:
     cap = obtener(bd, actor, captura_id)
+    _exigir_departamento(bd, actor, cap)  # el procesado crea el borrador en su departamento
     bd.refresh(cap, with_for_update=True)  # un doble clic no encola el procesado dos veces
     if cap.estado != "error":
         raise HTTPException(409, "Solo se puede reintentar una captura que ha fallado.")
@@ -448,6 +472,11 @@ def borrar(bd: Session, actor: Actor, captura_id: int) -> None:
     cap = obtener(bd, actor, captura_id)
     if cap.estado in ("subida", "procesando") and _trabajo_activo(bd, cap):
         raise HTTPException(409, "Espera a que termine de procesarse antes de borrarla.")
+    # Con la captura se borran sus borradores sin publicar, que son conocimiento del departamento de
+    # su tarea: hace falta poder gestionarlo (p. ej., la autora que se ha cambiado de departamento
+    # ya no borra el borrador que revisa su antiguo jefe).
+    otro_departamento = HTTPException(403, "El borrador de esta captura es de otro departamento. "
+                                           "Pide a su jefe que lo revise o lo borre.")
     imagenes: set[str] = set()
     if cap.instruccion_id:
         ins = bd.get(Instruccion, cap.instruccion_id)
@@ -455,14 +484,20 @@ def borrar(bd: Session, actor: Actor, captura_id: int) -> None:
             instrucciones.bloquear_tarea(bd, ins.tarea_id)  # que nadie lo esté publicando a la vez
             bd.refresh(ins)
             if ins.estado in instrucciones.EDITABLES:
+                if not instrucciones.puede_gestionar(actor, instrucciones.departamento_de(ins.tarea)):
+                    raise otro_departamento
                 imagenes = instrucciones.imagenes_propias(ins)  # las subidas a mano al revisar el borrador
                 bd.delete(ins)
     if cap.documento_id:
         doc = bd.get(Documento, cap.documento_id)
         if doc is not None and doc.estado == "borrador":
+            if not instrucciones.puede_gestionar(actor, doc.departamento_id):
+                raise otro_departamento
             bd.delete(doc)
     carpeta = Path(cap.ruta_original).parent.as_posix() if cap.ruta_original else None
     auditar(bd, actor, "borrar_captura", "captura", cap.id, {"tipo": cap.tipo, "titulo": cap.titulo})
+    registrar(bd, actor, "borro", "captura", cap.id, cap.titulo, resultado={"tipo": cap.tipo},
+              contexto={"tarea_id": cap.tarea_id})
     bd.delete(cap)
     bd.flush()
     en_uso = carpeta is not None and bd.scalar(
@@ -510,6 +545,11 @@ def _ajustar_tiempos(pasos: list[dict[str, Any]], dur: float | None) -> None:
 
 def normalizar_propuesta(datos: Any, dur: float | None, con_tiempos: bool = True) -> dict[str, Any] | None:
     """Valida y limpia la propuesta del modelo. Devuelve None si no sirve (y se usará el plan B)."""
+    # Una lista con un único objeto que es la instrucción entera ([{"titulo": ..., "pasos": [...]}]),
+    # no un paso: si no, saldría un único paso con el título de la tarea.
+    if (isinstance(datos, list) and len(datos) == 1 and isinstance(datos[0], dict)
+            and {"pasos", "steps"} & {str(k).strip().lower() for k in datos[0]}):
+        datos = datos[0]
     if isinstance(datos, list):
         datos = {"pasos": datos}
     # Los modelos pequeños a veces envuelven la respuesta ({"instruccion": {...}}), usan claves en
@@ -960,6 +1000,8 @@ def proponer_ficha(bd: Session, texto: str, origen: str, tarea: str | None, titu
     """Ficha {titulo, contenido, etiquetas, origen}. Si el modelo falla, la transcripción ordenada."""
     try:
         datos = llm.chat_json(prompts.mensajes_ficha(origen, tarea, texto), bd=bd)
+        if isinstance(datos, list) and len(datos) == 1 and isinstance(datos[0], dict):
+            datos = datos[0]  # la ficha dentro de una lista: [{"titulo", "contenido", "etiquetas"}]
         # Respuesta envuelta ({"ficha": {...}}) o con claves en inglés ({"title", "content", "tags"}).
         if isinstance(datos, dict) and len(datos) == 1:
             interior = next(iter(datos.values()))
@@ -1169,6 +1211,7 @@ def _entrevista_propia(bd: Session, actor: Actor, captura_id: int) -> Captura:
         raise HTTPException(403, "Solo quien hace la entrevista puede responderla.")
     if cap.estado != "en_curso":
         raise HTTPException(409, "La entrevista ya ha terminado.")
+    _exigir_departamento(bd, actor, cap)
     return cap
 
 
@@ -1184,7 +1227,8 @@ def responder_entrevista(bd: Session, actor: Actor, captura_id: int, texto: str 
             raise HTTPException(400, "La grabación está vacía.")
         try:
             texto = asr.transcribir(datos, nombre=nombre_seguro(audio.filename or "respuesta.webm"))["texto"]
-        except asr.ErrorVoz as e:
+        except Exception as e:  # noqa: BLE001  (servicio caído, respuesta rara...: nunca un error 500)
+            log.warning("No se ha podido transcribir una respuesta de la entrevista %s: %s", captura_id, e)
             raise HTTPException(503, "No se ha podido transcribir el audio. Escribe la respuesta o inténtalo de nuevo.") from e
         voz = True
         if not (texto or "").strip():
@@ -1196,6 +1240,8 @@ def responder_entrevista(bd: Session, actor: Actor, captura_id: int, texto: str 
     if cap.estado != "en_curso":
         raise HTTPException(409, "La entrevista ya ha terminado.")
     conversacion = list(cap.conversacion or [])
+    if len(conversacion) >= MAX_MENSAJES:  # después del guion se puede seguir añadiendo, pero no sin fin
+        raise HTTPException(409, "La entrevista ya es muy larga. Termínala para generar el borrador.")
     tema = _tema_actual(conversacion)
     if saltar and tema != "fin":
         conversacion.append(_mensaje("experto", "", tema, saltada=True))

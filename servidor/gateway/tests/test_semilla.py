@@ -25,6 +25,7 @@ from cidia.modelos import (
     Ejecucion,
     EjecucionPaso,
     Empresa,
+    Formacion,
     Instruccion,
     IntentoEval,
     Laguna,
@@ -127,6 +128,11 @@ def test_personas_del_plan(sembrada, bd):
     assert carmen.es_experto and carmen.departamento.nombre == "Producción"
     assert u("admin").rol == "admin"
     assert all(x.email.endswith("@arlanza.example") for x in bd.scalars(select(Usuario)).all())
+    # Marta se forma en Oficina técnica. En CidIA solo la administración asigna formaciones
+    # (Administración › Empleados): la semilla las deja igual, con su auditoría.
+    formacion = bd.scalar(select(Formacion).where(Formacion.usuario_id == marta.id))
+    assert (formacion.estado, formacion.departamento.nombre) == ("activa", "Oficina técnica")
+    assert {f.asignada_por_id for f in bd.scalars(select(Formacion)).all()} == {u("admin").id}
 
 
 def test_imagenes_de_los_pasos(sembrada, bd):
@@ -391,6 +397,32 @@ def test_siembra_a_medias(sembrada, bd):
     assert semilla.estado_base(bd) == "sembrada"
 
 
+def test_una_siembra_a_la_vez(sembrada, bd, capsys):
+    """Con otra siembra en marcha (su cerrojo cogido) no empieza otra, ni con --forzar: la del
+    arranque puede tardar minutos y una lanzada a mano vaciaría lo que está creando."""
+    from cidia.db import motor_bd
+
+    antes = _recuentos(bd)
+    bd.rollback()  # sin transacción abierta: no retiene tablas mientras prueba la orden manual
+    with motor_bd().connect() as otra:
+        assert otra.execute(select(func.pg_try_advisory_lock(semilla.CERROJO))).scalar() is True
+        otra.commit()
+        try:
+            r = semilla.sembrar(bd, forzar=True)
+            # La orden manual avisa y termina con error antes de tocar el esquema (inicializar_bd
+            # esperaría a que la otra siembra soltase la tabla de usuarios).
+            assert semilla.main(["--forzar"]) == 1
+        finally:
+            otra.execute(select(func.pg_advisory_unlock(semilla.CERROJO)))
+            otra.commit()
+    assert (r["sembrado"], r["estado"]) == (False, "ocupada") and "en marcha" in r["motivo"]
+    salida = capsys.readouterr().out
+    assert "otra siembra" in salida and "--forzar" not in salida  # aquí forzar no arregla nada
+    assert _recuentos(bd) == antes
+    with semilla._cerrojo(motor_bd()) as libre:  # al terminar la otra, el cerrojo queda libre
+        assert libre
+
+
 def test_lagunas_sin_vectores_del_modelo(sembrada, bd, monkeypatch):
     """Si el modelo de embeddings falla o devuelve un número de vectores que no cuadra, las lagunas
     se crean igual (sin vector) y la siembra sigue."""
@@ -422,14 +454,57 @@ def test_idempotente_y_forzar(sembrada, bd, monkeypatch):
     antes = _recuentos(bd)
     assert semilla.sembrar(bd) == {"sembrado": False, "estado": "sembrada", "motivo": "Ya existe el usuario «ana»."}
     assert _recuentos(bd) == antes
+    # Con un motor externo (WeKnora), vaciar retira antes sus documentos para no dejarlos huérfanos.
+    retirados: list[int] = []
+
+    class MotorExterno:
+        def borrar(self, _bd, doc):
+            retirados.append(doc.id)
+            doc.motor_id = None
+
+    costes = bd.scalar(select(Documento).where(Documento.titulo == "Costes y proveedores de utillaje"))
+    costes.motor_id, costes_id = "conocimiento-ot-0004", costes.id
+    bd.commit()
+    monkeypatch.setattr(semilla, "motor", lambda: MotorExterno())
     monkeypatch.setenv("CIDIA_DEMO_CONTRASENA", CONTRASENA)
     resumen = semilla.sembrar(bd, forzar=True)
     assert resumen["sembrado"] is True
+    assert retirados == [costes_id]
     despues = _recuentos(bd)
     assert {k: v for k, v in despues.items() if k != "SentenciaXapi"} == \
         {k: v for k, v in antes.items() if k != "SentenciaXapi"}
     # las pruebas anteriores también dejan trazas (inicios de sesión): se compara lo que escribe la semilla
     assert resumen["xapi"] == despues["SentenciaXapi"] == sembrada["xapi"]
+    # los ids no se reutilizan: lo que se conserva (trabajos, auditoría) no apunta a filas nuevas
+    nuevo = bd.scalar(select(Documento).where(Documento.titulo == "Costes y proveedores de utillaje"))
+    assert nuevo.id > costes_id and nuevo.motor_id is None
+
+
+def test_copiloto_respeta_permisos_con_los_datos_sembrados(sembrada, cliente, bd):
+    """Por la API, como la interfaz: el copiloto no cita lo que la persona no puede ver.
+
+    Va después de forzar: añade consultas y lagunas, que cambiarían los recuentos de esa prueba.
+    """
+    costes = "Costes y proveedores de utillaje"
+    pregunta = "¿Quién aprueba la compra de un utillaje de más de 3.000 €? proveedores homologados"
+
+    def citas(cabeceras: dict[str, str], texto: str = pregunta) -> set[str]:
+        r = cliente.post("/api/consulta/simple", json={"pregunta": texto}, headers=cabeceras)
+        assert r.status_code == 200, r.text
+        return {f["titulo"] for f in r.json()["fuentes"]}
+
+    luis, ana = _token(cliente, "luis"), _token(cliente, "ana")
+    assert costes not in citas(luis)  # nivel 1: ni lo cita ni sabe que existe
+    assert costes in citas(ana)  # nivel 3 de Oficina técnica
+    invitado = {"Authorization": f"Bearer {cliente.post('/api/auth/invitado').json()['token']}"}
+    assert citas(invitado) <= {"Bienvenida y PRL"}  # sin sesión, solo lo público
+    assert citas(invitado, "¿Dónde está el punto de reunión en caso de emergencia?") <= {"Bienvenida y PRL"}
+    # El historial de Luis tiene solo sus consultas (sembradas y nuevas), sin citas que él no vea.
+    u = bd.scalar(select(Usuario).where(Usuario.usuario == "luis"))
+    h = cliente.get("/api/consulta/historial", params={"por_pagina": 100}, headers=luis)
+    assert h.status_code == 200, h.text
+    assert h.json()["total"] == _contar(bd, Consulta, Consulta.usuario_id == u.id) > 2
+    assert all(costes not in {f["titulo"] for f in c["fuentes"]} for c in h.json()["elementos"])
 
 
 # --------------------------------------------------------------------------- con los modelos reales

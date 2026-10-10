@@ -9,32 +9,35 @@ import { mmss } from './tipos'
 const BARRAS = 32
 
 // En iPhone y iPad, abrir el micrófono por segunda vez (para el medidor) puede silenciar la pista
-// que está grabando useGrabadora. Allí se graba sin medidor.
+// que está grabando useGrabadora. Allí, si no llega el flujo de la propia grabación, no hay medidor.
 const MICRO_UNICO = typeof navigator !== 'undefined'
   && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
 
-/** Nivel del micrófono (0..1) mientras `activo`, con un historial corto para dibujar barras. */
-export function useNivelMicro(activo: boolean, barras = BARRAS) {
+/** Nivel del micrófono (0..1) mientras `activo`, con un historial corto para dibujar barras.
+ *  Con `grabacion` (el flujo que ya está grabando) se mide ese mismo, sin abrir el micrófono otra vez. */
+export function useNivelMicro(activo: boolean, barras = BARRAS, grabacion?: MediaStream | null) {
   const [niveles, setNiveles] = useState<number[]>(() => Array(barras).fill(0))
   useEffect(() => {
-    if (!activo || MICRO_UNICO) {
+    if (!activo || (MICRO_UNICO && !grabacion)) {
       setNiveles(Array(barras).fill(0))
       return
     }
     let vivo = true
-    let flujo: MediaStream | null = null
+    let propio: MediaStream | null = null // solo se cierra el flujo que se abre aquí
     let ctx: AudioContext | null = null
     let marco = 0
     let ultimo = 0
     const historial: number[] = Array(barras).fill(0)
-    navigator.mediaDevices?.getUserMedia({ audio: true })
-      .then((f) => {
+    const obtener = grabacion ? Promise.resolve(grabacion)
+      : navigator.mediaDevices?.getUserMedia({ audio: true }).then((f) => (propio = f))
+    obtener
+      ?.then((f) => {
         if (!vivo) {
-          f.getTracks().forEach((t) => t.stop())
+          propio?.getTracks().forEach((t) => t.stop())
           return
         }
-        flujo = f
         ctx = new AudioContext()
+        ctx.resume().catch(() => { /* Safari lo crea en pausa fuera del clic: el medidor queda quieto */ })
         const analizador = ctx.createAnalyser()
         analizador.fftSize = 1024
         ctx.createMediaStreamSource(f).connect(analizador)
@@ -63,10 +66,10 @@ export function useNivelMicro(activo: boolean, barras = BARRAS) {
     return () => {
       vivo = false
       cancelAnimationFrame(marco)
-      flujo?.getTracks().forEach((t) => t.stop())
+      propio?.getTracks().forEach((t) => t.stop())
       ctx?.close().catch(() => {})
     }
-  }, [activo, barras])
+  }, [activo, barras, grabacion])
   return niveles
 }
 
@@ -98,9 +101,10 @@ export default function GrabadorVoz({ onAudio, ocupado, compacto, maxSegundos = 
   maxSegundos?: number
   ayuda?: string
 }) {
-  const { grabando, error, empezar, parar } = useGrabadora()
+  const { grabando, error, empezar, parar, flujo } = useGrabadora()
   const segundos = useCronometro(grabando)
-  const niveles = useNivelMicro(grabando, compacto ? 14 : BARRAS)
+  // El flujo de la grabación ya está listo cuando `grabando` pasa a verdadero.
+  const niveles = useNivelMicro(grabando, compacto ? 14 : BARRAS, grabando ? flujo.current : null)
   const avisar = useAvisos()
   const sinMicro = typeof navigator === 'undefined' || !navigator.mediaDevices
   const duracion = useRef(0)

@@ -84,6 +84,8 @@ export function Lecciones({ lecciones, onVista, alTerminar }: {
     try {
       await onVista(x.id)
     } catch (e) {
+      // No se ha guardado: deja de verse como vista para que cuente al volver a abrirla.
+      setMarcadas((m) => { const n = new Set(m); n.delete(x.id); return n })
       avisarError(e)
     }
   }

@@ -58,6 +58,12 @@ async function arrancarGateway() {
       return
     }
     if (url.pathname === '/api/auth/yo') {
+      if (tokenDe(req) === 'usr-enorme-123') {
+        // Un servidor que responde sin fin: el Host no debe guardarlo todo en memoria.
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(`{"relleno":"${'x'.repeat(2 * 1024 * 1024)}"}`)
+        return
+      }
       const p = gw.tokens.get(tokenDe(req))
       if (!p) { json(res, 401, { detail: 'Sesión no válida.' }); return }
       json(res, 200, p)
@@ -80,7 +86,14 @@ async function arrancarGateway() {
         metodo: req.method, ruta: req.url, cuerpo: cuerpo.toString('utf8'),
         authorization: req.headers.authorization ?? null, cookie: req.headers.cookie ?? null,
         prefijo: req.headers['x-forwarded-prefix'] ?? null, origin: req.headers.origin ?? null,
+        pista: req.headers['x-pista'] ?? null,
       })
+      return
+    }
+    if (url.pathname === '/api/salto') {
+      // Cabecera de salto a salto declarada en Connection: no debe llegar al renderer.
+      res.writeHead(200, { 'content-type': 'text/plain', connection: 'keep-alive, x-salto-interno', 'x-salto-interno': '1' })
+      res.end('ok')
       return
     }
     if (url.pathname === '/api/sse') {
@@ -98,6 +111,11 @@ async function arrancarGateway() {
       res.end(Buffer.alloc(fin - ini + 1))
       return
     }
+    if (url.pathname === '/api/origen') {
+      // Cabeceras que tocarían el estado del origen de la app (su cookie con el Host, su almacén).
+      json(res, 200, { ok: true }, { 'set-cookie': 'dsh-host=robada; Path=/', 'clear-site-data': '"cookies", "storage"' })
+      return
+    }
     if (url.pathname === '/redir') { res.writeHead(307, { location: '/app/' }); res.end(); return }
     if (url.pathname === '/redir-abs') { res.writeHead(307, { location: `${gw.url}/api/eco?x=2` }); res.end(); return }
     if (url.pathname.startsWith('/app')) {
@@ -112,6 +130,13 @@ async function arrancarGateway() {
       res.write(': esperando\n\n')
       return // nunca termina: el proxy debe cortar cuando el renderer cancele
     }
+    if (url.pathname === '/api/corte') {
+      // El servidor se cae a mitad de la respuesta (reinicio, red): corta la conexión.
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      res.write('event: token\ndata: {"texto":"Ho"}\n\n')
+      setTimeout(() => req.socket.destroy(), 100)
+      return
+    }
     json(res, 404, { detail: 'No existe.' })
   })
   await new Promise(r => gw.servidor.listen(0, '127.0.0.1', r))
@@ -122,6 +147,7 @@ async function arrancarGateway() {
 const rutas = [] // { kind, path, handler, quitada }
 const credenciales = { valores: new Map(), escrituras: [] }
 const mcp = { montajes: [], actualizaciones: [] }
+const guardias = [] // tools.guard registrados por el plugin
 const efectos = []
 let hostApp = null
 let urlApp = ''
@@ -143,6 +169,12 @@ const ctx = {
   plugin(modulo, ajustes) {
     mcp.montajes.push({ modulo, ajustes })
     return { update(nuevos, noSave) { mcp.actualizaciones.push({ ajustes: nuevos, noSave }) } }
+  },
+  // Servicios opcionales (cordis ctx.inject): aquí solo 'tools', con guard como en la 0.2.0-rc.2.
+  inject(servicios, callback) {
+    if (!servicios.every(s => s === 'tools')) return () => {}
+    callback({ tools: { guard(fn) { guardias.push(fn); return () => { guardias.splice(guardias.indexOf(fn), 1) } } } })
+    return () => {}
   },
 }
 
@@ -215,6 +247,14 @@ test('registra la ruta /cidia por prefijo y rechaza peticiones sin la cookie de 
   assert.equal(p.status, 401)
 })
 
+test('deniega a todos los agentes la herramienta local load_workspace_dependencies', () => {
+  assert.equal(guardias.length, 1)
+  const [guardia] = guardias
+  assert.match(guardia({ name: 'load_workspace_dependencies', input: {} }), /no está disponible en CidIA/)
+  assert.equal(guardia({ name: 'mcp__cidia__buscar_conocimiento', input: {} }), undefined)
+  assert.equal(guardia({ name: 'ask_user', input: {} }), undefined)
+})
+
 test('al arrancar obtiene un token de invitado, fija la credencial y monta el MCP', async () => {
   const r = await pedir('/cidia/sesion')
   assert.equal(r.status, 200)
@@ -242,6 +282,28 @@ test('el proxy pone el token del Host, quita la cookie y añade x-forwarded-pref
   assert.equal(eco.cookie, null, 'la cookie de la app no sale del equipo')
   assert.equal(eco.origin, null)
   assert.equal(eco.prefijo, '/cidia/gw')
+  const origen = await pedir('/cidia/gw/api/origen')
+  assert.equal(origen.status, 200)
+  assert.equal(origen.headers.get('set-cookie'), null, 'el servidor no toca la cookie de la app')
+  assert.equal(origen.headers.get('clear-site-data'), null, 'ni borra el almacén del origen de la app')
+})
+
+test('el proxy no reenvía las cabeceras que Connection declara de salto a salto', async () => {
+  // fetch no deja fijar Connection: petición directa con node:http.
+  const eco = await new Promise((resolver, rechazar) => {
+    const p = http.request(urlApp + '/cidia/gw/api/eco', {
+      headers: { cookie: COOKIE, connection: 'keep-alive, x-pista', 'x-pista': 'solo-hasta-el-host' },
+    }, (r) => {
+      const trozos = []
+      r.on('data', t => trozos.push(t)).on('end', () => resolver(JSON.parse(Buffer.concat(trozos).toString('utf8'))))
+    })
+    p.on('error', rechazar)
+    p.end()
+  })
+  assert.equal(eco.pista, null, 'la cabecera de salto a salto no llega al servidor')
+  const r = await pedir('/cidia/gw/api/salto')
+  assert.equal(await r.text(), 'ok')
+  assert.equal(r.headers.get('x-salto-interno'), null, 'ni vuelve al renderer')
 })
 
 test('el proxy nunca sale del servidor CidIA aunque la ruta parezca una URL', async () => {
@@ -307,6 +369,21 @@ test('si el renderer cancela, se corta también la petición al gateway', async 
   await esperarA(() => gw.cerradas > antes)
 })
 
+test('si el servidor corta a mitad de respuesta, el renderer recibe el corte en lugar de esperar siempre', async () => {
+  const r = await pedir('/cidia/gw/api/corte')
+  assert.equal(r.status, 200)
+  const lector = r.body.getReader()
+  const { value } = await lector.read()
+  assert.match(Buffer.from(value).toString(), /event: token/)
+  const resto = (async () => { for (;;) { const t = await lector.read(); if (t.done) return 'terminada' } })()
+  let reloj
+  const espera = new Promise(res => { reloj = setTimeout(() => res('colgada'), 2000) })
+  const resultado = await Promise.race([resto.catch(() => 'cortada'), espera])
+  clearTimeout(reloj)
+  if (resultado === 'colgada') await lector.cancel().catch(() => undefined)
+  assert.equal(resultado, 'cortada', 'la respuesta incompleta no debe quedarse abierta ni parecer completa')
+})
+
 test('adopta la sesión de usuario de la interfaz: credencial y MCP con su token, sin devolverlo', async () => {
   const r = await pedir('/cidia/sesion', { method: 'POST', body: JSON.stringify({ token: 'usr-ana-12345' }) })
   assert.equal(r.status, 200)
@@ -330,6 +407,15 @@ test('un token caducado o inventado se rechaza con un mensaje claro', async () =
   assert.equal(mal.status, 400)
   const corto = await pedir('/cidia/sesion', { method: 'POST', body: JSON.stringify({ token: 'x' }) })
   assert.equal(corto.status, 400)
+  // JSON válido que no es un objeto: 400 con un mensaje claro, no un error interno.
+  for (const cuerpo of ['null', '[1]', '"usr-ana-12345"', '7']) {
+    const r2 = await pedir('/cidia/sesion', { method: 'POST', body: cuerpo })
+    assert.equal(r2.status, 400, cuerpo)
+    assert.match((await r2.json()).detail, /objeto JSON/)
+  }
+  // Una respuesta desmesurada del servidor se corta: no se adopta nada y no cae el Host.
+  const enorme = await pedir('/cidia/sesion', { method: 'POST', body: JSON.stringify({ token: 'usr-enorme-123' }) })
+  assert.equal(enorme.status, 502)
   // La sesión buena sigue intacta.
   const s = await (await pedir('/cidia/sesion')).json()
   assert.equal(s.modo, 'usuario')
@@ -377,6 +463,32 @@ test('diccionario en castellano, estado y rutas desconocidas', async () => {
   assert.equal(estado.token, undefined)
   assert.equal((await pedir('/cidia/otra')).status, 404)
   assert.equal((await pedir('/cidia/sesion', { method: 'PUT' })).status, 405)
+})
+
+test('cerrar sesión sin servidor: la identidad sale del modelo y del MCP y se revoca al volver', async () => {
+  const s = await (await pedir('/cidia/sesion', { method: 'POST', body: JSON.stringify({ token: 'usr-ana-12345' }) })).json()
+  assert.equal(s.modo, 'usuario')
+  await esperarA(() => mcp.actualizaciones.at(-1)?.ajustes.headers.Authorization === 'Bearer usr-ana-12345')
+  const puerto = gw.servidor.address().port
+  await new Promise(r => { gw.servidor.close(r); gw.servidor.closeAllConnections?.() })
+
+  const fuera = await (await pedir('/cidia/sesion', { method: 'DELETE' })).json()
+  assert.equal(fuera.modo, 'sin_conexion')
+  assert.equal(credenciales.valores.has('CIDIA_GATEWAY_TOKEN'), false, 'vuelve el token de arranque del .env')
+  assert.deepEqual(mcp.actualizaciones.at(-1).ajustes.headers, {}, 'el MCP ya no habla en nombre de la persona')
+  const otraVez = await pedir('/cidia/sesion', { method: 'POST', body: JSON.stringify({ token: 'usr-ana-12345' }) })
+  assert.equal(otraVez.status, 401, 'la sesión cerrada en el equipo no se puede volver a adoptar')
+  assert.equal(gw.revocados.filter(t => t === 'usr-ana-12345').length, 1, 'aún no se ha podido revocar')
+
+  // Vuelve el servidor: en el siguiente intento se revoca y se pasa a invitado.
+  await new Promise(r => gw.servidor.listen(puerto, '127.0.0.1', r))
+  const vuelta = await (await pedir('/cidia/sesion', { method: 'DELETE' })).json()
+  assert.equal(vuelta.modo, 'invitado')
+  assert.equal(gw.revocados.filter(t => t === 'usr-ana-12345').length, 2)
+  assert.equal(gw.tokens.has('usr-ana-12345'), false)
+  assert.equal(credenciales.valores.get('CIDIA_GATEWAY_TOKEN'), vuelta.token)
+  await esperarA(() => mcp.actualizaciones.at(-1)?.ajustes.headers.Authorization === `Bearer ${vuelta.token}`)
+  gw.tokens.set('usr-ana-12345', { invitado: false, id: 7, usuario: 'ana', nombre: 'Ana Martín', rol: 'empleado', servicios: ['chat'] })
 })
 
 test('con el servidor caído el proxy responde 502 con un mensaje en castellano', async () => {

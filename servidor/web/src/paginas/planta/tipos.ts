@@ -61,7 +61,8 @@ export interface RevisionFoto {
 }
 
 export interface Veredicto {
-  estado: 'comparada' | 'sin_vision' | 'sin_referencia' | 'error'
+  /** comparando: guardada y el modelo con visión la está comparando (llega después, en segundo plano). */
+  estado: 'comparando' | 'comparada' | 'sin_vision' | 'sin_referencia' | 'error'
   coincide: boolean | null
   observaciones: string
   confianza: number | null
@@ -95,6 +96,8 @@ export interface ConsultaHistorial {
   paso_id: number | null
   pregunta: string
   respuesta: string | null
+  /** true: hubo respuesta, pero se apoya en documentos que quien mira no puede abrir (no llega su texto). */
+  respuesta_oculta?: boolean
   fuentes: Fuente[]
   con_respaldo: boolean
   creada: string
@@ -124,6 +127,8 @@ export interface EjecucionDatos {
     epis: string | null
     herramientas: string | null
     video_url: string | null
+    /** Imagen del experto con la que se compara la foto del resultado (null si no hay o no se puede ver). */
+    referencia_url?: string | null
   }
   pasos: PasoEjecucion[]
   total_pasos: number

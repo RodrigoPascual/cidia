@@ -209,7 +209,8 @@ export default function Editor() {
     const autorEsOtro = ins.autor && ins.autor.id !== perfil?.id
     const ok = await confirmar(`Publicar la versión ${ins.version}`, (
       <>
-        <p>«{ed.titulo}» pasará a ser la instrucción vigente de <strong>{ins.tarea.nombre}</strong>
+        <p>«{ed.titulo}» pasará a ser la instrucción vigente de {ed.titulo.trim() === ins.tarea.nombre.trim()
+          ? 'esta tarea' : <strong>{ins.tarea.nombre}</strong>}
           {ins.vigente ? <> y la versión {ins.vigente.version} quedará obsoleta</> : null}. Al publicarla:</p>
         <ul className="ins-lista-confirmar">
           <li>Se indexará en el conocimiento de {ins.tarea.departamento ?? 'su departamento'}: el copiloto la usará y la citará.</li>

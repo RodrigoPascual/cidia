@@ -28,9 +28,10 @@ export default function Historial({ abierto, onCerrar, onElegir }: {
     return () => clearTimeout(t)
   }, [busqueda])
 
-  // Cada vez que se abre, se empieza por las más recientes.
+  // Cada vez que se abre, se empieza por las más recientes (si ya estaba en la primera página, la
+  // carga la dispara el propio cambio de «abierto»: así no se pide dos veces).
   useEffect(() => {
-    if (abierto) setPeticion((p) => ({ ...p, pagina: 1 }))
+    if (abierto) setPeticion((p) => (p.pagina === 1 ? p : { ...p, pagina: 1 }))
   }, [abierto])
 
   useEffect(() => {

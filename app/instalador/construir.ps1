@@ -283,6 +283,24 @@ if (-not (Test-Path $makensis)) {
 }
 if (-not (Test-Path $makensis)) { Fallo "no se encuentra $makensis" }
 
+# Espacio libre. makensis prepara los datos de la app (unos 920 MB sin comprimir) en un fichero
+# temporal de %TEMP% y después escribe el instalador (243 MB con LZMA; 361 MB con -Rapido). Sin
+# sitio falla al final con «Internal compiler error #12345: error creating mmap», tras 10 minutos.
+function LibreEn([string]$ruta) {
+  $unidad = (Split-Path -Qualifier ([IO.Path]::GetFullPath($ruta))).TrimEnd(':')
+  return (Get-PSDrive -Name $unidad -PSProvider FileSystem).Free
+}
+$necesario = @{}
+$necesario[(Split-Path -Qualifier ([IO.Path]::GetFullPath($env:TEMP)))] = 1100MB
+$unidadSalida = Split-Path -Qualifier ([IO.Path]::GetFullPath($Salida))
+$necesario[$unidadSalida] = $necesario[$unidadSalida] + $(if ($Rapido) { 500MB } else { 400MB })
+foreach ($u in @($necesario.Keys)) {
+  $libre = LibreEn "$u\"
+  if ($libre -lt $necesario[$u]) {
+    Fallo ("hace falta al menos {0:N1} GB libres en {1} para compilar el instalador (hay {2:N1} GB)" -f ($necesario[$u] / 1GB), $u, ($libre / 1GB))
+  }
+}
+
 $comunes = @('/V2', '/INPUTCHARSET', 'UTF8', "/DVERSION=$Version", "/DVERSION_WIN=$VersionWin",
   "/DSERVIDOR=$($conf.servidor)", "/DPLANTILLAS=$rutaNsh")
 Push-Location $Instalador
@@ -293,11 +311,22 @@ try {
 
   Paso 'Instalador (CidIA-Setup.exe)'
   $setup = Join-Path $Salida 'CidIA-Setup.exe'
+  $sumaSetup = Join-Path $Salida 'CidIA-Setup.exe.sha256'
+  # makensis escribe el instalador a medida que comprime: si la compilación se corta, quedaría
+  # un CidIA-Setup.exe truncado con la suma de la versión anterior. Se compila a un fichero
+  # aparte y solo se sustituye el anterior (y su suma) al terminar sin errores.
+  $parcial = Join-Path $Salida 'CidIA-Setup.exe.parcial'
+  if (Test-Path $parcial) { Remove-Item $parcial -Force }
   $extra = @()
   if ($Rapido) { $extra += '/XSetCompressor /FINAL zlib' }
   $inicio = Get-Date
-  & $makensis @extra @comunes "/DCARGA=$Carga" "/DSALIDA=$setup" 'CidIA.nsi'
-  if ($LASTEXITCODE -ne 0) { Fallo 'no se pudo compilar el instalador' }
+  & $makensis @extra @comunes "/DCARGA=$Carga" "/DSALIDA=$parcial" 'CidIA.nsi'
+  if ($LASTEXITCODE -ne 0) {
+    if (Test-Path $parcial) { Remove-Item $parcial -Force }
+    Fallo 'no se pudo compilar el instalador'
+  }
+  if (Test-Path $sumaSetup) { Remove-Item $sumaSetup -Force }
+  Move-Item -Force $parcial $setup
 } finally { Pop-Location }
 
 $info = Get-Item $setup
@@ -305,4 +334,4 @@ $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLower()
 Paso 'Listo'
 Write-Host ("{0} · {1:N1} MB · {2:N0} s" -f $info.FullName, ($info.Length / 1MB), ((Get-Date) - $inicio).TotalSeconds)
 Write-Host "SHA-256: $hash"
-Set-Content -Path (Join-Path $Salida 'CidIA-Setup.exe.sha256') -Value "$hash  CidIA-Setup.exe" -Encoding ASCII
+Set-Content -Path $sumaSetup -Value "$hash  CidIA-Setup.exe" -Encoding ASCII

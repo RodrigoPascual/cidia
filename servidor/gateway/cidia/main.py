@@ -80,7 +80,9 @@ def _montar_web(app: FastAPI) -> None:
             prefijo = ""
         html = (dir_web / "index.html").read_text(encoding="utf-8")
         html = html.replace("<head>", f'<head>\n    <base href="{prefijo}/app/" />', 1)
-        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+        # Solo la propia app (mismo origen: el proxy del plugin) puede mostrar la interfaz en un marco.
+        return HTMLResponse(html, headers={"Cache-Control": "no-cache", "Content-Security-Policy": "frame-ancestors 'self'",
+                                           "X-Content-Type-Options": "nosniff"})
 
 
 _MENSAJES_VALIDACION = {

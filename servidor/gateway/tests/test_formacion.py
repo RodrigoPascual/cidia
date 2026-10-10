@@ -247,7 +247,27 @@ def test_normalizar_pregunta_tolerante():
         "enunciado": "¿Hay que confirmar el paso crítico?", "opciones": ["Sí", "No", "Depende del turno"],
         "correcta": 0, "explicacion": "Depende del turno no es correcto: siempre hay que confirmarlo."})
     assert p and p["correcta"] == 0
+    # Opciones numeradas por el modelo («A) ...»): la interfaz ya pone la letra. La correcta puede
+    # llegar como «B) texto», «b)» o 1.0.
+    p = formacion._normalizar_pregunta({"enunciado": "¿Cómo?", "opciones": ["A) En cruz", "B) En círculo", "C) Da igual"],
+                                        "correcta": "B) En círculo"})
+    assert p and p["opciones"] == ["En cruz", "En círculo", "Da igual"] and p["correcta"] == 1
+    p = formacion._normalizar_pregunta({"enunciado": "¿Cómo?", "opciones": ["a. Uno", "b. Dos", "c. Tres"], "correcta": "c)"})
+    assert p and p["opciones"] == ["Uno", "Dos", "Tres"] and p["correcta"] == 2
+    p = formacion._normalizar_pregunta({"enunciado": "¿Cuál?", "opciones": ["1) Aflojar", "2) Apretar", "3) Marcar"],
+                                        "correcta": 1.0})
+    assert p and p["opciones"] == ["Aflojar", "Apretar", "Marcar"] and p["correcta"] == 1
+    # Lo que parece numeración pero es un dato, o no va en orden, no se toca.
+    p = formacion._normalizar_pregunta({"enunciado": "¿Rango?", "opciones": ["1 - 2 bar", "2 - 3 bar", "3 - 4 bar"],
+                                        "correcta": 0})
+    assert p and p["opciones"] == ["1 - 2 bar", "2 - 3 bar", "3 - 4 bar"]
+    p = formacion._normalizar_pregunta({"enunciado": "¿Cómo?", "opciones": ["A mano", "Con llave", "Con martillo"],
+                                        "correcta": "A mano"})
+    assert p and p["opciones"][0] == "A mano" and p["correcta"] == 0
+    p = formacion._normalizar_pregunta({"enunciado": "¿Cómo?", "opciones": ["B) Uno", "A) Dos", "C) Tres"], "correcta": 0})
+    assert p and p["opciones"] == ["B) Uno", "A) Dos", "C) Tres"]
     # Sin correcta válida o con opciones repetidas: se descarta.
+    assert formacion._normalizar_pregunta({"enunciado": "x", "opciones": ["a", "b", "c"], "correcta": 1.5}) is None
     assert formacion._normalizar_pregunta({"enunciado": "x", "opciones": ["a", "b", "c"], "correcta": 7}) is None
     assert formacion._normalizar_pregunta({"enunciado": "x", "opciones": ["a", "a", "b"], "correcta": 0}) is None
     assert formacion._normalizar_pregunta({"enunciado": "x", "opciones": "a, b, c", "correcta": 0}) is None
@@ -431,6 +451,36 @@ def test_itinerario_con_formacion_de_todo_su_departamento(cliente, bd, planta):
     bd.commit()
     item = itinerario()[otra.id]
     assert item["origen"] == "formacion" and item["formacion"]["departamento"] == "Producción"
+
+
+def test_pregunta_guardada_con_otra_forma_no_rompe_la_tarea(cliente, bd, planta):
+    """Una micro-lección escrita a mano o por otra versión con una pregunta rara no da un error 500:
+    la página de la tarea se carga (la lección queda sin pregunta) y responderla da un 400 claro."""
+    tarea, ins = crear_tarea_con_instruccion(bd, planta, "prod")
+    raras = [
+        {"enunciado": "¿Qué?", "opciones": "a, b, c", "correcta": 0},  # opciones como texto
+        ["no es un objeto"],
+        {"enunciado": "¿Qué?", "opciones": ["Uno", "Dos"], "correcta": "zeta"},  # correcta ilegible
+        {"enunciado": "¿Qué?", "opciones": ["Uno", "Dos"], "correcta": 5},  # fuera de rango
+        {"opciones": ["Uno", "Dos"], "correcta": 0},  # sin enunciado
+    ]
+    buena = {"enunciado": "¿Hay que confirmar el paso crítico?", "opciones": ["Sí", "No"], "correcta": "0",
+             "explicacion": "Siempre."}
+    for i, p in enumerate([*raras, buena], start=1):
+        bd.add(Microleccion(instruccion_id=ins.id, orden=i, titulo=f"Lección {i}", contenido="Contenido de la lección.",
+                            pregunta=p))
+    bd.commit()
+    h = cab(cliente, "pedro")
+    r = cliente.get(f"/api/formacion/tareas/{tarea.id}", headers=h)
+    assert r.status_code == 200, r.text
+    lecciones = r.json()["lecciones"]
+    assert [l["pregunta"] for l in lecciones[:-1]] == [None] * len(raras)
+    assert lecciones[-1]["pregunta"] == {"enunciado": buena["enunciado"], "opciones": ["Sí", "No"]}
+    for l in lecciones[:-1]:
+        r = cliente.post(f"/api/formacion/microlecciones/{l['id']}/responder", json={"opcion": 0}, headers=h)
+        assert r.status_code == 400 and "pregunta de control" in r.json()["detail"]
+    r = cliente.post(f"/api/formacion/microlecciones/{lecciones[-1]['id']}/responder", json={"opcion": 0}, headers=h)
+    assert r.status_code == 200 and r.json()["correcta"] is True and r.json()["explicacion"] == "Siempre."
 
 
 def test_microlecciones_de_un_borrador_no_existen(cliente, bd, planta, ia):

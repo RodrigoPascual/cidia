@@ -55,16 +55,34 @@ export default function Aportaciones() {
   }
 
   function alEnviar(ap: Aportacion) {
-    if (!mias.datos) mias.recargar()
     mias.setDatos((d) => d && {
       aportaciones: [ap, ...d.aportaciones],
       resumen: { ...d.resumen, [ap.estado]: (d.resumen[ap.estado] ?? 0) + 1 },
     })
-    if (laguna) preguntas.recargar()
+    // Una consulta de seguimiento que ya estuviera en marcha traería la lista de antes: se
+    // cancela y se pide de nuevo (recargar aborta la anterior).
+    mias.recargar()
+    if (laguna) {
+      // La tarjeta de la pregunta cambia al momento a «Tu respuesta está en revisión» (la recarga
+      // del servidor puede tardar unos segundos).
+      const id = laguna.id
+      preguntas.setDatos((d) => d && {
+        lagunas: d.lagunas.map((l) => (l.id === id
+          ? { ...l, mi_respuesta: { id: ap.id, estado: ap.estado }, respuestas_en_revision: l.respuestas_en_revision + 1 }
+          : l)),
+      })
+      preguntas.recargar()
+    }
     setLaguna(null)
   }
 
   function alRetirar(id: number) {
+    // Si respondía a una pregunta, esa pregunta vuelve a poder responderse al momento.
+    preguntas.setDatos((d) => d && {
+      lagunas: d.lagunas.map((l) => (l.mi_respuesta?.id === id
+        ? { ...l, mi_respuesta: null, respuestas_en_revision: Math.max(0, l.respuestas_en_revision - 1) }
+        : l)),
+    })
     mias.setDatos((d) => {
       const quitada = d?.aportaciones.find((a) => a.id === id)
       if (!d || !quitada) return d
@@ -73,6 +91,7 @@ export default function Aportaciones() {
         resumen: { ...d.resumen, [quitada.estado]: Math.max(0, d.resumen[quitada.estado] - 1) },
       }
     })
+    mias.recargar() // cancela una consulta de seguimiento en marcha, que aún la traería
     preguntas.recargar() // si respondía a una pregunta, vuelve a poder responderse
   }
 
@@ -303,8 +322,7 @@ function PreguntasPendientes({ cargando, error, reintentar, lista, seleccionada,
               <div key={p.id} className={`tarjeta apo-pregunta ${seleccionada === p.id ? 'seleccionada' : ''}`}>
                 <div className="apo-pregunta-texto">«{p.pregunta}»</div>
                 <div className="fila envolver diminuto apagado">
-                  <span>Preguntada {veces(p.frecuencia)}</span>
-                  {p.ultima_vez && <span>· última {hace(p.ultima_vez)}</span>}
+                  <span>Preguntada {veces(p.frecuencia)}{p.ultima_vez && <> · última {hace(p.ultima_vez)}</>}</span>
                   {p.tarea && <Etiqueta icono={<Wrench />}>{nombreTarea(p.tarea)}</Etiqueta>}
                 </div>
                 <div className="apo-pregunta-pie">

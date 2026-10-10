@@ -1,6 +1,6 @@
 // Panel lateral con la fuente de una cita: fragmento, documento, versión, paso, autor y validador.
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   BadgeCheck, ChevronLeft, ChevronRight, ExternalLink, FileText, GraduationCap, ListChecks, Quote, UserRound, Wrench, X,
@@ -20,6 +20,17 @@ export default function PanelFuente({ fuentes, n, citadas, onCambiar, onCerrar }
   const { puede } = useSesion()
   const indice = fuentes.findIndex((f) => f.n === n)
   const f = indice >= 0 ? fuentes[indice] : null
+  const caja = useRef<HTMLElement>(null)
+  const abierto = !!f
+
+  // Al abrirse, el foco pasa al panel (el teclado y los lectores de pantalla siguen la cita); al
+  // cerrarse vuelve a donde estaba (la cita o el chip de la fuente).
+  useEffect(() => {
+    if (!abierto) return
+    const anterior = document.activeElement as HTMLElement | null
+    caja.current?.focus({ preventScroll: true })
+    return () => { if (anterior && document.contains(anterior)) anterior.focus({ preventScroll: true }) }
+  }, [abierto])
 
   useEffect(() => {
     if (!f) return
@@ -49,7 +60,7 @@ export default function PanelFuente({ fuentes, n, citadas, onCambiar, onCerrar }
   return (
     <>
       <div className="panel-fuente-velo" onClick={onCerrar} />
-      <aside className="panel-fuente" role="dialog" aria-label={`Fuente ${f.n}`}>
+      <aside ref={caja} className="panel-fuente" role="dialog" aria-modal="true" aria-label={`Fuente ${f.n}`} tabIndex={-1}>
         <div className="panel-fuente-cabecera">
           <div className="fila">
             <span className="cita grande">{f.n}</span>
@@ -87,10 +98,20 @@ export default function PanelFuente({ fuentes, n, citadas, onCambiar, onCerrar }
               </Aviso>
             </div>
           ) : (
-            <div className="panel-fuente-fragmento">
-              <Quote className="comillas" />
-              <p className="pre">{f.fragmento}</p>
-            </div>
+            <>
+              {f.obsoleta && (
+                <div className="mt-2">
+                  <Aviso tono="amarillo" titulo="Versión sustituida">
+                    Esta respuesta se basó en una versión anterior de la instrucción. Antes de aplicarlo, comprueba la
+                    versión vigente.
+                  </Aviso>
+                </div>
+              )}
+              <div className="panel-fuente-fragmento">
+                <Quote className="comillas" />
+                <p className="pre">{f.fragmento}</p>
+              </div>
+            </>
           )}
 
           {(f.autor || f.validador) && (

@@ -162,7 +162,7 @@ export default function Entrevista() {
             {(cap.conversacion ?? []).map((m, i) => <Burbuja key={i} m={m} titulos={titulos} />)}
             {pendiente && <Burbuja m={pendiente} titulos={titulos} provisional />}
             {enviando && (
-              <div className="cap-msg copiloto">
+              <div className="cap-msg cap-msg-ia">
                 <LogoCidia tamano={30} />
                 <div className="cap-globo cap-pensando" aria-label="El copiloto está pensando"><span /><span /><span /></div>
               </div>
@@ -265,7 +265,7 @@ export default function Entrevista() {
 function Burbuja({ m, titulos, provisional }: { m: Mensaje; titulos: Record<string, string>; provisional?: boolean }) {
   if (m.rol === 'copiloto') {
     return (
-      <div className="cap-msg copiloto">
+      <div className="cap-msg cap-msg-ia">
         <LogoCidia tamano={30} />
         <div className="cap-globo">
           {titulos[m.tema] && <div className="cap-msg-tema">{titulos[m.tema]}</div>}

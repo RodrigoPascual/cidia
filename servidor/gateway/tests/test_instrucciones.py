@@ -169,6 +169,49 @@ def test_versiones_obsoletas_y_diferencias(cliente, bd, planta, ganchos):
     assert inv["de"]["version"] == 1 and inv["a"]["version"] == 2
 
 
+def test_no_se_sustituye_una_version_que_aun_se_indexa(cliente, bd, planta, ganchos):
+    """Si la vigente todavía se está indexando, su trabajo terminaría después de retirarla y la
+    devolvería al copiloto junto a la nueva: publicar la siguiente espera a que acabe."""
+    from cidia.modelos import Trabajo
+
+    h = cab(cliente, "carmen")
+    t = nueva_tarea(bd, planta, "prod")
+    v1 = cliente.post(f"/api/instrucciones/{crear(cliente, h, t)['id']}/publicar", headers=h).json()
+    v2 = cliente.post(f"/api/instrucciones/{v1['id']}/nueva-version", headers=h).json()
+    trabajo = Trabajo(tipo="indexar_documento", entidad="documento", entidad_id=v1["documento_id"], estado="en_curso")
+    bd.add(trabajo)
+    bd.commit()
+    r = cliente.post(f"/api/instrucciones/{v2['id']}/publicar", headers=h)
+    assert r.status_code == 409 and "versión 1" in r.json()["detail"]
+    bd.expire_all()
+    assert bd.get(Instruccion, v1["id"]).estado == "publicada" and bd.get(Instruccion, v2["id"]).estado == "borrador"
+    trabajo.estado = "completado"
+    bd.commit()
+    r = cliente.post(f"/api/instrucciones/{v2['id']}/publicar", headers=h)
+    assert r.status_code == 200 and r.json()["estado"] == "publicada"
+    bd.expire_all()
+    assert bd.get(Documento, v1["documento_id"]).estado == "obsoleto"
+
+
+def test_editor_trae_lo_que_se_dijo_en_el_video(cliente, bd, planta):
+    """El detalle de una instrucción capturada en vídeo trae los segmentos de la transcripción."""
+    from cidia.modelos import Captura
+
+    h = cab(cliente, "carmen")
+    t = nueva_tarea(bd, planta, "prod")
+    d = crear(cliente, h, t)
+    assert d["transcripcion"] is None
+    cap = Captura(tipo="video", autor_id=planta.personas["carmen"].id, tarea_id=t.id, estado="borrador_listo",
+                  transcripcion={"texto": "Paso 1. Limpio.", "segmentos": [
+                      {"inicio": 0.0, "fin": 3.0, "texto": " Paso 1. Limpio la brida. "}, {"inicio": 3.0, "fin": 4.0, "texto": ""}]})
+    bd.add(cap)
+    bd.flush()
+    bd.get(Instruccion, d["id"]).captura_id = cap.id
+    bd.commit()
+    det = cliente.get(f"/api/instrucciones/{d['id']}", headers=h).json()
+    assert det["transcripcion"] == [{"inicio": 0.0, "fin": 3.0, "texto": "Paso 1. Limpio la brida."}]
+
+
 def test_movido_en_diferencias(cliente, bd, planta, ganchos):
     h = cab(cliente, "carmen")
     t = nueva_tarea(bd, planta, "prod")
@@ -215,6 +258,40 @@ def test_imagen_de_un_paso(cliente, bd, planta):
     assert r.status_code == 200 and not primera.exists() and not primera.parent.exists()
 
 
+def test_quitar_un_paso_borra_su_imagen_subida(cliente, bd, planta, ganchos):
+    """Al quitar un paso con una imagen subida a mano, la imagen se borra si ya no la usa nadie;
+    si la usa otra versión (la publicada), se conserva."""
+    h = cab(cliente, "carmen")
+    d = crear(cliente, h, nueva_tarea(bd, planta, "prod"))
+    for p in d["pasos"][:2]:
+        r = cliente.post(f"/api/instrucciones/{d['id']}/pasos/{p['id']}/imagen", headers=h,
+                         files={"fichero": ("foto.png", PNG, "image/png")})
+        assert r.status_code == 200, r.text
+    bd.expire_all()
+    primera, segunda = (ajustes().dir_datos / bd.get(Paso, p["id"]).imagen_ruta for p in d["pasos"][:2])
+    pasos = cliente.get(f"/api/instrucciones/{d['id']}", headers=h).json()["pasos"]
+    assert cliente.put(f"/api/instrucciones/{d['id']}", headers=h, json={"pasos": pasos[1:]}).status_code == 200
+    assert not primera.exists() and segunda.exists()
+    # La segunda la comparte la versión 2: quitarla del borrador no la borra de la publicada.
+    assert cliente.post(f"/api/instrucciones/{d['id']}/publicar", headers=h).status_code == 200
+    v2 = cliente.post(f"/api/instrucciones/{d['id']}/nueva-version", headers=h).json()
+    assert cliente.put(f"/api/instrucciones/{v2['id']}", headers=h, json={"pasos": v2["pasos"][1:]}).status_code == 200
+    assert segunda.exists()
+
+
+def test_tarea_dada_de_baja_y_borrado_registrado(cliente, bd, planta):
+    h = cab(cliente, "carmen")
+    t = nueva_tarea(bd, planta, "prod")
+    t.activa = False
+    bd.commit()
+    r = cliente.post("/api/instrucciones", headers=h, json={"tarea_id": t.id, "titulo": "X"})
+    assert r.status_code == 400 and "dada de baja" in r.json()["detail"]
+    d = crear(cliente, h, nueva_tarea(bd, planta, "prod"))
+    assert cliente.delete(f"/api/instrucciones/{d['id']}", headers=h).status_code == 200
+    assert bd.scalar(select(SentenciaXapi).where(SentenciaXapi.verbo == "borro",
+                                                 SentenciaXapi.objeto_id == str(d["id"]))) is not None
+
+
 def test_imagen_demasiado_grande_no_llega_al_disco(cliente, bd, planta):
     h = cab(cliente, "carmen")
     d = crear(cliente, h, nueva_tarea(bd, planta, "prod"))
@@ -224,7 +301,7 @@ def test_imagen_demasiado_grande_no_llega_al_disco(cliente, bd, planta):
     grande = PNG + b"\0" * (instrucciones.MAX_IMAGEN + 1)
     r = cliente.post(f"/api/instrucciones/{d['id']}/pasos/{d['pasos'][0]['id']}/imagen", headers=h,
                      files={"fichero": ("foto.png", grande, "image/png")})
-    assert r.status_code == 413 and "15 MB" in r.json()["detail"]
+    assert r.status_code == 413 and "15 MB" in r.json()["detail"], r.text
     assert set(carpeta.iterdir()) == antes
 
 

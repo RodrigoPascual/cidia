@@ -311,8 +311,8 @@ def detalle_tarea(bd: Session, actor: Actor, tarea_id: int) -> dict[str, Any]:
             "contenido": m.contenido,
             "punto_clave": m.punto_clave,
             # La respuesta correcta no sale del servidor: se comprueba con /responder.
-            "pregunta": {"enunciado": m.pregunta.get("enunciado", ""), "opciones": m.pregunta.get("opciones", [])}
-            if m.pregunta else None,
+            "pregunta": {"enunciado": q["enunciado"], "opciones": q["opciones"]}
+            if (q := pregunta_guardada(m.pregunta)) else None,
             "vista": m.id in vistas,
         } for m in mls]
         t = _ultimo_trabajo(bd, ins.id)
@@ -354,6 +354,21 @@ def detalle_tarea(bd: Session, actor: Actor, tarea_id: int) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- uso de micro-lecciones
+
+
+def pregunta_guardada(p: Any) -> dict[str, Any] | None:
+    """Pregunta de control de una micro-lección leída con cuidado: {enunciado, opciones, correcta,
+    explicacion}, o None si no tiene una utilizable. Una fila escrita a mano, por la semilla o por
+    una versión anterior con otra forma no debe romper la página de la tarea (sería un error 500):
+    se trata como una micro-lección sin pregunta."""
+    if not isinstance(p, dict) or not isinstance(p.get("opciones"), list):
+        return None
+    opciones = [_texto(o.get("texto") if isinstance(o, dict) else o) for o in p["opciones"]]
+    enunciado = _texto(p.get("enunciado"))
+    correcta = _indice_correcta(p.get("correcta"), opciones)
+    if not enunciado or len(opciones) < 2 or not all(opciones) or correcta is None or not 0 <= correcta < len(opciones):
+        return None
+    return {"enunciado": enunciado, "opciones": opciones, "correcta": correcta, "explicacion": _texto(p.get("explicacion"))}
 
 
 def _microleccion_accesible(bd: Session, actor: Actor, microleccion_id: int) -> tuple[Microleccion, Instruccion]:
@@ -407,13 +422,13 @@ def responder(bd: Session, actor: Actor, microleccion_id: int, opcion: int) -> d
     que la persona vuelva a intentarlo. Los fallos se cuentan con las sentencias xAPI «respondio».
     """
     m, ins = _microleccion_accesible(bd, actor, microleccion_id)
-    p = m.pregunta
-    if not p:
+    p = pregunta_guardada(m.pregunta)
+    if p is None:
         raise HTTPException(400, "Esta micro-lección no tiene pregunta de control.")
-    opciones = p.get("opciones") or []
+    opciones = p["opciones"]
     if not 0 <= opcion < len(opciones):
         raise HTTPException(400, "Elige una de las opciones.")
-    correcta = int(p.get("correcta", 0))
+    correcta = p["correcta"]
     acierto = opcion == correcta
     fallos = 0 if acierto else 1 + (bd.scalar(
         select(func.count()).select_from(SentenciaXapi).where(
@@ -428,7 +443,7 @@ def responder(bd: Session, actor: Actor, microleccion_id: int, opcion: int) -> d
     return {
         "correcta": acierto,
         "opcion_correcta": correcta if revelar else None,
-        "explicacion": (p.get("explicacion") or "") if revelar else "",
+        "explicacion": p["explicacion"] if revelar else "",
         "revelada": revelar,
     }
 
@@ -523,6 +538,48 @@ def _corregir_por_explicacion(opciones: list[str], idx: int, explicacion: str) -
     return idx
 
 
+LETRAS = "ABCDEF"
+# «A) En cruz», «b. En círculo», «C: Da igual» o «1) Aflojar»: la interfaz ya pone su letra a cada
+# opción. Con números no vale el guion («1 - 2 bar» es un dato, no una numeración).
+_PREFIJO_OPCION = re.compile(r"^\s*(?:([A-Fa-f])\s*[).:\-]|([1-6])\s*[).:])\s+")
+
+
+def _sin_prefijos(opciones: list[str]) -> list[str]:
+    """Quita la numeración que ponen los modelos («A) ...»), solo si todas las opciones la llevan y en
+    orden (A, B, C... o 1, 2, 3...): así no se toca una opción que empieza por «A mano»."""
+    marcas = [_PREFIJO_OPCION.match(o) for o in opciones]
+    if not all(marcas):
+        return opciones
+    vistas = [(m.group(1) or m.group(2) or "").upper() for m in marcas if m]
+    if vistas not in (list(LETRAS[:len(opciones)]), [str(i) for i in range(1, len(opciones) + 1)]):
+        return opciones
+    limpias = [o[m.end():].strip() for o, m in zip(opciones, marcas) if m]
+    return limpias if all(limpias) else opciones
+
+
+def _indice_correcta(c: Any, opciones: list[str]) -> int | None:
+    """Posición de la opción correcta tal como la escriba el modelo: 1, 1.0, «1», «B», «b)», «B) En
+    círculo» o el propio texto de la opción."""
+    if isinstance(c, bool):
+        return None
+    if isinstance(c, float) and c.is_integer():
+        c = int(c)
+    if isinstance(c, int):
+        return c
+    if not isinstance(c, str):
+        return None
+    s = c.strip()
+    if s.isdigit():
+        return int(s)
+    if len(s) == 1 and s.upper() in LETRAS:
+        return LETRAS.index(s.upper())
+    exacta = next((i for i, o in enumerate(opciones) if _clave(o) == _clave(s)), None)
+    if exacta is not None:
+        return exacta
+    m = re.match(r"^\s*([A-Fa-f])\s*[).:\-](?:\s|$)", s)
+    return LETRAS.index(m.group(1).upper()) if m else None
+
+
 def _normalizar_pregunta(p: Any) -> dict[str, Any] | None:
     """Pregunta de control válida con exactamente 3 opciones distintas, o None."""
     if not isinstance(p, dict) or not isinstance(p.get("opciones"), list):
@@ -541,18 +598,8 @@ def _normalizar_pregunta(p: Any) -> dict[str, Any] | None:
             opciones.append(o)
     if not enunciado or len(opciones) < 3:
         return None
-    c = p.get("correcta")
-    idx: int | None = marcada
-    if idx is None and isinstance(c, int) and not isinstance(c, bool):
-        idx = c
-    elif idx is None and isinstance(c, str):
-        s = c.strip()
-        if s.isdigit():
-            idx = int(s)
-        elif len(s) == 1 and s.upper() in "ABCDEF":
-            idx = "ABCDEF".index(s.upper())
-        else:
-            idx = next((i for i, o in enumerate(opciones) if o.lower() == s.lower()), None)
+    opciones = _sin_prefijos(opciones)
+    idx = marcada if marcada is not None else _indice_correcta(p.get("correcta"), opciones)
     if idx is None or not 0 <= idx < len(opciones):
         return None
     explicacion = _texto(p.get("explicacion"))

@@ -88,7 +88,11 @@ export function PanelCopiloto({ numero, mensajes, soloLectura, onPreguntar }: {
         <div className="icono"><Bot /></div>
         <div className="crece">
           <div className="negrita">Copiloto</div>
-          <div className="pequeno apagado">Responde con la instrucción, en el contexto del paso {numero}</div>
+          <div className="pequeno apagado">
+            {soloLectura
+              ? `Preguntas que se hicieron en el paso ${numero}`
+              : `Responde con la instrucción, en el contexto del paso ${numero}`}
+          </div>
         </div>
         {mensajes.length > 0 && (
           <Etiqueta>{mensajes.length} {mensajes.length === 1 ? 'pregunta' : 'preguntas'}</Etiqueta>

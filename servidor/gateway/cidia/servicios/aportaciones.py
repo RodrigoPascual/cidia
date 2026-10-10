@@ -115,6 +115,45 @@ def _texto(v: Any) -> str:
     return str(v).strip()
 
 
+# Lo que Whisper «oye» en una nota sin voz (ruido de la nave, un pitido, pulsar sin hablar):
+# créditos de subtítulos, despedidas de vídeo, etiquetas de sonido o signos repetidos («¡¡¡¡…»).
+_ALUCINACION_VOZ = re.compile(
+    r"amara\.org|subt[ií]tulos? (?:realizados? )?por|gracias por (?:ver|mirar)|suscr[ií]bete|dale (?:a )?like",
+    re.I,
+)
+_ETIQUETA_SONIDO = re.compile(r"[\[(][^\])\n]{1,30}[\])]")  # «[Música]», «(risas)»
+
+
+def transcripcion_util(texto: str | None) -> str | None:
+    """La transcripción si dice algo, o None si es ruido: así la nota queda «sin transcribir» para
+    que el jefe la escuche, en vez de publicar como título y solución una ristra de signos.
+
+    Whisper suele añadir esas coletillas al final de una nota real (el silencio tras soltar el
+    botón): se quitan las frases que las contienen y se conserva lo que dijo la persona."""
+    t = (texto or "").strip()
+    if _ETIQUETA_SONIDO.search(t) or _ALUCINACION_VOZ.search(t):
+        frases = re.split(r"(?<=[.!?…])\s+", _ETIQUETA_SONIDO.sub(" ", t))
+        t = re.sub(r"[ \t]{2,}", " ", " ".join(f for f in frases if not _ALUCINACION_VOZ.search(f))).strip()
+    palabras = re.findall(r"[^\W\d_]{2,}", t)
+    if not palabras:
+        return None
+    visibles = re.sub(r"\s+", "", t)
+    if sum(ch.isalnum() for ch in visibles) < 0.6 * len(visibles):  # casi todo signos
+        return None
+    if len(palabras) >= 6 and len({p.lower() for p in palabras}) <= 2:  # «la la la la la la»
+        return None
+    return t
+
+
+_INICIO_LINEA = re.compile(r"^(\s*(?:[-*•]\s+)?)([a-záéíóúñü])", re.M)
+
+
+def inicial_mayuscula(texto: str) -> str:
+    """Cada línea (o viñeta) empieza en mayúscula: los modelos pequeños escriben a menudo
+    «el jefe de…» o «- firma el pedido», que en la ficha publicada queda descuidado."""
+    return _INICIO_LINEA.sub(lambda m: m.group(1) + m.group(2).upper(), texto or "")
+
+
 def primera_frase(texto: str, maximo: int = 100) -> str:
     """Primera frase de un texto, recortada, para usarla como título."""
     t = re.sub(r"\s+", " ", texto or "").strip()
@@ -260,9 +299,9 @@ def normalizar(datos: Any, texto: str, maximo_nivel: int = 4, referencia: str | 
                  if _clave(e) not in _GENERICAS and _apoyo(e, base) >= 0.5]
     return {
         "titulo": titulo[:1].upper() + titulo[1:],
-        "problema": problema,
-        "causa": causa,
-        "solucion": solucion or texto,
+        "problema": inicial_mayuscula(problema),
+        "causa": inicial_mayuscula(causa),
+        "solucion": inicial_mayuscula(solucion) or texto,  # el relato de respaldo, tal cual
         "etiquetas": etiquetas,
         "nivel_minimo": _nivel(c.get("nivel_minimo"), maximo_nivel),
         "ordenada_por_ia": True,
@@ -465,7 +504,7 @@ def procesar_trabajo(bd: Session, progreso: Any, aportacion_id: int) -> dict[str
         progreso(15, "Transcribiendo la nota de voz")
         try:
             r = asr.transcribir(ruta_absoluta(ap.audio_ruta))
-            transcripcion = (r.get("texto") or "").strip() or None
+            transcripcion = transcripcion_util(r.get("texto"))
             duracion = r.get("duracion")
         except Exception as e:  # noqa: BLE001  (el jefe podrá escuchar el audio igualmente)
             log.warning("No se pudo transcribir la aportación %s: %s", ap.id, e)
