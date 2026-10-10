@@ -66,7 +66,7 @@ def test_models_solo_permitidos(cliente, planta):
     d = r.json()
     ids = [m["id"] for m in d["data"]]
     assert d["object"] == "list" and ajustes().llm_modelo_chat in ids
-    assert "openai" not in ids and "deepseek" not in ids  # modelos en la nube bloqueados
+    assert "openai" not in ids and "anthropic" not in ids  # modelos en la nube bloqueados
     assert all(m["object"] == "model" for m in d["data"])
     assert any(m["default"] for m in d["data"])
     # También para invitados, pero no sin sesión.

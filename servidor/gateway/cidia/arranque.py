@@ -27,6 +27,10 @@ CONFIG_ILUO_POR_DEFECTO = {
     "meses_validez": 12,
 }
 
+# Ejemplos de modelos en la nube que salen bloqueados en el panel de Modelos.
+PROVEEDORES_NUBE = (("OpenAI", "openai"), ("Anthropic Claude", "anthropic"), ("Google Gemini", "google"),
+                    ("OpenRouter", "openrouter"))
+
 
 def valores_por_defecto() -> None:
     with sesion_bd() as bd:
@@ -45,10 +49,15 @@ def valores_por_defecto() -> None:
             if a.llm_modelo_vision and a.llm_modelo_vision != a.llm_modelo_chat:
                 bd.add(ModeloIA(nombre=a.llm_modelo_vision, ref=a.llm_modelo_vision, tipo="vision", permitido=True,
                                 predeterminado=True, soporta_vision=True, descripcion="Modelo con visión"))
-            for nombre, prov in (("OpenAI", "openai"), ("DeepSeek", "deepseek"), ("Google Gemini", "google"),
-                                 ("OpenRouter", "openrouter")):
+            for nombre, prov in PROVEEDORES_NUBE:
                 bd.add(ModeloIA(nombre=nombre, ref=prov, tipo="chat", ubicacion="nube", proveedor=prov,
                                 permitido=False, descripcion="Modelo en la nube: bloqueado por política de la empresa"))
+        # Instalaciones anteriores: la fila de ejemplo de DeepSeek pasa a Anthropic (sin marcas chinas en la interfaz).
+        for m in bd.scalars(select(ModeloIA).where(ModeloIA.ubicacion == "nube", ModeloIA.proveedor == "deepseek")):
+            if bd.scalar(select(ModeloIA.id).where(ModeloIA.ref == "anthropic", ModeloIA.tipo == m.tipo)):
+                bd.delete(m)
+            else:
+                m.nombre, m.ref, m.proveedor = "Anthropic Claude", "anthropic", "anthropic"
 
 
 def administrador_inicial() -> None:

@@ -409,10 +409,41 @@ def servidor_modelos(monkeypatch):
     return estado
 
 
+def test_fila_deepseek_de_instalaciones_anteriores(bd):
+    from cidia.arranque import valores_por_defecto
+    from cidia.modelos import ModeloIA
+
+    def nube():
+        bd.expire_all()
+        return bd.scalars(select(ModeloIA).where(ModeloIA.ubicacion == "nube")).all()
+
+    # Instalación anterior: tenía la fila de DeepSeek y no la de Anthropic, que se renombra.
+    for m in nube():
+        if m.proveedor == "anthropic":
+            bd.delete(m)
+    bd.add(ModeloIA(nombre="DeepSeek", ref="deepseek", tipo="chat", ubicacion="nube", proveedor="deepseek",
+                    permitido=False))
+    bd.commit()
+    valores_por_defecto()
+    filas = nube()
+    assert not any("deepseek" in (m.nombre + m.ref + (m.proveedor or "")).lower() for m in filas)
+    assert [m.nombre for m in filas if m.proveedor == "anthropic" and not m.permitido] == ["Anthropic Claude"]
+
+    # Si ya existen las dos, sobra la de DeepSeek.
+    bd.add(ModeloIA(nombre="DeepSeek", ref="deepseek", tipo="chat", ubicacion="nube", proveedor="deepseek",
+                    permitido=False))
+    bd.commit()
+    valores_por_defecto()
+    filas = nube()
+    assert not any(m.proveedor == "deepseek" for m in filas)
+    assert sum(m.proveedor == "anthropic" for m in filas) == 1
+
+
 def test_modelos_permitidos(cliente, bd, h_admin, servidor_modelos, monkeypatch):
     datos = cliente.get("/api/admin/modelos", headers=h_admin).json()
     nube = [m for m in datos["modelos"] if m["ubicacion"] == "nube"]
     assert nube and all(m["bloqueado"] and not m["permitido"] and m["uso"] == "Nadie" for m in nube)
+    assert not any("deepseek" in (m["nombre"] + m["ref"]).lower() for m in datos["modelos"])
     chat = next(m for m in datos["modelos"] if m["ref"] == "qwen3:0.6b" and m["tipo"] == "chat")
     assert chat["descargado"] is True and chat["predeterminado"] and chat["donde"] == "En el servidor de la empresa"
     assert "qwen3.5:9b" in datos["servidor"]["sin_registrar"]
