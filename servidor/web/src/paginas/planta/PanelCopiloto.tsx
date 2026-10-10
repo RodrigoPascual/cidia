@@ -15,8 +15,9 @@ export interface Mensaje {
   respuesta: Respuesta
 }
 
-export function PanelCopiloto({ numero, mensajes, soloLectura, onPreguntar }: {
+export function PanelCopiloto({ numero, mensajes, soloLectura, onPreguntar, tareaId }: {
   numero: number
+  tareaId?: number
   mensajes: Mensaje[]
   soloLectura: boolean
   onPreguntar: (texto: string) => void
@@ -45,7 +46,7 @@ export function PanelCopiloto({ numero, mensajes, soloLectura, onPreguntar }: {
     setTranscribiendo(true)
     let pregunta = ''
     try {
-      pregunta = await transcribir(audio)
+      pregunta = await transcribir(audio, tareaId)
     } catch (e) {
       avisarError(e)
       return

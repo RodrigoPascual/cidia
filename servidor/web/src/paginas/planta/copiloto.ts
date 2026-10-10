@@ -106,8 +106,10 @@ export function motivoSinMicrofono(): string | null {
 }
 
 /** Transcribe una nota de voz en el servidor. Devuelve el texto (vacío si no se ha entendido nada). */
-export async function transcribir(audio: Blob): Promise<string> {
+export async function transcribir(audio: Blob, tareaId?: number): Promise<string> {
   const fd = new FormData()
+  // Con la tarea, el servidor añade sus pasos al vocabulario de Whisper (mejora códigos y cifras).
+  if (tareaId) fd.append('tarea_id', String(tareaId))
   const ext = audio.type.includes('ogg') ? 'ogg' : audio.type.includes('mp4') ? 'm4a' : 'webm'
   fd.append('audio', audio, `pregunta.${ext}`)
   const r = await enviarFormulario<{ texto?: string; text?: string }>('/api/voz/transcribir', fd)

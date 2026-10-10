@@ -526,7 +526,7 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
           </article>
         </section>
         <aside className="ej-columna">
-          <PanelCopiloto numero={indice + 1} mensajes={delPaso} soloLectura={soloLectura} onPreguntar={preguntar} />
+          <PanelCopiloto numero={indice + 1} mensajes={delPaso} soloLectura={soloLectura} onPreguntar={preguntar} tareaId={ej.tarea.id} />
         </aside>
       </main>
     )

@@ -102,4 +102,4 @@ Otras opciones: `--frases N`, `--formato wav`, `--texto-prompt "..."`, `--guarda
 
 * El servicio de voz reintenta con temperaturas de reserva (0,0 a 1,0) y no arrastra el texto anterior entre segmentos (`condition_on_previous_text=False`), contra los bucles de repetición.
 * El gateway envía como prompt inicial el vocabulario de las tareas que la persona puede ver (códigos y nombres) y, si se indica `tarea_id`, los pasos de esa tarea (`rutas/voz.py`, función `vocabulario`).
-* Pendiente: que el modo planta envíe `tarea_id` al transcribir y medir de nuevo en el MSI con el modelo `small` y voces reales.
+* El modo planta envía `tarea_id` al transcribir cada pregunta. Pendiente: medir de nuevo en el MSI con el modelo `small` y voces reales.
