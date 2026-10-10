@@ -7,8 +7,9 @@
 ;      estén el .env y la capa home;
 ;   2. fija DSH_HOME, DSH_TELEMETRY_DISABLED=1 y la red (el servidor CidIA va sin proxy y lo
 ;      demás que salga por Node, como la política de actualización, va a un sumidero local);
-;   3. abre la app con --user-data-dir propio: la instancia única de Electron va por esa
-;      carpeta, así CidIA no choca con una DeepSeek Harness instalada en el mismo usuario;
+;   3. abre la app (app\CidIA.exe) con --user-data-dir propio: la instancia única de Electron va
+;      por esa carpeta, así CidIA no choca con una DeepSeek Harness instalada en el mismo usuario;
+;      y con el AppUserModelID de CidIA, el mismo de los accesos directos (barra de tareas);
 ;   4. si en el equipo hay otra app que usa el protocolo dsh://, se lo devuelve (la app base
 ;      lo registra a su nombre al arrancar).
 ; Los argumentos que reciba se pasan a la app (p. ej. --remote-debugging-port=9333).
@@ -40,6 +41,8 @@ SetCompressor /SOLID lzma
   !error "Falta /DPLANTILLAS=<plantillas.nsh> (lo genera construir.ps1)"
 !endif
 
+!include comun.nsh
+
 Name "CidIA"
 Caption "CidIA"
 OutFile "${SALIDA}"
@@ -49,10 +52,9 @@ VIProductVersion "${VERSION_WIN}"
 VIAddVersionKey /LANG=0 "ProductName" "CidIA"
 VIAddVersionKey /LANG=0 "ProductVersion" "${VERSION}"
 VIAddVersionKey /LANG=0 "FileVersion" "${VERSION}"
+VIAddVersionKey /LANG=0 "CompanyName" "${CIDIA_EMPRESA}"
 VIAddVersionKey /LANG=0 "FileDescription" "CidIA, copiloto de conocimiento industrial"
-VIAddVersionKey /LANG=0 "LegalCopyright" "CidIA. Incluye DeepSeek Harness (licencia MIT)."
-
-!include comun.nsh
+VIAddVersionKey /LANG=0 "LegalCopyright" "${CIDIA_COPYRIGHT}"
 
 Var Servidor
 Var RutaPlugin
@@ -197,6 +199,45 @@ Function PrepararRed
   Pop $1
 FunctionEnd
 
+; Abre la app con el AppUserModelID de CidIA. Con STARTF_TITLEISAPPID, lpTitle de STARTUPINFO es el
+; AppUserModelID explícito del proceso (lo mismo que hace el shell al abrir un acceso directo con
+; System.AppUserModel.ID). La barra de tareas asocia entonces la ventana al acceso directo de CidIA,
+; que lleva ese ID: icono y nombre de CidIA, «Anclar» ancla el acceso directo (que abre este
+; lanzador, no la app sin su entorno) y no se agrupa con DeepSeek Harness (com.deepseek.dsh).
+; Si CreateProcessW falla, Exec normal.
+;   $R0 = línea de órdenes
+!define STARTF_TITLEISAPPID 0x1000
+Function AbrirApp
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  System::Call '*(&w130 "${CIDIA_AUMID}") p .r3'
+  ; STARTUPINFOW de 32 bits (68 bytes): cb, lpReserved, lpDesktop, lpTitle, dwX, dwY, dwXSize,
+  ; dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags, wShowWindow, cbReserved2,
+  ; lpReserved2, hStdInput, hStdOutput, hStdError.
+  System::Call '*(i 68, p 0, p 0, p r3, i 0, i 0, i 0, i 0, i 0, i 0, i 0, i ${STARTF_TITLEISAPPID}, &i2 0, &i2 0, p 0, p 0, p 0, p 0) p .r1'
+  ; PROCESS_INFORMATION: hProcess, hThread, dwProcessId, dwThreadId
+  System::Call '*(p 0, p 0, i 0, i 0) p .r2'
+  System::Call 'kernel32::CreateProcessW(p 0, w R0, p 0, p 0, i 0, i 0, p 0, w "$EXEDIR\app", p r1, p r2) i .r0'
+  ${If} $0 <> 0
+    System::Call '*$2(p .r0, p .r4)'
+    System::Call 'kernel32::CloseHandle(p r0)'
+    System::Call 'kernel32::CloseHandle(p r4)'
+  ${Else}
+    Exec '$R0'
+  ${EndIf}
+  System::Free $1
+  System::Free $2
+  System::Free $3
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
+
 Section
   StrCpy $App "$EXEDIR\app\${CIDIA_EXE_APP}"
   ${IfNot} ${FileExists} "$App"
@@ -223,7 +264,8 @@ Section
 
   ReadRegStr $Anterior HKCU "${CIDIA_CLAVE_PROTOCOLO}" ""
   ${GetParameters} $R0
-  Exec '"$App" --user-data-dir="${CIDIA_NAVEGADOR}" $R0'
+  StrCpy $R0 '"$App" --user-data-dir="${CIDIA_NAVEGADOR}" $R0'
+  Call AbrirApp
 
   ; Si el protocolo dsh:// era de otra app (DeepSeek Harness), se le devuelve en cuanto la app
   ; base lo registre a su nombre (lo hace al arrancar). Se vigila hasta 90 segundos.

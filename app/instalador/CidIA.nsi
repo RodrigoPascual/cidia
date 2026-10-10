@@ -2,7 +2,8 @@
 ;
 ; Instalación por usuario, sin permisos de administrador, en $LOCALAPPDATA\Programs\CidIA:
 ;   app\             app base (DeepSeek Harness 0.2.0-rc.2, extraída del instalador oficial,
-;                    sin app-update.yml para que no se actualice sola)
+;                    sin app-update.yml para que no se actualice sola; su ejecutable es
+;                    app\CidIA.exe, con el icono y los datos de versión de CidIA)
 ;   plugins\cidia\   plugin CidIA (interfaz, sesión, marca e idioma)
 ;   plantillas\      perfil y capa home de referencia (el lanzador los usa para repararse)
 ;   CidIA.exe        lanzador (fija DSH_HOME y abre la app con su propio perfil)
@@ -58,8 +59,9 @@ VIProductVersion "${VERSION_WIN}"
 VIAddVersionKey /LANG=0 "ProductName" "CidIA"
 VIAddVersionKey /LANG=0 "ProductVersion" "${VERSION}"
 VIAddVersionKey /LANG=0 "FileVersion" "${VERSION}"
+VIAddVersionKey /LANG=0 "CompanyName" "${CIDIA_EMPRESA}"
 VIAddVersionKey /LANG=0 "FileDescription" "Instalador de CidIA, copiloto de conocimiento industrial"
-VIAddVersionKey /LANG=0 "LegalCopyright" "CidIA. Incluye DeepSeek Harness (licencia MIT)."
+VIAddVersionKey /LANG=0 "LegalCopyright" "${CIDIA_COPYRIGHT}"
 
 Var Servidor
 Var RutaPlugin
@@ -118,6 +120,7 @@ UninstPage custom un.PaginaDatos un.PaginaDatosSalir
 !insertmacro CIDIA_DEFINIR_PROTOCOLO "un."
 !insertmacro CIDIA_DEFINIR_EN_USO ""
 !insertmacro CIDIA_DEFINIR_EN_USO "un."
+!insertmacro CIDIA_DEFINIR_AUMID ""
 !include "${PLANTILLAS}"
 
 ; --------------------------------------------------------------------------------- inicio
@@ -345,10 +348,15 @@ Section "CidIA" SeccionCidia
     Quit
   ${EndIf}
 
-  ; CidIA no puede estar abierta mientras se sustituyen sus ficheros.
+  ; CidIA no puede estar abierta mientras se sustituyen sus ficheros (también con el nombre que
+  ; tenía el ejecutable de la app en las instalaciones anteriores).
   ${Do}
     StrCpy $R0 "$INSTDIR\app\${CIDIA_EXE_APP}"
     Call AppEnUso
+    ${If} $R1 == "0"
+      StrCpy $R0 "$INSTDIR\app\${CIDIA_EXE_APP_ANTERIOR}"
+      Call AppEnUso
+    ${EndIf}
     ${If} $R1 == "0"
       ${ExitDo}
     ${EndIf}
@@ -365,7 +373,7 @@ Section "CidIA" SeccionCidia
   DetailPrint "Instalando la app base…"
   RMDir /r "$INSTDIR\app"
   SetOutPath "$INSTDIR\app"
-  File /r /x .cidia-origen "${CARGA}\app\*.*"
+  File /r /x .cidia-origen /x .cidia-marca "${CARGA}\app\*.*"
 
   DetailPrint "Instalando el plugin CidIA…"
   RMDir /r "$INSTDIR\plugins\cidia"
@@ -403,10 +411,23 @@ Section "CidIA" SeccionCidia
     ${EndIf}
   ${EndIf}
 
-  ; Accesos directos (solo para este usuario).
+  ; Accesos directos (solo para este usuario), con el AppUserModelID con el que el lanzador abre la
+  ; app: la barra de tareas muestra la ventana con el acceso directo del menú Inicio (icono y
+  ; nombre de CidIA) y, al anclarla, ancla el acceso directo, que abre el lanzador.
   SetShellVarContext current
   CreateShortcut "$SMPROGRAMS\CidIA.lnk" "$INSTDIR\CidIA.exe" "" "$INSTDIR\cidia.ico" 0 SW_SHOWNORMAL "" "CidIA, copiloto de conocimiento industrial"
   CreateShortcut "$DESKTOP\CidIA.lnk" "$INSTDIR\CidIA.exe" "" "$INSTDIR\cidia.ico" 0 SW_SHOWNORMAL "" "CidIA, copiloto de conocimiento industrial"
+  StrCpy $R1 "${CIDIA_AUMID}"
+  StrCpy $R0 "$SMPROGRAMS\CidIA.lnk"
+  Call FijarAumid
+  ${If} $R2 != "1"
+    DetailPrint "No se pudo poner el AppUserModelID en $R0."
+  ${EndIf}
+  StrCpy $R0 "$DESKTOP\CidIA.lnk"
+  Call FijarAumid
+  ${If} $R2 != "1"
+    DetailPrint "No se pudo poner el AppUserModelID en $R0."
+  ${EndIf}
 
   ; Registro: configuración y entrada en Aplicaciones instaladas.
   WriteRegStr HKCU "${CIDIA_CLAVE}" "Instalacion" "$INSTDIR"
@@ -472,6 +493,10 @@ Section "Uninstall"
     StrCpy $R0 "$INSTDIR\app\${CIDIA_EXE_APP}"
     Call un.AppEnUso
     ${If} $R1 == "0"
+      StrCpy $R0 "$INSTDIR\app\${CIDIA_EXE_APP_ANTERIOR}"
+      Call un.AppEnUso
+    ${EndIf}
+    ${If} $R1 == "0"
       ${ExitDo}
     ${EndIf}
     ${If} ${Silent}
@@ -485,8 +510,8 @@ Section "Uninstall"
 
   ; El protocolo dsh:// vuelve a DeepSeek Harness si está instalada; si no, se quita.
   StrCpy $R1 "$INSTDIR\app"
-  ${If} ${FileExists} "$LOCALAPPDATA\Programs\DeepSeek Harness\${CIDIA_EXE_APP}"
-    StrCpy $R0 '"$LOCALAPPDATA\Programs\DeepSeek Harness\${CIDIA_EXE_APP}" "%1"'
+  ${If} ${FileExists} "$LOCALAPPDATA\Programs\DeepSeek Harness\${CIDIA_EXE_DSH}"
+    StrCpy $R0 '"$LOCALAPPDATA\Programs\DeepSeek Harness\${CIDIA_EXE_DSH}" "%1"'
     StrCpy $R2 ""
   ${Else}
     StrCpy $R0 ""
@@ -497,6 +522,8 @@ Section "Uninstall"
   SetShellVarContext current
   Delete "$SMPROGRAMS\CidIA.lnk"
   Delete "$DESKTOP\CidIA.lnk"
+  ; Si se ancló a la barra de tareas, Windows guarda allí una copia del acceso directo.
+  Delete "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\CidIA.lnk"
 
   ; Primero el enlace del perfil (nunca se borra a través de él), luego la instalación.
   StrCpy $R0 "${CIDIA_ENLACE_PLUGIN}"

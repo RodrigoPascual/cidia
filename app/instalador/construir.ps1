@@ -9,6 +9,10 @@
      firma Authenticode.
   2. Extrae su carga útil (app-64.7z) con 7-Zip SIN ejecutar el instalador oficial y quita
      resources\app-update.yml, para que la app no se actualice sola.
+  2b. Pone la marca de CidIA a esa copia de la app (marca-app.ps1): con rcedit 2.0.0 (herramienta
+     oficial de Electron, sha256 fijado, en la carpeta de herramientas, sin instalarla) el icono y
+     los datos de versión del ejecutable, que pasa a llamarse app\CidIA.exe; y los iconos de la
+     bandeja y del panel «Acerca de» en resources. No toca el app.asar.
   3. Prepara la carpeta de carga: plugin CidIA, plantillas del perfil, marca y textos.
   4. Genera plantillas.nsh: el instalador y el lanzador escriben la configuración en UTF-8 a
      partir de las plantillas de app\perfil (NSIS no escribe UTF-8 por sí mismo).
@@ -63,6 +67,12 @@ $DshFirmante = 'Hangzhou DeepSeek Artificial Intelligence Co., Ltd.'
 $NsisVersion = '3.11'
 $NsisUrl = 'https://sourceforge.net/projects/nsis/files/NSIS%203/3.11/nsis-3.11.zip/download'
 $NsisSha256 = 'c7d27f780ddb6cffb4730138cd1591e841f4b7edb155856901cdf5f214394fa1'
+# rcedit (MIT, github.com/electron/rcedit). El release no publica sumas: este sha256 es el del
+# rcedit-x64.exe del release v2.0.0 y coincide con el bin\rcedit-x64.exe del paquete npm oficial
+# rcedit 5.0.2 de Electron (comprobado el 10/10/2026).
+$RceditVersion = '2.0.0'
+$RceditUrl = "https://github.com/electron/rcedit/releases/download/v$RceditVersion/rcedit-x64.exe"
+$RceditSha256 = '3e7801db1a5edbec91b49a24a094aad776cb4515488ea5a4ca2289c400eade2a'
 
 # ------------------------------------------------------------------ rutas
 $Instalador = $PSScriptRoot
@@ -97,6 +107,16 @@ function Sha512Base64([string]$fichero) {
   $bytes = New-Object byte[] ($hex.Length / 2)
   for ($i = 0; $i -lt $bytes.Length; $i++) { $bytes[$i] = [Convert]::ToByte($hex.Substring($i * 2, 2), 16) }
   return [Convert]::ToBase64String($bytes)
+}
+
+function Sha256([string]$fichero) { return (Get-FileHash -Algorithm SHA256 -Path $fichero).Hash.ToLower() }
+
+# Valor de un !define "..." de comun.nsh (una sola fuente para NSIS y para este script).
+function DefinicionNsis([string]$nombre) {
+  $texto = [IO.File]::ReadAllText((Join-Path $Instalador 'comun.nsh'), $Utf8)
+  $m = [regex]::Match($texto, '(?m)^!define\s+' + [regex]::Escape($nombre) + '\s+"([^"]*)"\s*$')
+  if (-not $m.Success) { Fallo "no se encuentra !define $nombre en comun.nsh" }
+  return $m.Groups[1].Value
 }
 
 function ComprobarFirma([string]$fichero) {
@@ -176,7 +196,30 @@ Paso 'App base (app-64.7z)'
 $marca = Join-Path $Carga 'app\.cidia-origen'
 $origen = "$DshVersion $DshSha512"
 $appCarga = Join-Path $Carga 'app'
-if ((Test-Path $marca) -and ((Get-Content -Raw $marca).Trim() -eq $origen)) {
+# Marca de CidIA en la app (paso 2b): app\.cidia-marca guarda la huella de lo que se aplicó y la
+# sha256 del ejecutable resultante. Si la carga en caché ya tiene la marca pero con otra huella
+# (otro icono, otra versión...), no queda el ejecutable original: se vuelve a extraer.
+$ExeApp = DefinicionNsis 'CIDIA_EXE_APP'
+$ExeOriginal = DefinicionNsis 'CIDIA_EXE_APP_ANTERIOR'
+$Empresa = DefinicionNsis 'CIDIA_EMPRESA'
+$Copyright = DefinicionNsis 'CIDIA_COPYRIGHT'
+$exeOriginalCarga = Join-Path $appCarga $ExeOriginal
+$exeCarga = Join-Path $appCarga $ExeApp
+$marcaApp = Join-Path $appCarga '.cidia-marca'
+$huellaMarca = @("rcedit $RceditVersion", $ExeApp, $Version, $Empresa, $Copyright,
+  (Sha256 (Join-Path $AppRepo 'marca\cidia.ico')), (Sha256 (Join-Path $AppRepo 'marca\png\cidia-512.png')),
+  (Sha256 (Join-Path $Instalador 'marca-app.ps1'))) -join ' | '
+function MarcaVigente {
+  if (-not (Test-Path $marcaApp) -or -not (Test-Path $exeCarga)) { return $false }
+  $l = @([IO.File]::ReadAllLines($marcaApp, $Utf8))
+  return ($l.Count -ge 2 -and $l[0] -eq $huellaMarca -and $l[1] -eq (Sha256 $exeCarga))
+}
+$extraida = (Test-Path $marca) -and ((Get-Content -Raw $marca).Trim() -eq $origen)
+if ($extraida -and -not (Test-Path $exeOriginalCarga) -and -not (MarcaVigente)) {
+  Write-Host 'La marca de CidIA de la carga en caché no coincide con la actual: se vuelve a extraer la app.'
+  $extraida = $false
+}
+if ($extraida) {
   Write-Host 'Carga útil ya extraída (caché).'
 } else {
   $paquete7z = Join-Path $Extraccion 'app-64.7z'
@@ -192,9 +235,40 @@ if ((Test-Path $marca) -and ((Get-Content -Raw $marca).Trim() -eq $origen)) {
 }
 $actualizador = Join-Path $appCarga 'resources\app-update.yml'
 if (Test-Path $actualizador) { Remove-Item $actualizador -Force }
-ComprobarFirma (Join-Path $appCarga 'DeepSeek Harness.exe')
 if (Test-Path $actualizador) { Fallo 'app-update.yml sigue en la carga' }
 Write-Host 'Sin app-update.yml: la app no buscará actualizaciones.'
+
+# ------------------------------------------------------------------ 2b. marca de CidIA en la app
+Paso "Marca de CidIA en la app (rcedit $RceditVersion)"
+if (Test-Path $exeOriginalCarga) {
+  # Firma de DeepSeek del ejecutable tal como viene, antes de cambiarlo (después ya no vale).
+  ComprobarFirma $exeOriginalCarga
+  $rceditDir = Join-Path $Herramientas "rcedit-$RceditVersion"
+  $rcedit = Join-Path $rceditDir 'rcedit-x64.exe'
+  if (-not (Test-Path $rcedit) -or (Sha256 $rcedit) -ne $RceditSha256) {
+    New-Item -ItemType Directory -Force -Path $rceditDir | Out-Null
+    if (Test-Path $rcedit) { Remove-Item $rcedit -Force }
+    $descarga = Join-Path $Herramientas 'descarga-rcedit'
+    New-Item -ItemType Directory -Force -Path $descarga | Out-Null
+    $bajado = Join-Path $descarga "rcedit-x64-$RceditVersion.exe"
+    if (-not (Test-Path $bajado) -or (Sha256 $bajado) -ne $RceditSha256) { Descargar $RceditUrl $bajado }
+    if ((Sha256 $bajado) -ne $RceditSha256) {
+      Remove-Item $bajado -Force
+      Fallo 'el sha256 de rcedit-x64.exe no coincide con el fijado'
+    }
+    Copy-Item $bajado $rcedit
+  }
+  if (Test-Path $marcaApp) { Remove-Item $marcaApp -Force }
+  if (Test-Path $exeCarga) { Remove-Item $exeCarga -Force }
+  & (Join-Path $Instalador 'marca-app.ps1') -App $appCarga -Rcedit $rcedit -Marca (Join-Path $AppRepo 'marca') `
+    -Version $Version -VersionWin $VersionWin -Empresa $Empresa -Copyright $Copyright -Exe $ExeApp -ExeOriginal $ExeOriginal
+  [IO.File]::WriteAllLines($marcaApp, [string[]]@($huellaMarca, (Sha256 $exeCarga)), $Utf8)
+} elseif (MarcaVigente) {
+  Write-Host "Marca ya aplicada (caché): $ExeApp sin cambios desde que se marcó."
+} else {
+  Fallo "la carga no tiene ni $ExeOriginal ni un $ExeApp marcado por esta construcción"
+}
+if (-not (MarcaVigente)) { Fallo 'la marca de CidIA de la app no se ha guardado bien' }
 
 # ------------------------------------------------------------------ 3. plugin, perfil, marca y textos
 Paso 'Carga de CidIA'

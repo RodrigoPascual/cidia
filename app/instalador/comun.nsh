@@ -10,10 +10,29 @@
 !include WordFunc.nsh
 !include TextFunc.nsh
 
+; Las estructuras de Windows que se montan con System::Call (STARTUPINFOW, PROPVARIANT) están
+; escritas para 32 bits: el makensis portable de construir.ps1 genera ejecutables x86.
+!if ${NSIS_PTR_SIZE} > 4
+  !error "comun.nsh: compila con el makensis x86 (las estructuras de System::Call son de 32 bits)"
+!endif
+
 !define CIDIA_CLAVE "Software\CidIA"
 !define CIDIA_CLAVE_DESINSTALAR "Software\Microsoft\Windows\CurrentVersion\Uninstall\CidIA"
 !define CIDIA_CLAVE_PROTOCOLO "Software\Classes\dsh\shell\open\command"
-!define CIDIA_EXE_APP "DeepSeek Harness.exe"
+; Ejecutable de la app base en app\: construir.ps1 lo renombra y le pone el icono y los datos de
+; versión de CidIA (rcedit). Las instalaciones anteriores lo tenían con su nombre original.
+!define CIDIA_EXE_APP "CidIA.exe"
+!define CIDIA_EXE_APP_ANTERIOR "DeepSeek Harness.exe"
+; Ejecutable de la DeepSeek Harness del usuario (si la tiene), para devolverle el protocolo dsh://.
+!define CIDIA_EXE_DSH "DeepSeek Harness.exe"
+; AppUserModelID de CidIA: el lanzador abre la app con él y los accesos directos lo llevan, así la
+; barra de tareas muestra la ventana con el acceso directo de CidIA (icono, nombre, anclar) y no
+; la agrupa con DeepSeek Harness (com.deepseek.dsh).
+!define CIDIA_AUMID "CidIA.Escritorio"
+; Datos de versión de los ejecutables de CidIA (lanzador, instalador y app\CidIA.exe; construir.ps1
+; lee estas dos líneas para el de la app). Los avisos de licencias van en textos\licencia.txt.
+!define CIDIA_EMPRESA "Equipo CidIA"
+!define CIDIA_COPYRIGHT "© 2026 Equipo CidIA. Incluye software de código abierto (avisos en textos\licencia.txt)."
 !define CIDIA_DATOS "$LOCALAPPDATA\CidIA\datos"
 !define CIDIA_NAVEGADOR "$LOCALAPPDATA\CidIA\navegador"
 !define CIDIA_ENLACE_PLUGIN "$LOCALAPPDATA\CidIA\datos\profiles\desktop\node_modules\cidia"
@@ -100,6 +119,78 @@ Function ${PREFIJO}RestaurarProtocolo
     DeleteRegKey HKCU "Software\Classes\dsh"
   ${EndIf}
   ClearErrors
+  Pop $1
+  Pop $0
+FunctionEnd
+!macroend
+
+; ---------------------------------------------------------------------------------------------
+; AppUserModelID de un acceso directo (propiedad System.AppUserModel.ID del .lnk), con las
+; interfaces COM del shell: IShellLinkW -> IPersistFile (Load/Save) e IPropertyStore (SetValue).
+; NSIS no tiene una orden para esto. Estructuras para 32 bits (makensis x86).
+;   $R0 = ruta del .lnk   $R1 = AppUserModelID   ->   $R2 = "1" si se ha guardado
+!macro CIDIA_DEFINIR_AUMID PREFIJO
+Function ${PREFIJO}FijarAumid
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  Push $6
+  Push $7
+  StrCpy $R2 "0"
+  System::Call 'ole32::CoInitialize(p 0) i .r7'
+  ; CLSID_ShellLink, IID_IShellLinkW
+  System::Call 'ole32::CoCreateInstance(g "{00021401-0000-0000-C000-000000000046}", p 0, i 1, g "{000214F9-0000-0000-C000-000000000046}", *p .r1) i .r0'
+  ${If} $0 = 0
+    ; IUnknown::QueryInterface(IID_IPersistFile)
+    System::Call '$1->0(g "{0000010b-0000-0000-C000-000000000046}", *p .r2) i .r0'
+    ${If} $0 = 0
+      ; IPersistFile::Load(ruta, STGM_READWRITE)
+      System::Call '$2->5(w R0, i 2) i .r0'
+      ${If} $0 = 0
+        ; IUnknown::QueryInterface(IID_IPropertyStore)
+        System::Call '$1->0(g "{886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99}", *p .r3) i .r0'
+        ${If} $0 = 0
+          ; PROPERTYKEY (20 bytes) de System.AppUserModel.ID y PROPVARIANT VT_LPWSTR (31) con el ID.
+          System::Call '*(i 0, i 0, i 0, i 0, i 0) p .r4'
+          System::Call 'propsys::PSGetPropertyKeyFromName(w "System.AppUserModel.ID", p r4) i .r0'
+          System::Call '*(&w130 R1) p .r6'
+          System::Call '*(&i2 31, &i2 0, &i2 0, &i2 0, p r6, i 0) p .r5'
+          ${If} $0 = 0
+            ; IPropertyStore::SetValue y Commit; IPersistFile::Save(NULL, TRUE)
+            System::Call '$3->6(p r4, p r5) i .r0'
+            ${If} $0 = 0
+              System::Call '$3->7() i .r0'
+              ${If} $0 = 0
+                System::Call '$2->6(p 0, i 1) i .r0'
+                ${If} $0 = 0
+                  StrCpy $R2 "1"
+                ${EndIf}
+              ${EndIf}
+            ${EndIf}
+          ${EndIf}
+          System::Free $5
+          System::Free $6
+          System::Free $4
+          System::Call '$3->2()'
+        ${EndIf}
+      ${EndIf}
+      System::Call '$2->2()'
+    ${EndIf}
+    System::Call '$1->2()'
+  ${EndIf}
+  ${If} $7 = 0
+  ${OrIf} $7 = 1
+    System::Call 'ole32::CoUninitialize()'
+  ${EndIf}
+  Pop $7
+  Pop $6
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
   Pop $1
   Pop $0
 FunctionEnd

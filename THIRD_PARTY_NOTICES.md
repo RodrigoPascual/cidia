@@ -7,9 +7,10 @@ CidIA se construye sobre piezas de código abierto con licencias que permiten su
 | Componente | Licencia | Uso |
 |---|---|---|
 | DeepSeek Harness 0.2.0-rc.2 (app base, Electron) | MIT | Base de la app de escritorio. Se conserva su aviso de licencia en la carpeta de la app. Su nombre y marca no se usan en CidIA (normas de marca del proyecto). |
-| Electron, Chromium y Node.js (dentro de la app base) | MIT y licencias de Chromium (BSD y otras); `ffmpeg.dll` de Electron, LGPL | Incluidos sin modificar en la app base. |
+| Electron, Chromium y Node.js (dentro de la app base) | MIT y licencias de Chromium (BSD y otras); `ffmpeg.dll` de Electron, LGPL | Incluidos en la app base. Del ejecutable de Electron solo se cambian recursos de Windows (icono y datos de versión, con rcedit) y el nombre (`app\CidIA.exe`); el código, las DLL (también `ffmpeg.dll`) y el `app.asar` no se modifican. |
 | LibreOfficeKit (`libreoffice-kit-win32-x64`, dentro de la app base) | MPL-2.0 | Incluido sin modificar por la app base para vistas previas de documentos. La MPL permite el uso comercial y la redistribución; si se modificara algún fichero suyo habría que publicar ese fichero. |
 | NSIS | zlib/libpng | Genera `CidIA-Setup.exe` y el lanzador. |
+| rcedit 2.0.0 (`github.com/electron/rcedit`, Copyright (c) 2013 GitHub Inc.) | MIT | Solo en la construcción (no se distribuye): pone el icono y los datos de versión de CidIA al ejecutable de la app (`app/instalador/marca-app.ps1`). Se descarga el `rcedit-x64.exe` del release oficial con sha256 fijado. |
 
 ## Servidor
 

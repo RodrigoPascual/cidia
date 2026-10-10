@@ -2,14 +2,21 @@
 //
 //   "%LOCALAPPDATA%\Programs\CidIA\CidIA.exe" --remote-debugging-port=9333
 //   node app/instalador/verificar.mjs [--puerto 9333] [--captura captura.png] [--datos <DSH_HOME>]
+//                                     [--instalacion <carpeta>] [--sin-marca]
 //
 // Comprueba: destino dsh-app://app/, título y marca CidIA, secciones de CidIA en la barra
 // lateral, proxy al servidor (cidia/gw/salud), sesión del Host (cidia/estado), interfaz web
 // embebida en el iframe con la base del proxy y que la credencial del modelo es el token de la
 // sesión (por huellas SHA-256). Node 22 (WebSocket nativo), sin dependencias.
+// En Windows, además, la marca en el sistema (verificar-marca.ps1): ejecutable app\CidIA.exe con
+// el icono y los datos de versión de CidIA, icono de la bandeja, accesos directos y AppUserModelID
+// de la ventana en la barra de tareas (no se agrupa con DeepSeek Harness). --sin-marca lo omite;
+// --instalacion cambia la carpeta de la instalación.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const args = process.argv.slice(2)
 const opcion = (nombre, porDefecto) => {
@@ -19,6 +26,8 @@ const opcion = (nombre, porDefecto) => {
 const puerto = opcion('--puerto', '9333')
 const captura = opcion('--captura', null)
 const datos = opcion('--datos', join(process.env.LOCALAPPDATA ?? '', 'CidIA', 'datos'))
+const instalacion = opcion('--instalacion', join(process.env.LOCALAPPDATA ?? '', 'Programs', 'CidIA'))
+const conMarca = process.platform === 'win32' && !args.includes('--sin-marca')
 
 let fallos = 0
 const comprobar = (ok, texto, detalle = '') => {
@@ -91,6 +100,24 @@ try {
 } catch { /* sin fichero de credenciales */ }
 comprobar(Boolean(huellaHost) && huellaHost === estado?.huella, 'credencial del modelo = token de la sesión',
   `${estado?.host?.modo ?? '?'}${huellaHost ? '' : ' · sin CIDIA_GATEWAY_TOKEN en ' + datos}`)
+
+if (conMarca) {
+  // Una línea «OK …», «FALLO …» o «AVISO …» por comprobación; el código de salida es el número de fallos.
+  let salida
+  try {
+    salida = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
+      join(dirname(fileURLToPath(import.meta.url)), 'verificar-marca.ps1'), '-Instalacion', instalacion], { encoding: 'utf8', windowsHide: true })
+  } catch (error) {
+    salida = String(error.stdout ?? '')
+    if (!/^FALLO/m.test(salida)) comprobar(false, 'marca de CidIA en Windows (verificar-marca.ps1)', String(error.stderr ?? error.message).trim().slice(0, 300))
+  }
+  for (const linea of salida.split(/\r?\n/).filter(Boolean)) {
+    const ok = linea.startsWith('OK')
+    if (!ok && !linea.startsWith('FALLO')) { console.log(linea); continue }
+    const [texto, ...detalle] = linea.replace(/^(OK|FALLO)\s+/, '').split(' · ')
+    comprobar(ok, texto, detalle.join(' · '))
+  }
+}
 
 if (captura) {
   const r = await enviar('Page.captureScreenshot', { format: 'png' })
