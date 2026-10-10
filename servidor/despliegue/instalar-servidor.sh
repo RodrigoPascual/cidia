@@ -646,17 +646,19 @@ perfil_sugerido() {
 }
 
 describir_perfiles() {
-	tenue "msi       GPU NVIDIA de 12-16 GB: ministral-3:8b y qwen3-embedding:0.6b (configuración del MVP)"
+	tenue "msi       GPU NVIDIA de 12-16 GB: ministral-3:8b y qwen3-embedding-cidia:0.6b (configuración del MVP)"
 	tenue "generico  cualquier PC o servidor sin GPU: modelos medianos en el procesador (más lento)"
 	tenue "oracle    pruebas en ARM sin GPU: modelos pequeños y datos de demostración"
 }
 
-# Modelos (chat, visión, embeddings) del perfil genérico según la memoria del equipo.
+# Modelos (chat, visión, embeddings) del perfil genérico según la memoria del equipo. El de
+# embeddings es un derivado con contexto propio: lo crea «cidia modelos descargar» a partir de
+# qwen3-embedding:0.6b (servidor/despliegue/modelos).
 modelos_generico() {
 	if ((RAM_GIB >= 16)); then
-		echo "ministral-3:3b ministral-3:3b qwen3-embedding:0.6b"
+		echo "ministral-3:3b ministral-3:3b qwen3-embedding-cidia:0.6b"
 	else
-		echo "qwen3:1.7b qwen3.5:0.8b qwen3-embedding:0.6b"
+		echo "qwen3:1.7b qwen3.5:0.8b qwen3-embedding-cidia:0.6b"
 	fi
 }
 
@@ -1232,6 +1234,10 @@ EOF
 			poner_var "$fichero_generico" CIDIA_LLM_MODELO_EMBEDDINGS "${modelos[2]}"
 			poner_var "$fichero_generico" CIDIA_ASR_MODELO "$asr"
 			ok "Perfil genérico creado en perfiles/generico.env (modelos: ${modelos[*]})"
+		elif [[ $(leer_var "$fichero_generico" CIDIA_LLM_MODELO_EMBEDDINGS) == qwen3-embedding:0.6b ]]; then
+			# Perfiles de antes: el mismo modelo de búsqueda con contexto propio (mismos vectores).
+			poner_var "$fichero_generico" CIDIA_LLM_MODELO_EMBEDDINGS qwen3-embedding-cidia:0.6b
+			ok "Modelo de búsqueda: qwen3-embedding-cidia:0.6b (el mismo con contexto propio; no hay que reindexar)"
 		fi
 		poner_var "$fichero_generico" CIDIA_URL_PUBLICA "http://$DIRECCION:$PUERTO"
 		calcular_modelos_perfil
@@ -1492,7 +1498,7 @@ mostrar_modelos_pendientes() {
 	local cid m lista faltan=()
 	cid=$(contenedor ollama)
 	if [[ -z $cid ]]; then
-		info "Modelos: se descargarían ${MODELOS_PERFIL[*]}"
+		info "Modelos: se descargarían o crearían ${MODELOS_PERFIL[*]}"
 		return 0
 	fi
 	lista=$("${DOCKER[@]}" exec "$cid" ollama list 2>/dev/null | awk 'NR > 1 { print $1 }') || true
@@ -1500,7 +1506,7 @@ mostrar_modelos_pendientes() {
 		[[ $m == *:* ]] || m="$m:latest"
 		grep -qxF "$m" <<<"$lista" || faltan+=("$m")
 	done
-	if ((${#faltan[@]})); then info "Modelos: se descargarían ${faltan[*]}"; else ok "Modelos del perfil ya descargados: ${MODELOS_PERFIL[*]}"; fi
+	if ((${#faltan[@]})); then info "Modelos: se descargarían o crearían ${faltan[*]}"; else ok "Modelos del perfil ya descargados: ${MODELOS_PERFIL[*]}"; fi
 }
 
 # Carpetas en las que no se instala ni se borra aunque se pasen con --dir (raíz, sistema y

@@ -345,22 +345,124 @@ modelos_del_perfil() {
 	done | { grep -E '^[A-Za-z0-9._/:-]+$' || true; } | normalizar_modelo | sort -u
 }
 
-# Modelos que necesita esta instalación: los del perfil y los locales permitidos en la app.
+# Modelos que necesita esta instalación: los del perfil, los locales permitidos en la app y los
+# modelos base de los derivados.
 modelos_necesarios() {
-	local cid
+	local cid lista
 	cid=$(contenedor postgres)
-	{
+	lista=$({
 		modelos_del_perfil
 		if [[ -n $cid ]]; then
 			docker exec "$cid" psql -U cidia -d cidia -tAc \
 				"SELECT DISTINCT ref FROM modelos_ia WHERE permitido AND ubicacion = 'local'
 				 AND coalesce(proveedor, 'ollama') = 'ollama' AND tipo IN ('chat', 'embeddings', 'vision')" 2>/dev/null || true
 		fi
-	} | sed 's/[[:space:]]//g' | { grep -E '^[A-Za-z0-9._/:-]+$' || true; } | normalizar_modelo | sort -u
+	} | sed 's/[[:space:]]//g' | { grep -E '^[A-Za-z0-9._/:-]+$' || true; } | normalizar_modelo | sort -u)
+	{
+		printf '%s\n' "$lista"
+		bases_de_derivados <<<"$lista"
+	} | { grep -E '^[A-Za-z0-9._/:-]+$' || true; } | sort -u
 }
 
 # Modelos descargados: «nombre<TAB>tamaño».
 modelos_descargados() { docker exec "$1" ollama list 2>/dev/null | awk 'NR > 1 && NF >= 4 { print $1 "\t" $3 " " $4 }' || true; }
+
+# Modelos derivados: «nombre:etiqueta» no se descarga del registro, sino que se crea con «ollama
+# create» a partir de modelos/nombre_etiqueta.Modelfile. Así se le da, por ejemplo, un contexto
+# propio al modelo de búsqueda (qwen3-embedding-cidia:0.6b). Su modelo base (FROM) sí se descarga.
+
+# modelfile_de MODELO: ruta de su Modelfile si es un derivado; si no, termina con error.
+modelfile_de() {
+	local f="$DIR_DESP/modelos/${1//[:\/]/_}.Modelfile"
+	[[ -f $f ]] && printf '%s' "$f"
+}
+
+# base_de MODELFILE: modelo del que parte (línea FROM).
+base_de() { awk 'toupper($1) == "FROM" { print $2; exit }' "$1" | normalizar_modelo; }
+
+# Modelos base de los derivados de la lista que llega por la entrada.
+bases_de_derivados() {
+	local m f
+	while read -r m; do
+		if [[ -n $m ]] && f=$(modelfile_de "$m"); then base_de "$f"; fi
+	done
+	return 0
+}
+
+# derivado_al_dia MODELO MODELFILE: ¿ya está en Ollama (CID) con los PARAMETER del Modelfile?
+derivado_al_dia() {
+	local quiere tiene l
+	docker exec "$CID" ollama show "$1" >/dev/null 2>&1 || return 1
+	quiere=$(awk 'toupper($1) == "PARAMETER" { print $2, $3 }' "$2")
+	tiene=$(docker exec "$CID" ollama show --parameters "$1" 2>/dev/null | awk 'NF >= 2 { print $1, $2 }' || true)
+	while read -r l; do
+		if [[ -n $l ]] && ! grep -qxF "$l" <<<"$tiene"; then return 1; fi
+	done <<<"$quiere"
+	return 0
+}
+
+# descargar_modelo MODELO: «ollama pull» en el contenedor de Ollama (CID).
+descargar_modelo() {
+	local m=$1 rc=0
+	info "Descargando $m (puede tardar varios minutos)…"
+	if ((INTERACTIVO)); then
+		docker exec -it "$CID" ollama pull "$m" || rc=1
+	elif [[ -n $REGISTRO ]]; then
+		docker exec "$CID" ollama pull "$m" >>"$REGISTRO" 2>&1 || rc=1
+	else
+		docker exec "$CID" ollama pull "$m" >/dev/null 2>&1 || rc=1
+	fi
+	if docker exec "$CID" ollama show "$m" >/dev/null 2>&1; then
+		ok "$m descargado"
+	else
+		fallo "No se ha podido descargar $m"
+	fi
+	return "$rc"
+}
+
+# crear_derivado MODELO MODELFILE [--descargar]: lo crea (o lo rehace) con «ollama create» y el
+# Modelfile por la entrada estándar. Sin --descargar no usa la red: si falta el modelo base, avisa.
+crear_derivado() {
+	local m=$1 f=$2 base destino=/dev/null
+	base=$(base_de "$f")
+	if [[ ! $base =~ ^[A-Za-z0-9._/:-]+$ ]]; then
+		fallo "$f no indica un modelo base válido (línea FROM)."
+		return 1
+	fi
+	if ! docker exec "$CID" ollama show "$base" >/dev/null 2>&1; then
+		if [[ ${3:-} != --descargar ]]; then
+			aviso "Falta $base, del que se crea $m. Descárgalo con: sudo cidia modelos descargar"
+			return 1
+		fi
+		descargar_modelo "$base" || return 1
+	fi
+	if [[ -n $REGISTRO ]]; then destino=$REGISTRO; fi
+	if docker exec -i "$CID" ollama create "$m" -f /dev/stdin <"$f" >>"$destino" 2>&1 && derivado_al_dia "$m" "$f"; then
+		ok "$m creado a partir de $base ($(awk 'toupper($1) == "PARAMETER" { printf "%s%s %s", s, $2, $3; s = ", " }' "$f"))"
+	else
+		fallo "No se ha podido crear $m a partir de $base. Mira los registros: sudo cidia registros ollama"
+		return 1
+	fi
+}
+
+# preparar_derivados: crea o pone al día los derivados que necesita CidIA cuyo modelo base ya está
+# descargado (no usa la red). Lo hacen arrancar, actualizar y demo preparar, para que el gateway
+# tenga su modelo de búsqueda aunque el perfil haya cambiado. Nunca detiene la orden.
+preparar_derivados() {
+	local m f
+	CID=$(contenedor ollama)
+	[[ -n $CID ]] || return 0
+	if ! esperar_url "http://127.0.0.1:$PUERTO_OLLAMA/api/version" 90; then
+		aviso "Ollama no responde en 127.0.0.1:$PUERTO_OLLAMA: no se comprueban los modelos derivados."
+		return 0
+	fi
+	while read -r m; do
+		if [[ -n $m ]] && f=$(modelfile_de "$m") && ! derivado_al_dia "$m" "$f"; then
+			crear_derivado "$m" "$f" || true
+		fi
+	done < <(modelos_necesarios)
+	return 0
+}
 
 orden_modelos() {
 	local sub=${1:-listar}
@@ -375,11 +477,12 @@ orden_modelos() {
 }
 
 modelos_listar() {
-	local descargados necesarios perfil nombre tam marca
+	local descargados necesarios perfil bases nombre tam marca
 	titulo "Modelos de IA"
 	descargados=$(modelos_descargados "$CID")
 	necesarios=$(modelos_necesarios)
 	perfil=$(modelos_del_perfil)
+	bases=$(bases_de_derivados <<<"$necesarios")
 	if [[ -z $descargados ]]; then
 		aviso "No hay ningún modelo descargado."
 	else
@@ -387,6 +490,8 @@ modelos_listar() {
 			marca="no lo usa CidIA"
 			if grep -qxF "$nombre" <<<"$perfil"; then
 				marca="perfil"
+			elif grep -qxF "$nombre" <<<"$bases"; then
+				marca="base de un modelo derivado"
 			elif grep -qxF "$nombre" <<<"$necesarios"; then
 				marca="permitido en la app"
 			fi
@@ -402,34 +507,40 @@ modelos_listar() {
 }
 
 modelos_descargar() {
-	local lista=("$@") m fallidos=0 descargados
+	local lista=("$@") m f fallidos=0 descargados derivados=()
 	if ((${#lista[@]} == 0)); then
 		descargados=$(modelos_descargados "$CID")
 		while read -r m; do
-			if [[ -n $m ]] && ! grep -q "^$m"$'\t' <<<"$descargados"; then lista+=("$m"); fi
+			if [[ -z $m ]]; then continue; fi
+			if f=$(modelfile_de "$m"); then
+				derivado_al_dia "$m" "$f" || lista+=("$m")
+			elif ! grep -q "^$m"$'\t' <<<"$descargados"; then
+				lista+=("$m")
+			fi
 		done < <(modelos_necesarios)
 		if ((${#lista[@]} == 0)); then
 			ok "Todos los modelos que necesita CidIA ya están descargados."
 			return 0
 		fi
 	fi
+	# Primero los del registro y después los derivados, que parten de alguno de ellos.
 	for m in "${lista[@]}"; do
 		[[ $m =~ ^[A-Za-z0-9._/:-]+$ ]] || morir "Nombre de modelo no válido: $m"
-		info "Descargando $m (puede tardar varios minutos)…"
-		if ((INTERACTIVO)); then
-			docker exec -it "$CID" ollama pull "$m" || fallidos=$((fallidos + 1))
-		elif [[ -n $REGISTRO ]]; then
-			docker exec "$CID" ollama pull "$m" >>"$REGISTRO" 2>&1 || fallidos=$((fallidos + 1))
+		if modelfile_de "$(normalizar_modelo <<<"$m")" >/dev/null; then
+			derivados+=("$(normalizar_modelo <<<"$m")")
 		else
-			docker exec "$CID" ollama pull "$m" >/dev/null 2>&1 || fallidos=$((fallidos + 1))
-		fi
-		if docker exec "$CID" ollama show "$m" >/dev/null 2>&1; then
-			ok "$m descargado"
-		else
-			fallo "No se ha podido descargar $m"
+			descargar_modelo "$m" || fallidos=$((fallidos + 1))
 		fi
 	done
-	((fallidos == 0)) || morir "Descargas fallidas: $fallidos. Comprueba la conexión a Internet y el espacio en disco."
+	for m in "${derivados[@]}"; do
+		f=$(modelfile_de "$m")
+		if derivado_al_dia "$m" "$f"; then
+			ok "$m ya está creado"
+		else
+			crear_derivado "$m" "$f" --descargar || fallidos=$((fallidos + 1))
+		fi
+	done
+	((fallidos == 0)) || morir "Modelos sin descargar o sin crear: $fallidos. Comprueba la conexión a Internet y el espacio en disco."
 }
 
 modelos_borrar() {
@@ -610,6 +721,7 @@ orden_arrancar() {
 	dc up -d
 	calcular_urls
 	esperar_salud 240 || exit 1
+	preparar_derivados
 	if [[ -n $URL_PORTATILES ]]; then info "Dirección para los portátiles: $URL_PORTATILES"; fi
 	return 0
 }
@@ -647,6 +759,7 @@ orden_actualizar() {
 	dc up -d
 	calcular_urls
 	esperar_salud 300 || exit 1
+	preparar_derivados
 	if [[ -n $(contenedor ollama) ]]; then orden_modelos listar; fi
 }
 
@@ -1179,6 +1292,7 @@ demo_preparar() {
 	titulo "Modelos"
 	esperar_url "http://127.0.0.1:$PUERTO_OLLAMA/api/version" 90 ||
 		morir "Ollama no responde en 127.0.0.1:$PUERTO_OLLAMA. Mira sus registros: sudo cidia registros ollama"
+	preparar_derivados
 	necesitar ollama
 	s=$(modelos_descargados "$CID")
 	chat=$(leer_var "$fich" CIDIA_LLM_MODELO_CHAT | normalizar_modelo)
@@ -1346,7 +1460,7 @@ Uso: sudo cidia [--dir CARPETA] [--si] <orden> [argumentos]
   parar | arrancar                 para o arranca CidIA (los datos se conservan)
   actualizar [--sin-copia]         git pull, construir y aplicar (con copia previa)
   modelos [listar]                 modelos descargados y los que faltan
-  modelos descargar [modelo…]      descarga los que faltan (o los indicados)
+  modelos descargar [modelo…]      descarga los que faltan (o los indicados) y crea los derivados
   modelos borrar <modelo> [--forzar]
   copia [--conservar N]            copia de la base y de datos/ en copias/cidia-FECHA
   copias                           lista las copias

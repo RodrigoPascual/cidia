@@ -14,6 +14,7 @@ Todo lo que hace falta para convertir un equipo con Ubuntu en el servidor de Cid
 | `perfiles/msi.env`, `perfiles/oracle.env` | Ajustes no secretos de cada equipo (modelos, motor de conocimiento, semilla…). |
 | `perfiles/plantilla.env` | Plantilla del perfil genérico. El instalador la copia como `perfiles/generico.env` (local, fuera de git). |
 | `perfiles/weknora.env` | Ajustes no secretos de WeKnora. No es un perfil de equipo. |
+| `modelos/*.Modelfile` | Modelos derivados que no se descargan, sino que crea `cidia modelos descargar` con `ollama create` (ver «Modelo de búsqueda con contexto propio»). |
 | `postgres/initdb/` | Crea la base y el rol de WeKnora en el primer arranque. |
 
 ## Instalación rápida
@@ -65,7 +66,7 @@ sudo bash instalar-servidor.sh --repo https://github.com/ORGANIZACION/cidia.git 
 5. **Configuración y secretos** en `secretos/cidia.env` (600): los secretos se generan con `openssl rand` sin mostrarse y nunca se regeneran; si hay una base de datos anterior sin sus secretos, se detiene. Con el perfil genérico crea `perfiles/generico.env` desde la plantilla.
 6. **Imágenes**: `docker compose config`, `pull --ignore-buildable` y `build` (gateway con la interfaz web y ffmpeg LGPL, voz y, con `--con-espacio`, la caja de arena).
 7. **Arranque**: `docker compose up -d` y espera a que `/salud` responda (hasta 5 minutos). Con GPU comprueba que Ollama detecta CUDA.
-8. **Modelos** del perfil con barra de progreso (`cidia modelos descargar`): `ministral-3:8b` y `qwen3-embedding:0.6b` en el MSI; `qwen3:0.6b`, `qwen3.5:0.8b` y `qwen3-embedding:0.6b` en ARM.
+8. **Modelos** del perfil con barra de progreso (`cidia modelos descargar`): `ministral-3:8b` y `qwen3-embedding:0.6b` en el MSI; `qwen3:0.6b`, `qwen3.5:0.8b` y `qwen3-embedding:0.6b` en ARM. Después crea `qwen3-embedding-cidia:0.6b`, el modelo de búsqueda con contexto propio, sin volver a descargar nada.
 9. **Cuenta de administración**: si no hay ninguna, crea `admin` con una contraseña aleatoria (se pasa al gateway por la entrada estándar, nunca como argumento) y la guarda en `secretos/admin-inicial.txt` (600).
 10. **Resumen**: dirección para el instalador de los portátiles, URL del navegador (`http://<ip>:<puerto>/app/`), usuario y contraseña (solo esta vez) y siguientes pasos.
 
@@ -110,9 +111,9 @@ sudo $DC ps
 |---|---|
 | `estado` | Configuración, servicios, salud de gateway, Ollama, voz y base de datos, uso de CPU y memoria, disco, GPU, modelos (los que faltan) y última copia. |
 | `registros [servicio] [-f] [-n N]` | Registros de un servicio o de todos. |
-| `reiniciar [servicio]` · `parar` · `arrancar` | Ciclo de vida (los datos se conservan). |
-| `actualizar [--sin-copia]` | `git pull --ff-only`, copia previa, `pull`, `build --pull`, `up -d` y comprobación de salud. Sin git, reconstruye con el código actual. |
-| `modelos [listar]` · `modelos descargar [modelo…]` · `modelos borrar <modelo> [--forzar]` | Modelos del perfil y los locales permitidos en la app; no deja borrar uno en uso sin `--forzar`. |
+| `reiniciar [servicio]` · `parar` · `arrancar` | Ciclo de vida (los datos se conservan). `arrancar` crea o pone al día los modelos derivados cuyo modelo base ya está descargado. |
+| `actualizar [--sin-copia]` | `git pull --ff-only`, copia previa, `pull`, `build --pull`, `up -d`, comprobación de salud y modelos derivados al día. Sin git, reconstruye con el código actual. |
+| `modelos [listar]` · `modelos descargar [modelo…]` · `modelos borrar <modelo> [--forzar]` | Modelos del perfil, los locales permitidos en la app y los modelos base de los derivados; `descargar` baja los del registro y crea los derivados; no deja borrar uno en uso sin `--forzar`. |
 | `copia [--conservar N]` · `copias` | `pg_dump` (formato propio) de `cidia` y, si existe, `weknora`; `tar` de `datos/`; secretos y perfil local; `info.txt` y `SHA256SUMS`. |
 | `restaurar <copia> [--sin-copia]` | Verifica las sumas, pide escribir `RESTAURAR`, hace una copia del estado actual, restaura en una base temporal y solo si sale bien sustituye la actual; `datos/` anterior queda en `datos.previo-FECHA`. |
 | `admin-restablecer [usuario]` | Nueva contraseña aleatoria para la cuenta de administración (la crea si no hay ninguna), cierra sus sesiones y lo anota en la auditoría. |
@@ -129,7 +130,7 @@ Pensado para el MSI con 12 GB de VRAM; la demostración completa está en [`docs
 
 1. Para los servicios opcionales en marcha que la demo no usa: WeKnora (`weknora`, `weknora-ui`, `docreader`, `qdrant`, `redis`; se queda si es el motor de conocimiento del perfil o con `--con-weknora`) y `espacio-trabajo` (salvo `--con-espacio`).
 2. Pone en `cidia.env` `OLLAMA_KEEP_ALIVE=-1` (los modelos no caducan) y `ASR_LIBERAR_TRAS_S=0` (la voz no libera su modelo), guardando antes los valores anteriores como `CIDIA_DEMO_PREVIO_<variable>` (`ninguno` si no estaban), y marca `CIDIA_MODO_DEMO=activo`. Aplica con `up -d postgres gateway ollama asr`, que recrea Ollama y la voz.
-3. Precarga los modelos de chat y embeddings del perfil con una petición mínima a Ollama (`/api/chat` con `num_predict: 1` y `/api/embed`, ambos con `keep_alive: -1` y sin `num_ctx`, para que la primera pregunta no los vuelva a cargar con otro contexto) y comprueba con `ollama ps` que siguen en memoria y si van «100% GPU». Si no caben enteros en la GPU, avisa y propone bajar `OLLAMA_CONTEXT_LENGTH`.
+3. Crea el modelo de búsqueda derivado si falta y ya está su base. Precarga los modelos de chat y embeddings del perfil con una petición mínima a Ollama (`/api/chat` con `num_predict: 1` y `/api/embed`, ambos con `keep_alive: -1` y sin `num_ctx`, para que la primera pregunta no los vuelva a cargar con otro contexto) y comprueba con `ollama ps` que siguen en memoria y si van «100% GPU». Si no caben enteros en la GPU, avisa y propone bajar `OLLAMA_CONTEXT_LENGTH`.
 4. Envía a la voz un segundo de silencio en WAV: carga el modelo (y, la primera vez, lo descarga).
 5. Comprueba que existen las cuentas del guion (`ana`, `luis`, `carmen`, `marta`, `javier`, `lucia`) y dice dónde está su contraseña, sin mostrarla.
 6. Muestra la corriente (en portátiles), si la suspensión está desactivada, el uso de memoria de los contenedores y del equipo, la GPU y la dirección para los portátiles.
@@ -140,11 +141,21 @@ Pensado para el MSI con 12 GB de VRAM; la demostración completa está en [`docs
 
 | Perfil | Equipo | Modelos |
 |---|---|---|
-| `msi` | GPU NVIDIA de 12-16 GB, 32 GB de RAM | `ministral-3:8b` (chat y visión) y `qwen3-embedding:0.6b`; voz `small`; contexto 32K |
-| `generico` | Cualquier PC o servidor sin GPU | Con 16 GB o más: `ministral-3:3b` y `qwen3-embedding:0.6b`. Con menos: `qwen3:1.7b`, `qwen3.5:0.8b` y `qwen3-embedding:0.6b` |
-| `oracle` | Pruebas en ARM sin GPU | `qwen3:0.6b`, `qwen3.5:0.8b` y `qwen3-embedding:0.6b`; carga datos de demostración |
+| `msi` | GPU NVIDIA de 12-16 GB, 32 GB de RAM | `ministral-3:8b` (chat y visión) y `qwen3-embedding-cidia:0.6b`; voz `small`; contexto 32K |
+| `generico` | Cualquier PC o servidor sin GPU | Con 16 GB o más: `ministral-3:3b` y `qwen3-embedding-cidia:0.6b`. Con menos: `qwen3:1.7b`, `qwen3.5:0.8b` y `qwen3-embedding-cidia:0.6b` |
+| `oracle` | Pruebas en ARM sin GPU | `qwen3:0.6b`, `qwen3.5:0.8b` y `qwen3-embedding-cidia:0.6b`; carga datos de demostración |
 
 Para un perfil a medida (por ejemplo, un servidor con una GPU de 48 GB): `cp perfiles/plantilla.env perfiles/mi-planta.env`, cambiar los modelos y `sudo bash instalar-servidor.sh --perfil mi-planta`. Los embeddings son los mismos en todos los perfiles, así que no hay que reindexar al cambiar de equipo.
+
+### Modelo de búsqueda con contexto propio
+
+Ollama carga cada modelo con el contexto de `OLLAMA_CONTEXT_LENGTH`, también el de embeddings, y le reserva memoria para todo ese contexto: en Oracle, con 8192 y caché KV en f16, `qwen3-embedding:0.6b` ocupaba 2,9 GB en `ollama ps`, y con los 32768 del MSI sería bastante más. Los trozos que indexa CidIA rondan los 300 tokens y el gateway corta cada texto a 6.000 caracteres, así que los perfiles usan `qwen3-embedding-cidia:0.6b`: el mismo modelo con `PARAMETER num_ctx 4096` ([`modelos/qwen3-embedding-cidia_0.6b.Modelfile`](modelos/qwen3-embedding-cidia_0.6b.Modelfile)). Cifras medidas y motivo en [`docs/manual-servidor.md`](../../docs/manual-servidor.md) §8.2.
+
+* **Sin reindexar.** Los pesos son los mismos, así que los vectores son iguales; el gateway no guarda con ellos el nombre del modelo, y al arrancar la fila de búsqueda del panel de Modelos pasa al nombre nuevo (`sincronizar_modelo_busqueda` en `cidia/arranque.py`).
+* **Cómo se crea.** `modelos/<nombre>_<etiqueta>.Modelfile` define un derivado. `cidia modelos descargar` (y con ella el instalador) descarga la base de la línea `FROM` y crea el derivado con `docker exec -i <ollama> ollama create <modelo> -f /dev/stdin`. `cidia arrancar`, `actualizar` y `demo preparar` lo crean o lo rehacen si falta o si sus `PARAMETER` no coinciden, siempre que la base ya esté descargada (sin red). Es idempotente.
+* **El nombre tiene que contener `qwen3-embedding`**: `ia/llm.py` lo usa para poner la instrucción de consulta delante de las preguntas.
+* **La base se queda.** `cidia modelos` la marca como «base de un modelo derivado» y `modelos borrar` no la borra sin `--forzar`.
+* **Con WeKnora** (motor opcional), la base de conocimiento conserva el modelo con el que se dio de alta; funciona igual, pero WeKnora seguiría pidiendo el modelo base con el contexto global.
 
 ## Garantías
 

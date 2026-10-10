@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from cidia import trabajos
 from cidia.config import ajustes
@@ -58,6 +59,36 @@ def valores_por_defecto() -> None:
                 bd.delete(m)
             else:
                 m.nombre, m.ref, m.proveedor = "Anthropic Claude", "anthropic", "anthropic"
+        sincronizar_modelo_busqueda(bd)
+
+
+def sincronizar_modelo_busqueda(bd: Session) -> None:
+    """La fila predeterminada de búsqueda sigue a CIDIA_LLM_MODELO_EMBEDDINGS.
+
+    Los vectores los calcula siempre el modelo de la configuración, y no se guarda con ellos qué
+    modelo los hizo. Si la configuración cambia de nombre (por ejemplo, de qwen3-embedding:0.6b a
+    qwen3-embedding-cidia:0.6b, el mismo con contexto propio), la fila del anterior pasa a ser la
+    del nuevo: así el panel de Modelos lo muestra como el que indexa los documentos.
+    """
+    ref = ajustes().llm_modelo_embeddings
+    filas = bd.scalars(select(ModeloIA).where(ModeloIA.tipo == "embeddings", ModeloIA.ubicacion == "local")).all()
+    if not filas:
+        return
+    actual = next((m for m in filas if m.ref.removesuffix(":latest") == ref.removesuffix(":latest")), None)
+    if actual is None:
+        actual = next((m for m in filas if m.predeterminado), None)
+        if actual is None:
+            actual = ModeloIA(nombre=ref, ref=ref, tipo="embeddings", descripcion="Modelo de búsqueda por significado")
+            bd.add(actual)
+        else:
+            log.info("Modelo de búsqueda: «%s» pasa a «%s» (CIDIA_LLM_MODELO_EMBEDDINGS)", actual.ref, ref)
+            if actual.nombre == actual.ref:
+                actual.nombre = ref
+            actual.ref = ref
+    actual.permitido = True
+    for m in filas:
+        m.predeterminado = m is actual
+    actual.predeterminado = True
 
 
 def administrador_inicial() -> None:

@@ -80,8 +80,22 @@ G=$DIR_DESP/perfiles/generico.env
 comprobar "generico.env creado" '[[ -f $G ]]'
 comprobar "chat qwen3:1.7b" '[[ $(leer_var "$G" CIDIA_LLM_MODELO_CHAT) == qwen3:1.7b ]]'
 comprobar "visión qwen3.5:0.8b" '[[ $(leer_var "$G" CIDIA_LLM_MODELO_VISION) == qwen3.5:0.8b ]]'
-comprobar "embeddings como en el MSI" '[[ $(leer_var "$G" CIDIA_LLM_MODELO_EMBEDDINGS) == qwen3-embedding:0.6b ]]'
+comprobar "embeddings como en el MSI" '[[ $(leer_var "$G" CIDIA_LLM_MODELO_EMBEDDINGS) == $(leer_var "$BANCO/repo/servidor/despliegue/perfiles/msi.env" CIDIA_LLM_MODELO_EMBEDDINGS) ]]'
+comprobar "embeddings con contexto propio" '[[ $(leer_var "$G" CIDIA_LLM_MODELO_EMBEDDINGS) == qwen3-embedding-cidia:0.6b ]]'
 comprobar "URL pública en el perfil local" '[[ $(leer_var "$G" CIDIA_URL_PUBLICA) == http://192.168.1.50:18700 ]]'
 comprobar "voz base con 12 GB" '[[ $(leer_var "$ENV_FILE" ASR_MODELO) == base ]]'
-comprobar "modelos del perfil" '[[ "${MODELOS_PERFIL[*]}" == "qwen3:1.7b qwen3.5:0.8b qwen3-embedding:0.6b" ]]'
+comprobar "modelos del perfil" '[[ "${MODELOS_PERFIL[*]}" == "qwen3:1.7b qwen3.5:0.8b qwen3-embedding-cidia:0.6b" ]]'
+
+echo "== Perfil genérico de antes, con el modelo de búsqueda sin contexto propio"
+poner_var "$G" CIDIA_LLM_MODELO_EMBEDDINGS qwen3-embedding:0.6b
+poner_var "$G" CIDIA_LLM_MODELO_CHAT ministral-3:3b
+salida=$(escribir_configuracion 2>&1)
+comprobar "pasa al derivado" '[[ $(leer_var "$G" CIDIA_LLM_MODELO_EMBEDDINGS) == qwen3-embedding-cidia:0.6b ]]'
+comprobar "y lo dice" 'grep -q "no hay que reindexar" <<<"$salida"'
+comprobar "sin tocar el resto del perfil" '[[ $(leer_var "$G" CIDIA_LLM_MODELO_CHAT) == ministral-3:3b ]]'
+salida=$(escribir_configuracion 2>&1)
+comprobar "la segunda vez no hay nada que cambiar" '! grep -q "no hay que reindexar" <<<"$salida"'
+poner_var "$G" CIDIA_LLM_MODELO_EMBEDDINGS nomic-embed-text:latest
+escribir_configuracion >/dev/null
+comprobar "otro modelo de búsqueda elegido a mano se respeta" '[[ $(leer_var "$G" CIDIA_LLM_MODELO_EMBEDDINGS) == nomic-embed-text:latest ]]'
 terminar

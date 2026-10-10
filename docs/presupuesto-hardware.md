@@ -34,14 +34,15 @@ Los tres perfiles son los de la sección «Adaptación a cada empresa» del plan
 
 * Pesos de `ministral-3:8b` (Q4_K_M): 6,0 GB.
 * Caché KV: 136 KiB por token en f16 y la mitad en `q8_0`. Con 32K de contexto son unos 2,2 GiB en `q8_0`, y **cada hueco de 16K para un usuario más cuesta unos 1,1 GiB**.
-* Búferes y codificador de visión: 0,5 a 1 GB. Embeddings (`qwen3-embedding:0.6b`): 0,8 GB. Whisper `large-v3-turbo`: 1,5 a 2 GB mientras transcribe.
+* Búferes y codificador de visión: 0,5 a 1 GB. Whisper `large-v3-turbo`: 1,5 a 2 GB mientras transcribe.
+* Embeddings (`qwen3-embedding-cidia:0.6b`): alrededor de 1 GB [E, a medir en el MSI]: 0,6 GB de pesos, unos 0,2 GiB de caché KV en `q8_0` con 4.096 tokens y los búferes de cálculo. Es `qwen3-embedding:0.6b` con un contexto propio de 4.096 tokens ([`manual-servidor.md`](manual-servidor.md) §8.2). Ollama carga cada modelo con el contexto de todo el servidor y le reserva memoria para él: con el modelo base, en el Oracle de pruebas (CPU, contexto 8.192 y caché KV en f16) `ollama ps` daba **2,9 GB** frente a los 639 MB de pesos (896 MiB de caché KV y 1.225 MiB de búferes de cálculo). Con los 32K del MSI, solo su caché KV ocuparía 1,75 GiB en `q8_0` y los búferes también crecen con el contexto, así que no cabría junto a `ministral-3:8b`. Los trozos que se indexan rondan los 300 tokens, así que no se pierde nada, y los vectores son los mismos: no hay que reindexar.
 * Total en el MSI: unos 9,5 a 10 GB, así que caben `OLLAMA_NUM_PARALLEL=1` con 32K o `NUM_PARALLEL=2` con 16K cada uno, que ocupan lo mismo. Whisper se carga a demanda.
 
 **De consultas a la vez a puestos atendidos [E, a medir en la fase 4 con la prueba de varios usuarios a la vez].** Una consulta con GPU ocupa su hueco unos 10 a 20 s (prompt de unos 6.000 tokens y respuesta de 500 a 40-60 tokens por segundo). Con unas 20 consultas por operario y jornada, cada puesto ocupa la GPU alrededor del 1 % de la jornada. Dejamos margen para los picos (inicio de turno, sesiones de formación) y para el procesado de capturas, que ocupa la GPU varios minutos: **un hueco por cada 5 a 10 puestos**.
 
 | GPU (VRAM) | Ejemplo | Modelo recomendado | Reparto | Consultas a la vez | Puestos |
 |---|---|---|---|---|---|
-| Sin GPU, 32 GB de RAM | PC de oficina | `ministral-3:3b` (2,95 GB) y `qwen3-embedding:0.6b`; Whisper `small` int8 en CPU | `NUM_PARALLEL=1`, 16K | 1 (las demás esperan) | 3 a 5 |
+| Sin GPU, 32 GB de RAM | PC de oficina | `ministral-3:3b` (2,95 GB) y `qwen3-embedding-cidia:0.6b`; Whisper `small` int8 en CPU | `NUM_PARALLEL=1`, 16K | 1 (las demás esperan) | 3 a 5 |
 | 12 GB | MSI con RTX 4080 Laptop (el MVP) | `ministral-3:8b` | 1 × 32K o 2 × 16K, Whisper a demanda | 2 | 10 a 20 |
 | 16 GB | RTX 5060 Ti, RTX 5070 Ti, RTX 5080 Laptop | `ministral-3:8b` | 4 × 16K y Whisper `large-v3-turbo` siempre cargado (unos 14 GB en total) | 4 | 20 a 40 |
 | 24 GB | RTX PRO 4000 Blackwell | `ministral-3:14b` [E: unos 9 GB en Q4_K_M] | 4 a 6 huecos de 16K | 4 a 6 [E] | 30 a 50 |
