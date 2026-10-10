@@ -55,7 +55,7 @@ export default function MiProgreso() {
       <Cabecera
         antetitulo="Pasaporte de habilidades"
         titulo="Mi progreso"
-        subtitulo="Qué tareas dominas, con qué nivel, hasta cuándo y con qué evidencias. Tu supervisor ve este mismo panel."
+        subtitulo="Qué tareas dominas, con qué nivel, hasta cuándo y con qué evidencias. Tu responsable ve este mismo panel."
         acciones={<Boton variante="fantasma" icono={<RefreshCw />} onClick={recargar} cargando={cargando && !!datos}>Actualizar</Boton>}
       />
       {error ? (

@@ -133,8 +133,13 @@ export default function Lagunas() {
                 <div className="apo-laguna-pregunta">«{l.pregunta}»</div>
                 <div className="apo-intensidad"><div style={{ width: `${(l.frecuencia / maximo) * 100}%` }} /></div>
                 <div className="fila envolver diminuto apagado">
-                  {l.ultima_vez && <span>Última vez {hace(l.ultima_vez)}</span>}
-                  {l.primera_vez && <span>· desde el {fecha(l.primera_vez)}</span>}
+                  {/* En un solo texto: con el hueco de la fila, el «·» quedaba despegado («ahora mismo   · desde»). */}
+                  {(l.ultima_vez || l.primera_vez) && (
+                    <span>
+                      {[l.ultima_vez ? `Última vez ${hace(l.ultima_vez)}` : null, l.primera_vez ? `desde el ${fecha(l.primera_vez)}` : null]
+                        .filter(Boolean).join(' · ')}
+                    </span>
+                  )}
                   {l.tarea && <Etiqueta icono={<Wrench />}>{nombreTarea(l.tarea)}</Etiqueta>}
                   {esAdmin && l.departamento?.nombre && <Etiqueta icono={<Building2 />}>{l.departamento.nombre}</Etiqueta>}
                 </div>

@@ -147,8 +147,25 @@ def indexar(bd: Session, doc: Documento, partes: list[tuple[str, dict[str, Any]]
     except Exception as e:  # noqa: BLE001
         log.exception("Error indexando el documento %s", doc.id)
         doc.estado = "error"
-        doc.mensaje_estado = str(e)[:1000]
+        doc.mensaje_estado = motivo_error(e)
     bd.flush()
+
+
+def motivo_error(e: Exception) -> str:
+    """Por qué no se ha podido indexar, en palabras de quien gestiona el documento.
+
+    Los errores propios de CidIA (WeKnora, falta de un modelo con visión...) ya traen un texto en
+    castellano pensado para mostrarse. Los de las librerías que leen los ficheros (PDF dañado,
+    Office protegido...) vienen en inglés y con detalles internos: se explican con una frase.
+    """
+    if isinstance(e, llm.ErrorModelo):  # su texto puede llevar direcciones internas del servidor de modelos
+        return "El modelo de IA no está disponible ahora mismo. Vuelve a indexar el documento en unos minutos."
+    if isinstance(e, asr.ErrorVoz):
+        return "El servicio de voz no ha podido transcribir el audio. Vuelve a indexar el documento en unos minutos."
+    if isinstance(e, RuntimeError) or (isinstance(e, ValueError) and str(e).startswith("Formato no soportado")):
+        return str(e)[:1000]
+    return ("No se ha podido leer el documento: el fichero puede estar dañado, protegido con contraseña o en un "
+            "formato que CidIA no sabe abrir.")
 
 
 def indexar_trabajo(bd: Session, progreso: Any, documento_id: int,

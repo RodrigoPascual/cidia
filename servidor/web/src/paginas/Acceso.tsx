@@ -86,8 +86,13 @@ function EstadoServidor({ info, conectado, comprobar }: ReturnType<typeof useSer
   )
 }
 
-function CampoContrasena({ id, valor, onCambio, autoComplete, placeholder, autoFocus }: {
+/** Contraseña con botón para verla y aviso de Bloq Mayús (acceso, cambio obligatorio y «Mi perfil»). */
+export function CampoContrasena({ id, valor, onCambio, autoComplete, placeholder, autoFocus, grande = true, descripcion }: {
   id: string; valor: string; onCambio: (v: string) => void; autoComplete: string; placeholder?: string; autoFocus?: boolean
+  /** Alto de las pantallas de acceso (46 px); false para formularios dentro de una tarjeta. */
+  grande?: boolean
+  /** id de un texto de ayuda o de error asociado al campo. */
+  descripcion?: string
 }) {
   const [ver, setVer] = useState(false)
   const [mayusculas, setMayusculas] = useState(false)
@@ -96,9 +101,10 @@ function CampoContrasena({ id, valor, onCambio, autoComplete, placeholder, autoF
     <>
       <div className="entrada-icono con-accion">
         <KeyRound />
-        <input id={id} className="entrada grande" type={ver ? 'text' : 'password'} autoComplete={autoComplete} value={valor}
-          autoFocus={autoFocus} placeholder={placeholder} onKeyUp={mirar} onKeyDown={mirar}
-          onChange={(e) => onCambio(e.target.value)} aria-describedby={mayusculas ? `${id}-mayus` : undefined} />
+        <input id={id} className={grande ? 'entrada grande' : 'entrada'} type={ver ? 'text' : 'password'} autoComplete={autoComplete}
+          value={valor} autoFocus={autoFocus} placeholder={placeholder} onKeyUp={mirar} onKeyDown={mirar}
+          onChange={(e) => onCambio(e.target.value)}
+          aria-describedby={[descripcion, mayusculas ? `${id}-mayus` : null].filter(Boolean).join(' ') || undefined} />
         <button type="button" className="accion-entrada" onClick={() => setVer((v) => !v)}
           aria-label={ver ? 'Ocultar la contraseña' : 'Mostrar la contraseña'} aria-pressed={ver}>
           {ver ? <EyeOff /> : <Eye />}

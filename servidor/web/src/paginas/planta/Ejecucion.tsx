@@ -155,6 +155,8 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
 
   const paso: PasoEjecucion | undefined = ej.pasos[indice]
   const confirmados = ej.pasos.filter((p) => p.confirmado).length
+  // Solo cuentan los críticos ya confirmados (quien mira una ejecución a medias no ve los pendientes como hechos).
+  const criticosComprobados = ej.pasos.filter((p) => p.es_critico && p.confirmado).length
   const todosHechos = confirmados === total
   // En solo lectura se llega al resultado con todos los pasos hechos o si ya hay foto que revisar.
   const hayResultado = todosHechos || (soloLectura && !!ej.foto)
@@ -458,9 +460,10 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
             </div>
             <div className="ej-cifras">
               <Cifra valor={`${confirmados}/${total}`} etiqueta="Pasos confirmados" />
-              <Cifra valor={ej.pasos.filter((p) => p.es_critico).length} etiqueta="Críticos comprobados" />
+              <Cifra valor={criticosComprobados}
+                etiqueta={criticosComprobados === 1 ? 'Crítico comprobado' : 'Críticos comprobados'} />
               <Cifra valor={reloj(segundos)} etiqueta="Tiempo" />
-              <Cifra valor={ej.consultas} etiqueta="Consultas al copiloto" />
+              <Cifra valor={ej.consultas} etiqueta={ej.consultas === 1 ? 'Consulta al copiloto' : 'Consultas al copiloto'} />
             </div>
             {ej.consultas_criticos > 0 && (
               <div className="pequeno apagado">
@@ -543,7 +546,10 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
           <div className="nombre recortar">
             {ej.tarea.codigo && <span className="codigo">{ej.tarea.codigo}</span>}{ej.tarea.nombre}
           </div>
-          <div className="detalle">{ins.codigo ?? 'Instrucción'} · versión {ins.version}</div>
+          {/* El código ya va delante del nombre de la tarea: aquí solo la versión («IT-023 · versión 1» lo repetía). */}
+          <div className="detalle">
+            {ins.codigo && ins.codigo === ej.tarea.codigo ? `Versión ${ins.version}` : `${ins.codigo ?? 'Instrucción'} · versión ${ins.version}`}
+          </div>
         </div>
         {ej.es_mia && ej.persona && (
           <div className="ej-persona" title={ej.persona.nombre}><UserRound /> {nombreCorto(ej.persona.nombre)}</div>
@@ -799,12 +805,12 @@ function Exito({ ej, resumen, onVolver, onProgreso }: {
         </svg>
         <h1>Tarea completada</h1>
         <div className="apagado mt-1">
-          {ej.tarea.nombre} · {ej.instruccion.codigo ?? 'instrucción'} versión {ej.instruccion.version}
+          {ej.tarea.nombre} · {ej.instruccion.codigo ?? 'instrucción'} · versión {ej.instruccion.version}
         </div>
         <div className="ej-cifras">
           <Cifra valor={duracion(r.duracion_s)} etiqueta="Tiempo" />
           <Cifra valor={r.pasos} etiqueta={`Pasos (${r.pasos_criticos} ${r.pasos_criticos === 1 ? 'crítico' : 'críticos'})`} />
-          <Cifra valor={r.consultas} etiqueta="Consultas al copiloto" />
+          <Cifra valor={r.consultas} etiqueta={r.consultas === 1 ? 'Consulta al copiloto' : 'Consultas al copiloto'} />
           <Cifra valor={r.consultas_criticos} etiqueta="En pasos críticos" tono={r.consultas_criticos ? 'alerta' : undefined} />
         </div>
         {nivel > 0 && (

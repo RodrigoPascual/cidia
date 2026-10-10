@@ -330,8 +330,8 @@ class Evidencias:
              else "Falta 1 ejecución completada en modo planta." if faltan == 1
              else f"Faltan {faltan} ejecuciones completadas en modo planta."},
             {"clave": "observacion", "nivel": 3, "cumplido": bool(self.observacion),
-             "texto": "Observación en el puesto aprobada por el supervisor",
-             "falta": "Falta la observación del supervisor."},
+             "texto": "Observación en el puesto aprobada por un responsable",
+             "falta": "Falta la observación en el puesto."},
             {"clave": "sin_criticos", "nivel": 3, "cumplido": self.ultima_sin_criticos,
              "texto": "Última ejecución sin consultas en pasos críticos",
              "falta": "Falta una ejecución completa sin consultas en los pasos críticos."},

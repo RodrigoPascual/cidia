@@ -15,7 +15,9 @@ import BotonVoz from './copiloto/BotonVoz'
 import { limpiarCitas, motivoSinMicrofono } from './planta/copiloto'
 import Historial from './copiloto/Historial'
 import PanelFuente from './copiloto/PanelFuente'
-import { ubicacion, type ConsultaGuardada, type Fuente, type Mensaje, type Modo, type PaginaHistorial } from './copiloto/tipos'
+import {
+  tituloFuente, ubicacion, type ConsultaGuardada, type Fuente, type Mensaje, type Modo, type PaginaHistorial,
+} from './copiloto/tipos'
 import './copiloto/copiloto.css'
 
 const MAX_GUARDADOS = 40 // mensajes que se recuerdan al volver a la página (en esta pestaña)
@@ -546,14 +548,15 @@ function ListaFuentes({ fuentes, citadas, revisadas, onAbrir }: {
       <div className="fuentes">
         {fuentes.map((f) => {
           const donde = ubicacion(f)
+          const titulo = donde ? tituloFuente(f) : f.titulo
           const citada = citadas.includes(f.n) && f.disponible !== false
           const apagada = f.disponible === false || (!citada && citadas.length > 0)
           return (
             <button key={f.n} type="button" className={`fuente ${citada ? 'citada' : apagada ? 'sin-citar' : ''}`}
               onClick={() => onAbrir(f.n)}
-              title={`${f.titulo}${donde ? ` · ${donde}` : ''}${f.obsoleta ? ' · versión sustituida' : ''}`}>
+              title={`${titulo}${donde ? ` · ${donde}` : ''}${f.obsoleta ? ' · versión sustituida' : ''}`}>
               <span className="n">{f.n}</span>
-              <span className="recortar">{f.titulo}</span>
+              <span className="recortar">{titulo}</span>
               {donde && <span className="ubic">{donde}</span>}
             </button>
           )

@@ -138,8 +138,8 @@ def _siguiente(tarea_id: int, ins: Instruccion | None, n: dict[str, Any], mls: l
     ruta = f"/formacion/tarea/{tarea_id}"
     nivel = n["nivel"]
     if ins is None:
-        return {"accion": "esperar", "texto": "Aún no hay instrucción publicada. Aparecerá aquí cuando el experto la publique.",
-                "ruta": ruta}
+        return {"accion": "esperar", "ruta": ruta,
+                "texto": "Aún no hay instrucción publicada. Aparecerá aquí cuando una persona experta la publique."}
     if n["requiere_reevaluacion"]:
         return {"accion": "reevaluar", "ruta": ruta,
                 "texto": f"Hay una versión nueva (v{ins.version}): repasa los cambios y vuelve a hacer el cuestionario."}
@@ -156,15 +156,16 @@ def _siguiente(tarea_id: int, ins: Instruccion | None, n: dict[str, Any], mls: l
                 "texto": f"Practica en modo planta: llevas {ejecuciones} de {objetivo} ejecuciones."}
     if not cuestionario:
         return {"accion": "esperar_cuestionario", "ruta": ruta,
-                "texto": "El cuestionario está pendiente de aprobación por el experto."}
+                "texto": "El cuestionario está pendiente de que lo apruebe una persona experta."}
     if nivel < 3 and not observada:
-        return {"accion": "observacion", "ruta": ruta, "texto": "Pide a tu supervisor la observación en el puesto."}
+        return {"accion": "observacion", "ruta": ruta, "texto": "Pide a tu responsable la observación en el puesto."}
     if nivel < 3:
         return {"accion": "practicar", "ruta": ruta,
                 "texto": "Haz una ejecución sin consultar al copiloto en los pasos críticos."}
     if nivel == 3:
         return {"accion": "formador", "ruta": ruta,
-                "texto": "Ya eres autónomo. Pide a tu jefe o al experto la validación como formador."}
+                "texto": "Ya haces la tarea sin ayuda. Pide a tu responsable o a una persona experta la validación "
+                         "como formador."}
     return {"accion": "completo", "ruta": ruta, "texto": "Nivel máximo: puedes formar a otras personas."}
 
 

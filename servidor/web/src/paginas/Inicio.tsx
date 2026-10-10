@@ -89,6 +89,9 @@ const ESTADO_APORTACION: Record<string, { texto: string; tono?: 'amarilla' | 've
   rechazada: { texto: 'No validada', tono: 'roja' },
 }
 
+/** «1 ejecución completada» / «3 ejecuciones completadas» (y «0 ...» en plural). */
+const segun = (n: number, una: string, varias: string) => (n === 1 ? una : varias)
+
 function saludoLocal(nombre: string): string {
   const h = new Date().getHours()
   return `${h >= 6 && h < 14 ? 'Buenos días' : h >= 14 && h < 21 ? 'Buenas tardes' : 'Buenas noches'}, ${nombre}`
@@ -107,6 +110,8 @@ export default function Inicio() {
   const esAdmin = d.rol === 'admin'
   const hoy = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
   const rolTexto = [NOMBRE_ROL[d.rol] ?? d.rol, d.es_experto && d.rol === 'empleado' ? 'Experto' : null].filter(Boolean).join(' · ')
+  // La cuenta de administración se llama «Administración»: no se repite el rol debajo del saludo.
+  const mostrarRol = rolTexto !== d.nombre
 
   return (
     <>
@@ -114,10 +119,13 @@ export default function Inicio() {
         <div>
           <div className="ini-fecha">{hoy}</div>
           <h1>{saludoLocal(d.nombre_corto || perfil?.nombre || '')}</h1>
-          <div className="ini-sub">
-            {d.puesto && <><span>{d.puesto}</span><span className="separa">·</span></>}
-            <span>{rolTexto}</span>
-          </div>
+          {(d.puesto || mostrarRol) && (
+            <div className="ini-sub">
+              {d.puesto && <span>{d.puesto}</span>}
+              {d.puesto && mostrarRol && <span className="separa">·</span>}
+              {mostrarRol && <span>{rolTexto}</span>}
+            </div>
+          )}
           <div className="ini-chips">
             {!esAdmin && d.cifras.tareas_autonomas > 0 && (
               <Link className="ini-chip" to="/progreso"><Sparkles /> <strong>{d.cifras.tareas_autonomas}</strong> {d.cifras.tareas_autonomas === 1 ? 'tarea dominada' : 'tareas dominadas'}</Link>
@@ -154,10 +162,14 @@ export default function Inicio() {
       {!esAdmin && (
         <section className="ini-seccion">
           <div className="ini-cifras">
-            <Dato icono={<Sparkles />} tono="verde" valor={d.cifras.tareas_autonomas} etiqueta="Tareas que haces solo (U u O)" />
-            <Dato icono={<GraduationCap />} valor={d.cifras.tareas_en_formacion} etiqueta="Tareas en aprendizaje (I o L)" />
-            <Dato icono={<Wrench />} tono="info" valor={d.cifras.ejecuciones} etiqueta="Ejecuciones completadas" />
-            <Dato icono={<MessageSquare />} valor={d.cifras.consultas_semana} etiqueta="Consultas esta semana" />
+            <Dato icono={<Sparkles />} tono="verde" valor={d.cifras.tareas_autonomas}
+              etiqueta={`${segun(d.cifras.tareas_autonomas, 'Tarea que dominas', 'Tareas que dominas')} (U u O)`} />
+            <Dato icono={<GraduationCap />} valor={d.cifras.tareas_en_formacion}
+              etiqueta={`${segun(d.cifras.tareas_en_formacion, 'Tarea', 'Tareas')} en aprendizaje (I o L)`} />
+            <Dato icono={<Wrench />} tono="info" valor={d.cifras.ejecuciones}
+              etiqueta={segun(d.cifras.ejecuciones, 'Ejecución completada', 'Ejecuciones completadas')} />
+            <Dato icono={<MessageSquare />} valor={d.cifras.consultas_semana}
+              etiqueta={`${segun(d.cifras.consultas_semana, 'Consulta', 'Consultas')} en los últimos 7 días`} />
           </div>
         </section>
       )}
@@ -230,14 +242,20 @@ function CifrasPlanta({ p }: { p: NonNullable<DatosInicio['planta']> }) {
         <span className="pequeno apagado">Consultas de los últimos 7 días</span>
       </div>
       <div className="ini-cifras seis">
-        <Dato icono={<Users />} valor={p.personas} etiqueta={`Personas en ${p.departamentos} ${p.departamentos === 1 ? 'departamento' : 'departamentos'}`} />
+        <Dato icono={<Users />} valor={p.personas}
+          etiqueta={`${segun(p.personas, 'Persona', 'Personas')} en ${p.departamentos} ${segun(p.departamentos, 'departamento', 'departamentos')}`} />
         <Dato icono={<FileText />} tono="info" valor={p.documentos}
-          etiqueta={p.documentos_procesando ? `Documentos listos · ${p.documentos_procesando} pendientes` : 'Documentos listos para consultar'} />
-        <Dato icono={<ListChecks />} tono="verde" valor={p.instrucciones_publicadas} etiqueta="Instrucciones publicadas" />
-        <Dato icono={<MessageSquare />} valor={p.consultas_semana} etiqueta="Consultas esta semana" />
+          etiqueta={p.documentos_procesando
+            ? `${segun(p.documentos, 'Documento listo', 'Documentos listos')} · ${p.documentos_procesando} ${segun(p.documentos_procesando, 'pendiente', 'pendientes')}`
+            : segun(p.documentos, 'Documento listo para consultar', 'Documentos listos para consultar')} />
+        <Dato icono={<ListChecks />} tono="verde" valor={p.instrucciones_publicadas}
+          etiqueta={segun(p.instrucciones_publicadas, 'Instrucción publicada', 'Instrucciones publicadas')} />
+        <Dato icono={<MessageSquare />} valor={p.consultas_semana}
+          etiqueta={`${segun(p.consultas_semana, 'Consulta', 'Consultas')} en los últimos 7 días`} />
         <Dato icono={<ShieldCheck />} tono={p.pct_con_respaldo !== null && p.pct_con_respaldo < 70 ? 'alerta' : 'verde'}
           valor={p.pct_con_respaldo === null ? '-' : `${p.pct_con_respaldo} %`} etiqueta="Consultas con respaldo documental" />
-        <Dato icono={<CircleHelp />} tono={p.lagunas_abiertas ? 'alerta' : undefined} valor={p.lagunas_abiertas} etiqueta="Lagunas de conocimiento abiertas" />
+        <Dato icono={<CircleHelp />} tono={p.lagunas_abiertas ? 'alerta' : undefined} valor={p.lagunas_abiertas}
+          etiqueta={segun(p.lagunas_abiertas, 'Laguna de conocimiento abierta', 'Lagunas de conocimiento abiertas')} />
       </div>
     </section>
   )
@@ -354,7 +372,7 @@ function MisTareas({ d }: { d: DatosInicio }) {
                     {t.origen === 'formacion' && <Etiqueta tono="azul">Formación</Etiqueta>}
                     {t.caducado ? <Etiqueta tono="roja">Caducado</Etiqueta>
                       : t.requiere_reevaluacion && <Etiqueta tono="naranja">Reevaluar</Etiqueta>}
-                    {!t.instruccion_id && <span className="apagado">sin instrucción todavía</span>}
+                    {!t.instruccion_id && <Etiqueta>Sin instrucción todavía</Etiqueta>}
                   </div>
                 </div>
                 <div className="ini-nivel">
@@ -395,7 +413,7 @@ function MisAportaciones({ d }: { d: DatosInicio }) {
       {!d.mis_aportaciones.length ? (
         <div className="ini-vacio-mini" style={{ alignItems: 'flex-start' }}>
           <Lightbulb />
-          <span>¿Conoces un truco o la solución a una avería? Cuéntalo por voz o por escrito: tu jefe lo valida y el copiloto lo cita con tu nombre.</span>
+          <span>¿Conoces un truco o la solución a una avería? Cuéntalo por voz o por escrito: tu responsable lo valida y el copiloto lo cita con tu nombre.</span>
         </div>
       ) : (
         <ul className="ini-lista">

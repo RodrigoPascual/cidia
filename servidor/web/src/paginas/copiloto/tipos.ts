@@ -93,6 +93,15 @@ export function nombreTipo(tipo?: string | null): string {
   return (tipo && NOMBRE_TIPO[tipo]) || 'Documento'
 }
 
+/**
+ * Título de la fuente para mostrar junto a su versión. El de una instrucción indexada acaba en «(v1)»
+ * («IT-023 · Montaje de la brida B (v1)»): si la versión ya se enseña aparte, no se repite («(v1) v1»).
+ */
+export function tituloFuente(f: { titulo?: string | null; version?: number | null }): string {
+  const t = f.titulo ?? ''
+  return f.version ? t.replace(new RegExp(`\\s*\\(v${f.version}\\)$`), '') : t
+}
+
 /** «v2 · paso 3 · pág. 4»: dónde está el dato dentro del documento (el código solo si el título no lo lleva ya). */
 export function ubicacion(f: Fuente): string {
   const partes: string[] = []

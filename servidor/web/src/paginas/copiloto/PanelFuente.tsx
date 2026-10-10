@@ -8,7 +8,7 @@ import {
 import { urlServidor } from '../../api'
 import { useSesion } from '../../sesion'
 import { Aviso, Boton, Etiqueta, TextoFormato } from '../../ui'
-import { nombreTipo, ubicacion, type Fuente } from './tipos'
+import { nombreTipo, tituloFuente, ubicacion, type Fuente } from './tipos'
 
 /** El fragmento es un trozo del documento tal cual (Markdown, o texto de un PDF): se prepara para verlo
  * con formato. El troceado puede pegar un encabezado con la línea siguiente («## Zonas | Zona | EPI |»),
@@ -96,7 +96,8 @@ export default function PanelFuente({ fuentes, n, citadas, onCambiar, onCerrar }
         </div>
 
         <div className="panel-fuente-cuerpo">
-          <h3 className="panel-fuente-titulo">{f.titulo}</h3>
+          {/* Sin la versión del final: va en la etiqueta de debajo («v1 · paso 3»). */}
+          <h3 className="panel-fuente-titulo">{f.disponible !== false && donde ? tituloFuente(f) : f.titulo}</h3>
           {f.disponible !== false && (
             <div className="fila envolver mt-1">
               <Etiqueta tono={f.tipo === 'instruccion' ? 'amarilla' : f.tipo === 'faq' ? 'verde' : 'azul'}

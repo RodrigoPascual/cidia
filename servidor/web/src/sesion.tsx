@@ -14,6 +14,8 @@ export interface Perfil {
   memoria_activa?: boolean
   /** Entró con una contraseña inicial o temporal: hay que cambiarla antes de seguir. */
   debe_cambiar_contrasena?: boolean
+  /** false: entra con la cuenta del directorio de la empresa (LDAP u OIDC) y la contraseña no se cambia en CidIA. */
+  contrasena_gestionable?: boolean
   servicios: string[]
   puesto?: string | null
   departamento?: { id: number; nombre: string } | null

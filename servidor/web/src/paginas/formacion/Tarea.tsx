@@ -190,7 +190,7 @@ export default function Tarea() {
   )
   const botonCuestionario = (
     <Boton icono={<ClipboardCheck />} disabled={!ins} onClick={irCuestionario}
-      title={d.cuestionario.disponible ? undefined : 'El experto todavía no ha aprobado las preguntas'}>
+      title={d.cuestionario.disponible ? undefined : 'Una persona experta todavía tiene que aprobar las preguntas'}>
       {d.cuestionario.aprobado ? 'Ver cuestionario' : d.cuestionario.disponible ? 'Hacer el cuestionario' : 'Cuestionario'}
     </Boton>
   )
@@ -200,7 +200,7 @@ export default function Tarea() {
     lecciones = (
       <Tarjeta>
         <Vacio icono={<ScrollText />} titulo="Esta tarea aún no tiene instrucción publicada">
-          Cuando el experto la publique, aquí aparecerán sus micro-lecciones y podrás practicarla en el modo planta.
+          Cuando una persona experta la publique, aquí aparecerán sus micro-lecciones y podrás practicarla en el modo planta.
         </Vacio>
       </Tarjeta>
     )

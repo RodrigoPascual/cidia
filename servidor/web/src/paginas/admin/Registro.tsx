@@ -196,13 +196,15 @@ function Actividad() {
       <div className="adm-filtros">
         <div className="entrada-icono">
           <Search />
-          <Entrada placeholder="Persona" value={actor} onChange={(e) => setActor(e.target.value)} />
+          <Entrada placeholder="Persona" aria-label="Buscar por persona" value={actor} onChange={(e) => setActor(e.target.value)} />
         </div>
-        <Selector value={verbo} onChange={(e) => setVerbo(e.target.value)} vacio="Todas las acciones"
+        <Selector value={verbo} onChange={(e) => setVerbo(e.target.value)} vacio="Todas las acciones" aria-label="Acción"
           opciones={(datos?.verbos ?? []).map((v) => ({ valor: v.clave, texto: v.nombre }))} />
         <div className="entrada-icono">
           <Search />
-          <Entrada placeholder="Objeto: tarea, documento, nombre…" value={objeto} onChange={(e) => setObjeto(e.target.value)} />
+          {/* Corto para que quepa en el filtro sin cortarse («Objeto: tarea, documento, nombre…» se quedaba en «noml»). */}
+          <Entrada placeholder="Tarea, documento o nombre" aria-label="Buscar por tarea, documento o nombre"
+            value={objeto} onChange={(e) => setObjeto(e.target.value)} />
         </div>
         <Fechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
         {hayFiltros && (
@@ -303,13 +305,13 @@ function Auditoria() {
       <div className="adm-filtros">
         <div className="entrada-icono">
           <Search />
-          <Entrada placeholder="Quién" value={usuario} onChange={(e) => setUsuario(e.target.value)} />
+          <Entrada placeholder="Quién" aria-label="Buscar por quién hizo el cambio" value={usuario} onChange={(e) => setUsuario(e.target.value)} />
         </div>
-        <Selector value={accion} onChange={(e) => setAccion(e.target.value)} vacio="Todos los cambios"
+        <Selector value={accion} onChange={(e) => setAccion(e.target.value)} vacio="Todos los cambios" aria-label="Tipo de cambio"
           opciones={(datos?.acciones ?? []).map((a) => ({ valor: a, texto: nombreAccion(a) }))} />
         <div className="entrada-icono">
           <Search />
-          <Entrada placeholder="Buscar en el detalle" value={texto} onChange={(e) => setTexto(e.target.value)} />
+          <Entrada placeholder="Buscar en el detalle" aria-label="Buscar en el detalle" value={texto} onChange={(e) => setTexto(e.target.value)} />
         </div>
         <Fechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
         {hayFiltros && (

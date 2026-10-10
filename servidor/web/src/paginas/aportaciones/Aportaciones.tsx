@@ -457,7 +457,7 @@ function TarjetaMia({ ap, abierta, onAlternar, onRetirada }: {
             <Aviso>CidIA está transcribiendo y ordenando tu aportación. Tardará unos segundos.</Aviso>
           )}
           {ap.estado === 'pendiente' && (
-            <Aviso tono="amarillo">Tu responsable la revisará pronto. Mientras tanto puedes retirarla si te has equivocado.</Aviso>
+            <Aviso tono="amarillo">Tu responsable la revisará pronto. Mientras tanto, puedes retirarla si te has equivocado.</Aviso>
           )}
           {ap.estado === 'validada' && (
             <Aviso tono="exito" titulo={`Validada por ${ap.revisada_por ?? 'tu responsable'}${ap.validada_en ? ` el ${fecha(ap.validada_en)}` : ''}`}>

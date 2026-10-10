@@ -12,7 +12,10 @@
   2b. Pone la marca de CidIA a esa copia de la app (marca-app.ps1): con rcedit 2.0.0 (herramienta
      oficial de Electron, sha256 fijado, en la carpeta de herramientas, sin instalarla) el icono y
      los datos de versión del ejecutable, que pasa a llamarse app\CidIA.exe; y los iconos de la
-     bandeja y del panel «Acerca de» en resources. No toca el app.asar.
+     bandeja y del panel «Acerca de» en resources. Después (traducir-app.mjs, con Node) pone en
+     castellano los textos del proceso principal dentro del app.asar (barra de menús, menús,
+     bandeja y cuadros de diálogo, con «CidIA» en lugar de la marca de la app base) y quita del
+     menú «Aplicación» «Buscar actualizaciones» y «Gestionar la orden dsh».
   3. Prepara la carpeta de carga: plugin CidIA, plantillas del perfil, marca y textos.
   4. Genera plantillas.nsh: el instalador y el lanzador escriben la configuración en UTF-8 a
      partir de las plantillas de app\perfil (NSIS no escribe UTF-8 por sí mismo).
@@ -149,18 +152,19 @@ if (-not $SieteZip -or -not (Test-Path $SieteZip)) { Fallo 'no se encuentra 7-Zi
 
 foreach ($d in $Cache, $Herramientas, $Extraccion, $Salida) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
 
+# Node: pruebas del plugin y castellano del app.asar (traducir-app.mjs, paso 2b).
+$node = Get-Command node.exe -ErrorAction SilentlyContinue
+if (-not $node) { Fallo 'no se encuentra Node (node.exe) en el PATH: hace falta Node 22 para construir.' }
+$versionNode = (& $node.Source --version)
+if ($versionNode -notmatch '^v(\d+)\.' -or [int]$Matches[1] -lt 22) { Fallo "hace falta Node 22 o posterior (hay $versionNode)" }
+
 if (-not $SinPruebas) {
   Paso 'Pruebas del plugin (node --test)'
-  $node = Get-Command node.exe -ErrorAction SilentlyContinue
-  if ($node) {
-    Push-Location (Join-Path $AppRepo 'plugins\cidia')
-    try {
-      & $node.Source --test 'pruebas/*.test.*' | Select-Object -Last 9
-      if ($LASTEXITCODE -ne 0) { Fallo 'las pruebas del plugin han fallado' }
-    } finally { Pop-Location }
-  } else {
-    Write-Warning 'Node no está en el PATH: se omiten las pruebas del plugin.'
-  }
+  Push-Location (Join-Path $AppRepo 'plugins\cidia')
+  try {
+    & $node.Source --test 'pruebas/*.test.*' | Select-Object -Last 9
+    if ($LASTEXITCODE -ne 0) { Fallo 'las pruebas del plugin han fallado' }
+  } finally { Pop-Location }
 }
 
 # ------------------------------------------------------------------ 1. instalador oficial
@@ -196,23 +200,26 @@ Paso 'App base (app-64.7z)'
 $marca = Join-Path $Carga 'app\.cidia-origen'
 $origen = "$DshVersion $DshSha512"
 $appCarga = Join-Path $Carga 'app'
-# Marca de CidIA en la app (paso 2b): app\.cidia-marca guarda la huella de lo que se aplicó y la
-# sha256 del ejecutable resultante. Si la carga en caché ya tiene la marca pero con otra huella
-# (otro icono, otra versión...), no queda el ejecutable original: se vuelve a extraer.
+# Marca de CidIA en la app (paso 2b): app\.cidia-marca guarda la huella de lo que se aplicó y las
+# sha256 del ejecutable y del app.asar resultantes. Si la carga en caché ya tiene la marca pero con
+# otra huella (otro icono, otra versión, otros textos...), no quedan el ejecutable ni el app.asar
+# originales: se vuelve a extraer.
 $ExeApp = DefinicionNsis 'CIDIA_EXE_APP'
 $ExeOriginal = DefinicionNsis 'CIDIA_EXE_APP_ANTERIOR'
 $Empresa = DefinicionNsis 'CIDIA_EMPRESA'
 $Copyright = DefinicionNsis 'CIDIA_COPYRIGHT'
 $exeOriginalCarga = Join-Path $appCarga $ExeOriginal
 $exeCarga = Join-Path $appCarga $ExeApp
+$asarCarga = Join-Path $appCarga 'resources\app.asar'
 $marcaApp = Join-Path $appCarga '.cidia-marca'
 $huellaMarca = @("rcedit $RceditVersion", $ExeApp, $Version, $Empresa, $Copyright,
   (Sha256 (Join-Path $AppRepo 'marca\cidia.ico')), (Sha256 (Join-Path $AppRepo 'marca\png\cidia-512.png')),
-  (Sha256 (Join-Path $Instalador 'marca-app.ps1'))) -join ' | '
+  (Sha256 (Join-Path $Instalador 'marca-app.ps1')), (Sha256 (Join-Path $Instalador 'traducir-app.mjs')),
+  (Sha256 (Join-Path $Instalador 'textos\app-es.json'))) -join ' | '
 function MarcaVigente {
-  if (-not (Test-Path $marcaApp) -or -not (Test-Path $exeCarga)) { return $false }
+  if (-not (Test-Path $marcaApp) -or -not (Test-Path $exeCarga) -or -not (Test-Path $asarCarga)) { return $false }
   $l = @([IO.File]::ReadAllLines($marcaApp, $Utf8))
-  return ($l.Count -ge 2 -and $l[0] -eq $huellaMarca -and $l[1] -eq (Sha256 $exeCarga))
+  return ($l.Count -ge 3 -and $l[0] -eq $huellaMarca -and $l[1] -eq (Sha256 $exeCarga) -and $l[2] -eq (Sha256 $asarCarga))
 }
 $extraida = (Test-Path $marca) -and ((Get-Content -Raw $marca).Trim() -eq $origen)
 if ($extraida -and -not (Test-Path $exeOriginalCarga) -and -not (MarcaVigente)) {
@@ -262,13 +269,21 @@ if (Test-Path $exeOriginalCarga) {
   if (Test-Path $exeCarga) { Remove-Item $exeCarga -Force }
   & (Join-Path $Instalador 'marca-app.ps1') -App $appCarga -Rcedit $rcedit -Marca (Join-Path $AppRepo 'marca') `
     -Version $Version -VersionWin $VersionWin -Empresa $Empresa -Copyright $Copyright -Exe $ExeApp -ExeOriginal $ExeOriginal
-  [IO.File]::WriteAllLines($marcaApp, [string[]]@($huellaMarca, (Sha256 $exeCarga)), $Utf8)
+  # Castellano en el proceso principal (menús, bandeja, diálogos). Solo acepta el app.asar
+  # original (sha256 fijado en el script) y se para si la app base no es la esperada.
+  Write-Host 'Castellano en el app.asar (traducir-app.mjs)'
+  & $node.Source (Join-Path $Instalador 'traducir-app.mjs') --asar $asarCarga --version-cidia $Version
+  if ($LASTEXITCODE -ne 0) { Fallo 'no se ha podido poner en castellano el app.asar' }
+  [IO.File]::WriteAllLines($marcaApp, [string[]]@($huellaMarca, (Sha256 $exeCarga), (Sha256 $asarCarga)), $Utf8)
 } elseif (MarcaVigente) {
-  Write-Host "Marca ya aplicada (caché): $ExeApp sin cambios desde que se marcó."
+  Write-Host "Marca y castellano ya aplicados (caché): $ExeApp y app.asar sin cambios desde entonces."
 } else {
   Fallo "la carga no tiene ni $ExeOriginal ni un $ExeApp marcado por esta construcción"
 }
 if (-not (MarcaVigente)) { Fallo 'la marca de CidIA de la app no se ha guardado bien' }
+# Comprobante: si el menú o los diálogos fueran a salir en inglés, la construcción se para aquí.
+& $node.Source (Join-Path $Instalador 'traducir-app.mjs') --asar $asarCarga --comprobar
+if ($LASTEXITCODE -ne 0) { Fallo 'el app.asar de la carga no está en castellano' }
 
 # ------------------------------------------------------------------ 3. plugin, perfil, marca y textos
 Paso 'Carga de CidIA'

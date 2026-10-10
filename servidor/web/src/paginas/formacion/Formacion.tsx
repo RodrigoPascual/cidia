@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { fecha, get } from '../../api'
 import {
-  BarraProgreso, Boton, Cabecera, Dato, ErrorCarga, Esqueleto, Etiqueta, Iluo, LETRA_ILUO, Tarjeta, Vacio, useDatos,
+  BarraProgreso, Boton, Cabecera, Dato, ErrorCarga, Esqueleto, Etiqueta, Iluo, LETRA_ILUO, NOMBRE_ILUO, Tarjeta, Vacio, useDatos,
 } from '../../ui'
 import type { FormacionActiva, ItemItinerario, Itinerario } from './tipos'
 import './formacion.css'
@@ -28,7 +28,7 @@ function FilaTarea({ t }: { t: ItemItinerario }) {
   return (
     <div className={`fm-item ${t.tiene_instruccion ? '' : 'sin-instruccion'}`} role="link" tabIndex={0} onClick={ir}
       onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) ir() }} aria-label={`${t.nombre}: ${t.siguiente.texto}`}>
-      <div className="fm-iluo" title={`Nivel ${LETRA_ILUO[t.nivel]}`}>
+      <div className="fm-iluo" title={t.nivel ? `Nivel ${LETRA_ILUO[t.nivel]} · ${NOMBRE_ILUO[t.nivel]}` : 'Sin nivel todavía'}>
         <Iluo nivel={t.nivel} tamano={42} caducado={t.caducado} />
         <span className="letra">{t.nivel ? t.nivel_letra : 'Sin nivel'}</span>
       </div>
@@ -146,8 +146,11 @@ export default function Formacion() {
     <>
       {cabecera}
       <div className="rejilla c4">
-        <Dato icono={<ListChecks />} valor={resumen.tareas} etiqueta="Tareas en tu itinerario" />
-        <Dato icono={<Award />} tono="verde" valor={resumen.autonomas} etiqueta="Ya eres autónomo (U u O)" />
+        <Dato icono={<ListChecks />} valor={resumen.tareas}
+          etiqueta={resumen.tareas === 1 ? 'Tarea en tu itinerario' : 'Tareas en tu itinerario'} />
+        {/* Igual que en Inicio («Tareas que dominas»), sin dar por hecho el género de quien lo lee. */}
+        <Dato icono={<Award />} tono="verde" valor={resumen.autonomas}
+          etiqueta={`${resumen.autonomas === 1 ? 'Tarea que dominas' : 'Tareas que dominas'} (U u O)`} />
         <Dato icono={<TrendingUp />} tono="info" valor={`${resumen.avance_medio} %`} etiqueta="Avance medio" />
         <Dato icono={<RefreshCw />} tono={resumen.reevaluacion ? 'alerta' : undefined} valor={resumen.reevaluacion}
           etiqueta="Pendientes de reevaluar" />

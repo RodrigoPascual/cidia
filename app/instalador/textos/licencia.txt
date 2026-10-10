@@ -17,7 +17,7 @@ Al usar CidIA aceptas usarlo dentro de tu empresa y según sus normas. Las respu
 
 3. Software de terceros incluido
 
-· DeepSeek Harness 0.2.0-rc.2 (app base de escritorio). Copyright (c) 2026 DeepSeek. Licencia MIT (texto completo más abajo). «DeepSeek Harness» es una marca registrada de DeepSeek. CidIA es un proyecto independiente: no está afiliado a DeepSeek ni cuenta con su respaldo.
+· DeepSeek Harness 0.2.0-rc.2 (app base de escritorio). Copyright (c) 2026 DeepSeek. Licencia MIT (texto completo más abajo). «DeepSeek Harness» es una marca registrada de DeepSeek. CidIA es un proyecto independiente: no está afiliado a DeepSeek ni cuenta con su respaldo. Cambios de CidIA en esta copia: el icono y los datos del ejecutable, y los textos de su proceso principal (menús, bandeja y cuadros de diálogo), traducidos al castellano y sin las entradas de menú para buscar actualizaciones y gestionar la orden dsh.
 · Electron y Chromium: sus licencias están en la carpeta de instalación, en app\LICENSE.electron.txt y app\LICENSES.chromium.html.
 · Node.js y pnpm (incluidos en la app base): licencias MIT; avisos en app\resources\runtime.
 · NSIS (sistema con el que se ha hecho este instalador): licencia zlib/libpng.

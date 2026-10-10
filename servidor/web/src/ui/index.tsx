@@ -487,13 +487,24 @@ export const NOMBRE_ILUO = ['Sin iniciar', 'En formación', 'Ejecuta con apoyo',
 
 // ------------------------------------------------------------------ voz
 
-/** Grabación de voz «mantén pulsado para hablar». Devuelve un Blob webm/ogg al soltar. */
-/** ¿Va embebida en la app de escritorio? Allí el micrófono lo pone el marco principal. */
+/** ¿Va embebida en la app de escritorio? Allí el micrófono lo abre el marco principal: el plugin
+ *  CidIA graba por la interfaz y le pasa el audio (mensajes 'cidia:microfono', ver
+ *  app/plugins/cidia/client.js). */
 function enAppDeEscritorio(): boolean {
   try { return window.location.protocol === 'dsh-app:' && window.parent !== window } catch { return false }
 }
 
-type RespuestaMicro = { estado: 'grabando' | 'lista' | 'cancelada' | 'error'; audio?: Blob; duracion_ms?: number; mensaje?: string }
+type RespuestaMicro = {
+  estado: 'grabando' | 'nivel' | 'lista' | 'cancelada' | 'error'
+  audio?: Blob
+  duracion_ms?: number
+  nivel?: number
+  mensaje?: string
+}
+
+function mandarAlPuente(id: string, accion: 'empezar' | 'parar' | 'cancelar') {
+  try { window.parent.postMessage({ tipo: 'cidia:microfono', id, accion }, window.location.origin) } catch { /* sin app */ }
+}
 
 /** Pide al plugin de la app que haga una acción de grabación y espera su respuesta. */
 function pedirAlPuente(id: string, accion: 'empezar' | 'parar' | 'cancelar', esperar: RespuestaMicro['estado'][]): Promise<RespuestaMicro> {
@@ -509,10 +520,46 @@ function pedirAlPuente(id: string, accion: 'empezar' | 'parar' | 'cancelar', esp
       resolver(d as RespuestaMicro)
     }
     window.addEventListener('message', alMensaje)
-    window.parent.postMessage({ tipo: 'cidia:microfono', id, accion }, window.location.origin)
+    mandarAlPuente(id, accion)
   })
 }
 
+interface MedidorPuente { flujo: MediaStream; nivel: (n: number) => void; cerrar: () => void }
+
+/**
+ * Flujo para el medidor de nivel cuando graba la app: el audio no pasa por este marco, pero el
+ * plugin manda el nivel del micrófono y aquí se convierte en un tono (que no suena) con ese volumen.
+ * Quien mide el flujo (useNivelMicro de la captura: RMS · 5) ve el nivel real.
+ */
+function medidorDelPuente(): MedidorPuente | null {
+  try {
+    const ctx = new AudioContext()
+    const tono = ctx.createOscillator()
+    const volumen = ctx.createGain()
+    const salida = ctx.createMediaStreamDestination()
+    volumen.gain.value = 0
+    tono.connect(volumen).connect(salida)
+    tono.start()
+    void ctx.resume().catch(() => { /* sin medidor */ })
+    return {
+      flujo: salida.stream,
+      // El RMS de un seno de amplitud A es A/√2: con A = n·√2/5 el medidor marca n.
+      nivel: (n) => volumen.gain.setTargetAtTime(Math.max(0, Math.min(1, n)) * Math.SQRT2 / 5, ctx.currentTime, 0.04),
+      cerrar: () => {
+        try { tono.stop() } catch { /* ya parado */ }
+        void ctx.close().catch(() => { /* ya cerrado */ })
+      },
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Grabación de voz. empezar() abre el micrófono y graba (`grabando` pasa a verdadero cuando ya se
+ * está grabando); parar() devuelve un Blob webm/ogg, o null si ha sido muy corta o se ha cancelado.
+ * En la app de escritorio graba el plugin por el puente; `flujo` es entonces el del medidor.
+ */
 export function useGrabadora() {
   const [grabando, setGrabando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -521,13 +568,30 @@ export function useGrabadora() {
   const resolver = useRef<((b: Blob | null) => void) | null>(null)
   const inicio = useRef(0)
   const flujoActual = useRef<MediaStream | null>(null)
-  const idPuente = useRef<string | null>(null)
+  // Grabación por el puente de la app: su id, si el micrófono ya está abierto y el medidor.
+  const puente = useRef<{ id: string; abierta: boolean; medidor: MedidorPuente | null } | null>(null)
+
+  // Nivel del micrófono que manda la app, para el medidor.
+  useEffect(() => {
+    if (!enAppDeEscritorio()) return undefined
+    const alMensaje = (e: MessageEvent) => {
+      const p = puente.current
+      const d = e.data
+      if (!p || e.origin !== window.location.origin || e.source !== window.parent) return
+      if (d && d.tipo === 'cidia:microfono' && d.id === p.id && d.estado === 'nivel' && typeof d.nivel === 'number') p.medidor?.nivel(d.nivel)
+    }
+    window.addEventListener('message', alMensaje)
+    return () => window.removeEventListener('message', alMensaje)
+  }, [])
 
   // Al desmontar el componente se apaga el micrófono si seguía grabando.
   useEffect(() => () => {
-    if (idPuente.current) {
-      try { window.parent.postMessage({ tipo: 'cidia:microfono', id: idPuente.current, accion: 'cancelar' }, window.location.origin) } catch { /* sin app */ }
-      idPuente.current = null
+    const p = puente.current
+    if (p) {
+      puente.current = null
+      p.medidor?.cerrar()
+      // Si aún se estaba abriendo, empezar() lo cancela en cuanto la app conteste.
+      if (p.abierta) mandarAlPuente(p.id, 'cancelar')
     }
     flujoActual.current?.getTracks().forEach((t) => t.stop())
     if (grabador.current && grabador.current.state !== 'inactive') {
@@ -539,16 +603,25 @@ export function useGrabadora() {
   const empezar = useCallback(async () => {
     setError(null)
     if (enAppDeEscritorio()) {
-      const id = `micro-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      idPuente.current = id
+      if (puente.current) return
+      const p = { id: `micro-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, abierta: false, medidor: null as MedidorPuente | null }
+      puente.current = p
+      const r = await pedirAlPuente(p.id, 'empezar', ['grabando', 'cancelada'])
+      if (puente.current !== p) {
+        // Se soltó el botón (o se cerró la pantalla) mientras la app abría el micrófono.
+        if (r.estado === 'grabando') mandarAlPuente(p.id, 'cancelar')
+        return
+      }
+      if (r.estado !== 'grabando') {
+        puente.current = null
+        if (r.estado === 'error') setError(r.mensaje ?? 'No se puede usar el micrófono. Revisa los permisos de Windows.')
+        return
+      }
+      p.abierta = true
+      p.medidor = medidorDelPuente()
+      flujoActual.current = p.medidor?.flujo ?? null
       inicio.current = Date.now()
       setGrabando(true)
-      const r = await pedirAlPuente(id, 'empezar', ['grabando'])
-      if (r.estado !== 'grabando') {
-        idPuente.current = null
-        setGrabando(false)
-        setError(r.mensaje ?? 'No se puede usar el micrófono. Revisa los permisos de Windows.')
-      }
       return
     }
     try {
@@ -575,11 +648,15 @@ export function useGrabadora() {
   }, [])
 
   const parar = useCallback((): Promise<Blob | null> => {
-    const id = idPuente.current
-    if (id) {
-      idPuente.current = null
+    const p = puente.current
+    if (p) {
+      puente.current = null
       setGrabando(false)
-      return pedirAlPuente(id, 'parar', ['lista', 'cancelada']).then((r) => {
+      p.medidor?.cerrar()
+      flujoActual.current = null
+      // Aún se estaba abriendo: no hay nada que entregar y empezar() lo cancela al abrirse.
+      if (!p.abierta) return Promise.resolve(null)
+      return pedirAlPuente(p.id, 'parar', ['lista', 'cancelada']).then((r) => {
         if (r.estado === 'error') { setError(r.mensaje ?? 'No se ha podido grabar.'); return null }
         if (r.estado !== 'lista' || !r.audio) return null
         return (r.duracion_ms ?? Date.now() - inicio.current) < 400 ? null : r.audio

@@ -107,6 +107,8 @@ def perfil(bd: Session, actor: Actor) -> dict[str, Any]:
         "memoria_activa": u.memoria_activa,
         # Contraseña inicial o temporal: la interfaz pide cambiarla antes de seguir.
         "debe_cambiar_contrasena": bool(u.debe_cambiar_contrasena and u.origen_identidad == "local"),
+        # Con LDAP u OIDC la contraseña es la del directorio de la empresa: «Mi perfil» no ofrece cambiarla.
+        "contrasena_gestionable": u.origen_identidad == "local",
         "servicios": servicios(actor),
         "puesto": u.puesto.nombre if u.puesto else None,
     }

@@ -1,7 +1,8 @@
 """Motor de conocimiento propio: PostgreSQL con pgvector y búsqueda de texto en castellano.
 
 Búsqueda híbrida: una lista por similitud de vectores y otra por palabras (índice GIN con
-la configuración 'spanish'), fusionadas con RRF. Los permisos se aplican en el propio SQL.
+la configuración 'spanish', ampliada con las formas con y sin diptongo), fusionadas con RRF.
+Los permisos se aplican en el propio SQL.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 from cidia.config import ajustes
 from cidia.conocimiento.base import Encontrado, MotorConocimiento, fusion_rrf
 from cidia.conocimiento.extraccion import extraer, trocear
+from cidia.conocimiento.lexico import variante
 from cidia.ia import llm
 from cidia.modelos import Documento, Fragmento, Usuario
 from cidia.permisos import Alcance, filtro_documentos
@@ -75,11 +77,11 @@ class MotorPgvector(MotorConocimiento):
             .order_by(dist)
             .limit(CANDIDATOS)
         ).all()
-        # 2) por palabras exactas (cualquiera de los términos)
-        palabras = re.findall(r"[\wáéíóúüñÁÉÍÓÚÜÑ][\wáéíóúüñÁÉÍÓÚÜÑ\-./]*", consulta)
+        # 2) por palabras (cualquiera de los términos), también en su forma con o sin diptongo
+        palabras = terminos_texto(consulta)
         por_texto = []
         if palabras:
-            tsq = func.websearch_to_tsquery("spanish", " or ".join(palabras[:30]))
+            tsq = func.websearch_to_tsquery("spanish", " or ".join(palabras))
             rango = func.ts_rank_cd(Fragmento.tsv, tsq)
             por_texto = bd.execute(
                 select(Fragmento.id, rango.label("rango"))
@@ -127,6 +129,23 @@ class MotorPgvector(MotorConocimiento):
 
     def salud(self) -> dict[str, Any]:
         return {"ok": True, "motor": self.nombre}
+
+
+MAX_PALABRAS = 30
+
+
+def terminos_texto(consulta: str) -> list[str]:
+    """Palabras de la búsqueda de texto: las de la consulta (hasta MAX_PALABRAS) y, detrás, la otra forma de
+    las que tienen o pueden tener diptongo («apretar» → «aprietar», «aprieta» → «apreta»: lexico.variante).
+
+    La columna `tsv` es to_tsvector('spanish', texto), y su lematizador (Snowball) no une «aprieta»
+    («apriet») con «apretar» («apret»). Normalizar el índice obligaría a cambiar una columna generada y a
+    reindexar todos los fragmentos; ampliar la consulta con un OR consigue lo mismo sin tocar el índice. Lo
+    que añade son candidatos: la fusión con la búsqueda por significado y las comprobaciones del copiloto
+    (servicios/consulta.py, con la misma normalización) deciden qué respalda la respuesta."""
+    palabras = re.findall(r"[\wáéíóúüñÁÉÍÓÚÜÑ][\wáéíóúüñÁÉÍÓÚÜÑ\-./]*", consulta or "")[:MAX_PALABRAS]
+    variantes = [v for p in palabras if (v := variante(p))]
+    return list(dict.fromkeys([*palabras, *variantes]))
 
 
 def metadatos_documento(bd: Session, d: Documento) -> dict[str, Any]:

@@ -154,6 +154,7 @@ export default function Marco({ ancho = false }: { ancho?: boolean }) {
   const actual = enlaceDe(lugar.pathname)
   const tituloActual = TITULOS_EXTRA[lugar.pathname] ?? actual?.texto ?? 'CidIA'
   const cerrarSesion = async () => { await salir(); navegar('/acceso') }
+  const rol = `${NOMBRE_ROL[perfil.rol] ?? ''}${perfil.es_experto && perfil.rol === 'empleado' ? ' · Experto' : ''}`
 
   const contenido = (
     <main id="contenido" className={`contenido ${ancho ? 'ancho' : ''}`} tabIndex={-1}>
@@ -221,9 +222,8 @@ export default function Marco({ ancho = false }: { ancho?: boolean }) {
                 <Avatar nombre={perfil.nombre} iniciales={perfil.iniciales} />
                 <span className="crece">
                   <span className="nombre recortar">{perfil.nombre}</span>
-                  <span className="detalle recortar">
-                    {NOMBRE_ROL[perfil.rol]}{perfil.es_experto && perfil.rol === 'empleado' ? ' · Experto' : ''}
-                  </span>
+                  {/* La cuenta «Administración» no repite su rol debajo del nombre. */}
+                  {rol !== perfil.nombre && <span className="detalle recortar">{rol}</span>}
                 </span>
               </NavLink>
               <Boton variante="fantasma" className="boton-salir" icono={<LogOut />} title="Cerrar sesión" onClick={cerrarSesion} />

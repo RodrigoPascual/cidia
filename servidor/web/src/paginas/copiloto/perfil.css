@@ -20,6 +20,9 @@
   .perfil-fila { grid-template-columns: 1fr; gap: 4px; }
 }
 
+.perfil-pie-form { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.perfil-pie-form .boton { margin-left: auto; }
+
 .memoria-explicacion { font-size: 14px; color: var(--tinta-2); }
 .memoria-explicacion p { margin: 0 0 8px; }
 .memoria-explicacion ul { margin: 0; padding-left: 1.2em; color: var(--pizarra); }
@@ -30,7 +33,11 @@
 @media (max-width: 520px) { .memoria-nuevo { flex-direction: column; } }
 
 .recuerdos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.recuerdos.inactivos .recuerdo { opacity: 0.6; }
+/* Memoria desactivada: los recuerdos se ven apagados sin perder contraste (el texto se sigue leyendo). */
+.recuerdos.inactivos .recuerdo { background: var(--papel); }
+.recuerdos.inactivos .recuerdo-texto { color: var(--tinta-3); }
+.recuerdos.inactivos .recuerdo-icono { background: var(--linea-suave); color: var(--pizarra); }
+.recuerdo-texto { overflow-wrap: anywhere; }
 .recuerdo {
   display: flex; align-items: center; gap: 12px; padding: 9px 10px 9px 12px;
   border: 1px solid var(--linea-suave); border-radius: var(--radio); background: var(--blanco);

@@ -24,7 +24,6 @@ import logging
 import re
 import threading
 import time
-import unicodedata
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from types import SimpleNamespace
@@ -38,6 +37,7 @@ from starlette.concurrency import run_in_threadpool
 
 from cidia.config import ajustes
 from cidia.conocimiento import Encontrado, motor
+from cidia.conocimiento.lexico import normal as _normal, raiz as _raiz, sin_diptongo
 from cidia.db import sesion_bd
 from cidia.ia import llm, prompts
 from cidia.modelos import (
@@ -146,11 +146,11 @@ class Terminos:
 
 
 def terminos(texto: str) -> Terminos:
-    t = unicodedata.normalize("NFKD", (texto or "").lower())
-    t = "".join(c for c in t if not unicodedata.combining(c))
+    t = _normal(texto)
     codigos = frozenset(c.replace("-", "") for c in _RE_CODIGO.findall(t))
-    # Raíz = 5 primeras letras: «atasca», «atasco» y «atascado» cuentan como la misma palabra.
-    raices = frozenset(p[:5] for p in re.findall(r"[a-z]+", t) if len(p) >= 4 and p not in _VACIAS)
+    # Raíz recortada a 5 letras: «atasca», «atasco» y «atascado» cuentan como la misma palabra, y también
+    # «aprieta» y «apretar» o «paso» y «pasos» (la raíz va sin terminación ni diptongo: conocimiento/lexico.py).
+    raices = frozenset(_raiz(p)[:5] for p in re.findall(r"[a-z]+", t) if len(p) >= 4 and p not in _VACIAS)
     return Terminos(codigos, raices)
 
 
@@ -199,14 +199,10 @@ MAX_FRASES_EXTRACTIVA = 3
 MAX_EXTRACTIVA = 600  # caracteres de frases en la respuesta extractiva
 MAX_TOKENS_REINTENTO = 220
 MAX_FRAGMENTOS_REINTENTO = 2
-# Sufijos que se quitan para comparar palabras («engrasan» y «engrase», «puesto» y «puestos»), sin llegar a
-# confundir «responsable» con «responde» ni «plantilla» con «planta» (lo que hace la raíz de 5 letras).
-_SUFIJOS = tuple(sorted((
-    "amientos", "imientos", "amiento", "imiento", "aciones", "iciones", "ciones", "siones", "acion", "icion",
-    "cion", "sion", "mente", "ables", "ibles", "able", "ible", "adoras", "adores", "adora", "ador", "ando",
-    "iendo", "amos", "emos", "imos", "ados", "adas", "idos", "idas", "ajes", "ado", "ada", "ido", "ida", "aje",
-    "ar", "er", "ir", "an", "en", "es", "as", "os", "a", "e", "o", "s",
-), key=len, reverse=True))
+# Las palabras se comparan por su raíz (`_raiz`, de conocimiento/lexico.py): sin tildes, sin terminación
+# («engrasan» y «engrase», «puesto» y «puestos») y sin diptongo («aprieta» y «apretar», «cuelga» y «colgar»),
+# sin llegar a confundir «responsable» con «responde» ni «plantilla» con «planta» (lo que hace la raíz de 5
+# letras). La pregunta y el texto se normalizan igual.
 # «prensa 2», «línea 2», «nave nº 1»: una referencia numerada de la pregunta tiene que estar en el fragmento.
 _RE_REFERENCIA = re.compile(r"\b([a-z]{4,})\s+(?:no?\.?\s*)?(\d{1,3})\b")
 _RE_SEPARADOR_TABLA = re.compile(r"^\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?$")
@@ -227,19 +223,6 @@ _RE_CIFRA = re.compile(r"\d+(?:[.,]\d+)*")
 # Raíces de palabras que no aportan nada a una respuesta (versión, revisión, página, documento...).
 _GENERICAS = frozenset({"version", "revi", "pagin", "document", "fragment", "tare", "segun"})
 MIN_PARECIDO_REINTENTO = 0.3  # parte de lo que aporta la mejor frase que el reintento tiene que decir
-
-
-def _normal(texto: str) -> str:
-    """Minúsculas y sin tildes."""
-    t = unicodedata.normalize("NFKD", (texto or "").lower())
-    return "".join(c for c in t if not unicodedata.combining(c))
-
-
-def _raiz(palabra: str) -> str:
-    for s in _SUFIJOS:
-        if palabra.endswith(s) and len(palabra) - len(s) >= 4:
-            return palabra[: -len(s)]
-    return palabra
 
 
 def _raices(texto: str) -> frozenset[str]:
@@ -280,9 +263,18 @@ def _frases(texto: str) -> list[str]:
     return [f.strip() for f in frases if f.strip()]
 
 
+# Título de un paso de una instrucción tal y como se indexa (servicios/instrucciones.texto_indexable):
+# «Paso 3. Apretar los 4 tornillos en cruz a 25 N·m [PASO CRÍTICO]», sin punto final.
+_RE_TITULO_PASO = re.compile(r"Paso\s+\d{1,3}\.\s+[^.!?]{3,200}")
+
+
 def unidades(texto: str) -> list[tuple[str, str]]:
     """(apartado, frase) de un fragmento, sin Markdown: frases de los párrafos, elementos de las listas y
-    filas de las tablas («Columna: valor; …»). Las líneas partidas de un PDF se vuelven a unir."""
+    filas de las tablas («Columna: valor; …»). Las líneas partidas de un PDF se vuelven a unir.
+
+    El título de un paso de una instrucción es una frase y, además, el apartado de las frases del paso: en
+    IT-023, «¿Qué llave uso para apretar los tornillos?» la responde «Con la llave dinamométrica…, aprieta
+    en cruz…», y los tornillos solo salen en el título del paso («Paso 3. Apretar los 4 tornillos…»)."""
     lineas: list[str] = []
     for bruta in (texto or "").splitlines():
         linea = bruta.strip()
@@ -300,7 +292,8 @@ def unidades(texto: str) -> list[tuple[str, str]]:
             continue
         anterior = lineas[-1] if lineas else ""
         if (anterior and not anterior.startswith(("#", "|")) and not linea.startswith("|")
-                and linea[0].islower() and not re.search(r"[.:;!?]$", anterior)):
+                and linea[0].islower() and not re.search(r"[.:;!?]$", anterior)
+                and not _RE_TITULO_PASO.fullmatch(anterior)):
             lineas[-1] = f"{anterior} {linea}"  # continuación de una línea partida
             continue
         lineas.append(linea)
@@ -331,6 +324,8 @@ def unidades(texto: str) -> list[tuple[str, str]]:
         else:
             cabecera = fila = None
             salida += [(apartado, f) for f in _frases(sin_markdown(linea))]
+            if _RE_TITULO_PASO.fullmatch(linea):
+                apartado = sin_markdown(linea)
     return [(a, f) for a, f in salida if len(f) >= 12]
 
 
@@ -345,6 +340,7 @@ class Frase:
     en_frase: int  # palabras de la pregunta que están en la propia frase (las demás, en el título o el apartado)
     similitud: float
     literales: int = 0  # palabras y cifras de la pregunta que la frase repite tal cual («más de 12.000»)
+    del_paso: int = 0  # palabras de la pregunta que solo están en el título del paso (no en la frase ni en el título)
 
 
 def respaldo_claro(encontrados: list[Encontrado], pregunta: str) -> bool:
@@ -370,10 +366,18 @@ def _pide_numero(pregunta: str) -> tuple[bool, str | None]:
     return bool(_RE_CUANTO.search(t) or _RE_MAGNITUD.search(t)), None
 
 
+# Un número y las dos palabras que lo siguen (en una búsqueda anticipada: «veinte o treinta puestos»).
+_RE_CANTIDAD = re.compile(rf"(?:\d+(?:[.,]\d+)*|\b(?:{_NUMEROS}))(?=\s+([a-z]+)(?:\s+([a-z]+))?)")
+
+
 def _tiene_numero(texto_normal: str, contado: str | None) -> bool:
+    """¿Hay un número? Si se sabe lo que se cuenta, tiene que ir justo detrás del número (o tras una palabra):
+    para «¿cuántos puestos…?», «tres puestos». La raíz de lo contado va sin diptongo («pruebas» → «prob»), así
+    que cada palabra se mira tal cual y sin diptongo («tres pruebas» → «probas»)."""
     if contado is None:
         return bool(_RE_NUMERO.search(texto_normal))
-    return bool(re.search(rf"(?:\d+(?:[.,]\d+)*|\b(?:{_NUMEROS}))\s+(?:[a-z]+\s+)?{re.escape(contado)}", texto_normal))
+    return any(p.startswith(contado) or sin_diptongo(p).startswith(contado)
+               for m in _RE_CANTIDAD.finditer(texto_normal) for p in m.groups() if p)
 
 
 def _literales(texto: str) -> frozenset[str]:
@@ -387,7 +391,8 @@ def evidencia(fuentes: list[dict[str, Any]], textos: list[str], pregunta: str,
 
     Una frase vale si:
     * contiene al menos la mitad de las palabras con contenido de la pregunta y el resto está en el título
-      o en el apartado del fragmento (el nombre de la empresa no cuenta: sale en todas partes);
+      o en el apartado del fragmento (el nombre de la empresa no cuenta: sale en todas partes); el título de
+      un paso de una instrucción solo completa frases que ya tienen dos palabras de la pregunta;
     * aporta algo más que la pregunta y el título (dos palabras nuevas, o una y una cifra);
     * el fragmento tiene todos los códigos y referencias numeradas de la pregunta («prensa 3» también
       vale escrito «P3») y la frase no habla de otra («nave 2» no responde a «nave 1»);
@@ -420,7 +425,16 @@ def evidencia(fuentes: list[dict[str, Any]], textos: list[str], pregunta: str,
                 continue
             raices_frase = _raices(frase)
             propias = raices_frase & buscadas
-            if len(propias) * 2 < len(buscadas) or propias | del_titulo | (_raices(apartado) & buscadas) != buscadas:
+            if len(propias) * 2 < len(buscadas):
+                continue
+            del_apartado = _raices(apartado) & buscadas
+            # El título de un paso abarca todo el paso: con una sola palabra de la pregunta en la frase, cualquier
+            # frase del paso valdría («¿A qué presión se hace la prueba?» → «La caída de presión máxima admitida
+            # es de 0,05 bar», en «Paso 5. Hacer la prueba de estanqueidad»).
+            es_paso = bool(_RE_TITULO_PASO.fullmatch(apartado))
+            if es_paso and len(propias) < 2:
+                del_apartado = frozenset()
+            if propias | del_titulo | del_apartado != buscadas:
                 continue
             normal = _normal(frase)
             nuevas = raices_frase - buscadas - raices_titulo - _GENERICAS
@@ -433,11 +447,14 @@ def evidencia(fuentes: list[dict[str, Any]], textos: list[str], pregunta: str,
             if pide_numero and not _tiene_numero(normal, contado):
                 continue
             frases.append(Frase(f["n"], f.get("documento_id"), i, frase, len(propias),
-                                float(f.get("similitud") or 0.0), len(literales & _literales(frase))))
-    # A igualdad de palabras con contenido, va antes la frase que repite más palabras y cifras de la pregunta:
-    # en «Hasta 3.000 € … / De 3.000 a 12.000 € … / Más de 12.000 € …», a «¿quién aprueba compras de más de
+                                float(f.get("similitud") or 0.0), len(literales & _literales(frase)),
+                                len(buscadas - propias - del_titulo) if es_paso else 0))
+    # A igualdad de palabras con contenido, va antes la frase que no necesita el título del paso (a «¿A cuánto
+    # se aprietan los tornillos de la brida B?» responde «Los 4 tornillos a 25 N·m, apretados en cruz…», no
+    # «Presenta la brida… los 4 tornillos…») y después la que repite más palabras y cifras de la pregunta: en
+    # «Hasta 3.000 € … / De 3.000 a 12.000 € … / Más de 12.000 € …», a «¿quién aprueba compras de más de
     # 12.000 €?» responde la tercera, no la primera de la lista.
-    frases.sort(key=lambda x: (-x.en_frase, -x.literales, -x.similitud, x.n, x.posicion))
+    frases.sort(key=lambda x: (-x.en_frase, x.del_paso, -x.literales, -x.similitud, x.n, x.posicion))
     return frases
 
 
@@ -450,7 +467,8 @@ def _contexto_directo(fuentes: list[dict[str, Any]], textos: list[str], frases: 
         apartado = ""
         for ap, frase in unidades(textos[n - 1]):
             if ap and ap != apartado:
-                lineas.append(f"{ap}:")
+                if not lineas or lineas[-1] != ap:  # el título de un paso ya va como frase
+                    lineas.append(f"{ap}:")
                 apartado = ap
             lineas.append(frase)
         bloques.append(prompts.fragmento_contexto(n, fu.get("titulo") or "", "\n".join(lineas), fu.get("version"),

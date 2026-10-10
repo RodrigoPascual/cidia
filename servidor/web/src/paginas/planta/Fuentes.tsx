@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { BookMarked, ExternalLink, Loader2 } from 'lucide-react'
 import { urlServidor } from '../../api'
 import { Aviso, Modal, TextoFormato } from '../../ui'
+import { tituloFuente } from '../copiloto/tipos'
 import { etiquetaFuente, limpiarCitas, type Fuente, type Respuesta } from './copiloto'
 
 export function RespuestaCopiloto({ respuesta, pensando = 'Buscando en la documentación…' }: {
@@ -36,7 +37,7 @@ export function RespuestaCopiloto({ respuesta, pensando = 'Buscando en la docume
           ))}
         </div>
       )}
-      <Modal abierto={!!abierta} titulo={abierta?.titulo ?? 'Fuente'} onCerrar={() => setAbierta(null)}>
+      <Modal abierto={!!abierta} titulo={(abierta && tituloFuente(abierta)) || 'Fuente'} onCerrar={() => setAbierta(null)}>
         {abierta && (
           <div className="columna">
             <div className="fila apagado pequeno"><BookMarked size={16} /> {etiquetaFuente(abierta)}</div>
@@ -47,7 +48,7 @@ export function RespuestaCopiloto({ respuesta, pensando = 'Buscando en la docume
                 : <div className="apagado">Sin extracto disponible.</div>}
             {(abierta.autor || abierta.validador) && (
               <div className="pequeno apagado">
-                {abierta.autor ? `Autor: ${abierta.autor}` : ''}
+                {abierta.autor ? `Autoría: ${abierta.autor}` : ''}
                 {abierta.autor && abierta.validador ? ' · ' : ''}
                 {abierta.validador ? `Validado por ${abierta.validador}` : ''}
               </div>

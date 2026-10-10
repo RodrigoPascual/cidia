@@ -85,6 +85,17 @@ function cabeceras(extra?: Record<string, string>): Record<string, string> {
   return h
 }
 
+/** Mensaje para un error HTTP sin explicación del servidor (p. ej. lo corta un proxy): nunca «Error 413». */
+function mensajePorEstado(estado: number): string {
+  if (estado === 0 || estado >= 500) return 'El servidor CidIA no responde. Inténtalo de nuevo en unos segundos.'
+  if (estado === 401) return 'Tu sesión ha terminado. Vuelve a iniciar sesión.'
+  if (estado === 403) return 'No tienes permiso para hacer esto.'
+  if (estado === 404) return 'No se encuentra: puede que se haya borrado.'
+  if (estado === 413) return 'El fichero es demasiado grande para subirlo.'
+  if (estado === 429) return 'Demasiadas peticiones seguidas. Espera un momento y vuelve a probar.'
+  return `No se ha podido completar (error ${estado}). Inténtalo de nuevo.`
+}
+
 async function leerError(r: Response): Promise<string> {
   try {
     const j = await r.json()
@@ -93,8 +104,7 @@ async function leerError(r: Response): Promise<string> {
   } catch {
     /* sin cuerpo JSON */
   }
-  if (r.status === 0 || r.status >= 500) return 'El servidor CidIA no responde. Inténtalo de nuevo en unos segundos.'
-  return `Error ${r.status}`
+  return mensajePorEstado(r.status)
 }
 
 export async function api<T = unknown>(
@@ -156,7 +166,7 @@ export function subir<T = unknown>(ruta: string, formulario: FormData, alProgres
       else {
         const d = datos as { detail?: string }
         if (xhr.status === 401) alCaducar.forEach((f) => f())
-        rechazar(new ErrorApi(xhr.status, typeof d?.detail === 'string' ? d.detail : `Error ${xhr.status}`))
+        rechazar(new ErrorApi(xhr.status, typeof d?.detail === 'string' ? d.detail : mensajePorEstado(xhr.status)))
       }
     }
     xhr.onerror = () => rechazar(new ErrorApi(0, 'No hay conexión con el servidor CidIA.'))

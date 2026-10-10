@@ -217,7 +217,7 @@ export default function Editor() {
           <li>Se prepararán las micro-lecciones y las preguntas de evaluación a partir de sus pasos.</li>
           <li>Quien tenga nivel ILUO en esta tarea quedará marcado para reevaluarse con la nueva versión.</li>
         </ul>
-        <p className="mb-1">Figurarás como revisor{autorEsOtro ? ` y ${ins.autor!.nombre} como autor` : ''}.</p>
+        <p className="mb-1">La revisión quedará a tu nombre{autorEsOtro ? ` y la autoría, a nombre de ${ins.autor!.nombre}` : ''}.</p>
       </>
     ))
     if (!ok) return

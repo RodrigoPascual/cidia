@@ -1,20 +1,24 @@
 // Mi perfil: datos de la cuenta, cambio de contraseña y memoria personal del copiloto.
 
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import {
-  BadgeCheck, Brain, Briefcase, Building2, GraduationCap, KeyRound, Layers, MessageSquare, Plus, ShieldCheck,
+  BadgeCheck, Brain, Briefcase, Building2, Check, GraduationCap, KeyRound, Layers, MessageSquare, Plus, ShieldCheck,
   Sparkles, Trash2, UserRound,
 } from 'lucide-react'
-import { del, get, hace, post, put } from '../api'
+import { del, fecha, get, hace, post, put } from '../api'
 import { NOMBRE_ROL, useSesion } from '../sesion'
 import {
-  Aviso, Avatar, Boton, Cabecera, Campo, Entrada, ErrorCarga, Esqueleto, Etiqueta, Interruptor, Tarjeta, Vacio,
+  Aviso, Avatar, Boton, Cabecera, Entrada, ErrorCarga, Esqueleto, Etiqueta, Interruptor, Tarjeta, Vacio,
   useAvisarError, useAvisos, useConfirmar, useDatos,
 } from '../ui'
+import { CampoContrasena } from './Acceso'
 import './copiloto/perfil.css'
 
 interface Recuerdo { id: number; contenido: string; origen: string | null; creada: string | null }
 interface EstadoMemoria { activa: boolean; recuerdos: Recuerdo[]; total: number; maximo: number }
+
+/** Mismos colores que en Administración › Empleados. */
+const TONO_ROL: Record<string, 'oscura' | 'azul' | undefined> = { admin: 'oscura', jefe: 'azul' }
 
 export default function Perfil() {
   const { perfil } = useSesion()
@@ -48,10 +52,13 @@ function DatosCuenta() {
         <div className="crece">
           <h2>{perfil.nombre}</h2>
           <div className="fila envolver mt-1" style={{ gap: 6 }}>
-            <Etiqueta tono={perfil.rol === 'admin' ? 'oscura' : perfil.rol === 'jefe' ? 'amarilla' : undefined}>
-              {NOMBRE_ROL[perfil.rol] ?? perfil.rol}
-            </Etiqueta>
-            {perfil.es_experto && <Etiqueta tono="verde" icono={<BadgeCheck />}>Experto</Etiqueta>}
+            <Etiqueta tono={TONO_ROL[perfil.rol]}>{NOMBRE_ROL[perfil.rol] ?? perfil.rol}</Etiqueta>
+            {perfil.es_experto && (
+              <Etiqueta tono="amarilla" icono={<BadgeCheck />}
+                title="Puedes capturar tu saber, preparar instrucciones y aprobar preguntas de evaluación de tu departamento">
+                Experto
+              </Etiqueta>
+            )}
           </div>
         </div>
       </div>
@@ -70,7 +77,7 @@ function DatosCuenta() {
           ) : <span className="apagado">Ninguna ahora mismo</span>}
         </Fila>
         <Fila icono={<MessageSquare />} etiqueta="Preguntas al copiloto">
-          {actividad ? actividad.total
+          {actividad ? actividad.total.toLocaleString('es-ES')
             : errorActividad ? <span className="apagado">No disponible ahora</span>
               : <Esqueleto alto={14} ancho={40} />}
         </Fila>
@@ -95,30 +102,53 @@ function Fila({ icono, etiqueta, children }: { icono: ReactNode; etiqueta: strin
 
 function CambioContrasena() {
   const { perfil } = useSesion()
+  const id = useId()
   const [actual, setActual] = useState('')
   const [nueva, setNueva] = useState('')
   const [repetida, setRepetida] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [hecho, setHecho] = useState(false)
   const avisar = useAvisos()
-  const avisarError = useAvisarError()
 
-  const corta = nueva.length > 0 && nueva.length < 8
-  const distinta = repetida.length > 0 && repetida !== nueva
-  const igualQueActual = nueva.length > 0 && nueva === actual
-  const valido = actual && nueva.length >= 8 && nueva === repetida && !igualQueActual
+  // Cuentas del directorio de la empresa (LDAP u OIDC): la contraseña no es de CidIA.
+  if (perfil?.contrasena_gestionable === false) {
+    return (
+      <Tarjeta titulo="Contraseña" icono={<KeyRound size={18} />}>
+        <Aviso titulo="Entras con tu cuenta de la empresa">
+          Tu usuario y tu contraseña son los del directorio de la empresa, así que no se cambian aquí. Para cambiarla,
+          sigue el procedimiento habitual de tu empresa.
+        </Aviso>
+      </Tarjeta>
+    )
+  }
+
+  // Las mismas reglas que al elegir la contraseña la primera vez (y que comprueba el servidor).
+  const reglas = [
+    { ok: nueva.length >= 8, texto: 'Al menos 8 caracteres' },
+    { ok: nueva.length > 0 && nueva !== actual, texto: 'Distinta de la actual' },
+    { ok: repetida.length > 0 && repetida === nueva, texto: 'Las dos contraseñas coinciden' },
+  ]
+  const valido = actual.length > 0 && reglas.every((r) => r.ok)
+  // Al volver a escribir se quitan el error y la confirmación anteriores.
+  const al = (poner: (v: string) => void) => (v: string) => { poner(v); setError(null); setHecho(false) }
 
   const cambiar = async (e: FormEvent) => {
     e.preventDefault()
     if (!valido) return
+    setError(null)
     setEnviando(true)
     try {
       await post('/api/auth/contrasena', { actual, nueva })
-      avisar('Contraseña cambiada. Si tenías la sesión abierta en otros equipos, allí tendrás que volver a entrar.')
       setActual('')
       setNueva('')
       setRepetida('')
+      setHecho(true)
+      avisar('Contraseña cambiada.')
     } catch (err) {
-      avisarError(err)
+      setError(err instanceof Error ? err.message : String(err))
+      // Casi siempre es la contraseña actual: el foco vuelve a ese campo.
+      requestAnimationFrame(() => document.getElementById(`${id}-actual`)?.focus())
     } finally {
       setEnviando(false)
     }
@@ -126,23 +156,40 @@ function CambioContrasena() {
 
   return (
     <Tarjeta titulo="Cambiar la contraseña" icono={<KeyRound size={18} />}>
-      <form onSubmit={cambiar} autoComplete="on">
+      <form onSubmit={cambiar} noValidate>
         {/* Para que el gestor de contraseñas sepa de qué cuenta es */}
         <input type="text" name="usuario" autoComplete="username" value={perfil?.usuario ?? ''} hidden readOnly />
-        <Campo etiqueta="Contraseña actual">
-          <Entrada type="password" autoComplete="current-password" value={actual} onChange={(e) => setActual(e.target.value)} />
-        </Campo>
-        <Campo etiqueta="Nueva contraseña"
-          ayuda={corta ? <span className="texto-alerta">Tiene que tener al menos 8 caracteres.</span>
-            : igualQueActual ? <span className="texto-alerta">Tiene que ser distinta de la actual.</span>
-              : 'Al menos 8 caracteres. Mejor una frase fácil de recordar que una palabra rara.'}>
-          <Entrada type="password" autoComplete="new-password" value={nueva} onChange={(e) => setNueva(e.target.value)} />
-        </Campo>
-        <Campo etiqueta="Repite la nueva contraseña"
-          ayuda={distinta ? <span className="texto-alerta">Las dos contraseñas no coinciden.</span> : undefined}>
-          <Entrada type="password" autoComplete="new-password" value={repetida} onChange={(e) => setRepetida(e.target.value)} />
-        </Campo>
-        <div className="fila" style={{ justifyContent: 'flex-end' }}>
+        {error && <div className="mb-2"><Aviso tono="alerta">{error}</Aviso></div>}
+        {hecho && (
+          <div className="mb-2">
+            <Aviso tono="exito" titulo="Contraseña cambiada">
+              Úsala a partir de ahora para entrar. En los demás equipos donde tuvieras la sesión abierta tendrás que volver a entrar.
+            </Aviso>
+          </div>
+        )}
+        <div className="campo">
+          <label htmlFor={`${id}-actual`}>Contraseña actual</label>
+          <CampoContrasena id={`${id}-actual`} valor={actual} onCambio={al(setActual)} autoComplete="current-password" grande={false} />
+        </div>
+        <div className="campo">
+          <label htmlFor={`${id}-nueva`}>Nueva contraseña</label>
+          <CampoContrasena id={`${id}-nueva`} valor={nueva} onCambio={al(setNueva)} autoComplete="new-password" grande={false}
+            descripcion={`${id}-reglas`} />
+        </div>
+        <div className="campo">
+          <label htmlFor={`${id}-repetida`}>Repite la nueva contraseña</label>
+          <CampoContrasena id={`${id}-repetida`} valor={repetida} onCambio={al(setRepetida)} autoComplete="new-password"
+            grande={false} />
+        </div>
+        <ul className="reglas-contrasena" id={`${id}-reglas`} aria-label="Requisitos de la nueva contraseña">
+          {reglas.map((r) => (
+            <li key={r.texto} className={r.ok ? 'ok' : ''}>
+              <Check aria-hidden="true" />{r.texto}<span className="sr-solo">{r.ok ? ': cumplido' : ': pendiente'}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="perfil-pie-form">
+          <span className="diminuto apagado">Mejor una frase fácil de recordar que una palabra rara.</span>
           <Boton type="submit" variante="primario" icono={<ShieldCheck />} cargando={enviando} disabled={!valido}>
             Cambiar contraseña
           </Boton>
@@ -184,9 +231,12 @@ function MemoriaPersonal() {
     if (!nuevo.trim()) return
     setAnadiendo(true)
     try {
-      await post('/api/memoria', { contenido: nuevo.trim() })
+      const r = await post<Recuerdo>('/api/memoria', { contenido: nuevo.trim() })
+      // Si ya recordaba algo prácticamente igual, el servidor devuelve ese recuerdo y no guarda otro.
+      const yaEstaba = !!datos?.recuerdos.some((x) => x.id === r.id)
       setNuevo('')
       recargarMemoria()
+      avisar(yaEstaba ? 'Eso ya lo recordaba.' : 'Apuntado. El copiloto lo tendrá en cuenta.')
     } catch (err) {
       avisarError(err)
     } finally {
@@ -228,7 +278,8 @@ function MemoriaPersonal() {
       titulo="Memoria personal"
       icono={<Brain size={18} />}
       acciones={datos && (
-        <Interruptor activo={activa} deshabilitado={cambiando} onCambio={activar} etiqueta={activa ? 'Activada' : 'Desactivada'} />
+        <Interruptor activo={activa} deshabilitado={cambiando} onCambio={activar}
+          etiqueta={<><span className="sr-solo">Memoria personal: </span>{activa ? 'Activada' : 'Desactivada'}</>} />
       )}
       pie={datos && datos.total > 0
         ? <Boton variante="peligro" tamano="pequeno" icono={<Trash2 />} onClick={borrarTodo}>Borrar todo</Boton>
@@ -236,12 +287,12 @@ function MemoriaPersonal() {
     >
       <div className="memoria-explicacion">
         <p>
-          Si la activas, el copiloto recordará datos útiles sobre ti entre conversaciones (tu turno, las máquinas con
-          las que trabajas, lo que estás aprendiendo o cómo prefieres las respuestas) para ayudarte mejor.
+          Con la memoria activada, el copiloto recuerda datos útiles sobre ti entre conversaciones (tu turno, las máquinas
+          con las que trabajas, lo que estás aprendiendo o cómo prefieres las respuestas) para ayudarte mejor.
         </p>
         <ul>
           <li><strong>Está desactivada por defecto</strong>: solo se activa si tú quieres.</li>
-          <li>Se guarda en el servidor de tu empresa y solo se usa en tus conversaciones.</li>
+          <li>Se guarda en el servidor de tu empresa. Solo la ves tú y solo se usa en tus conversaciones.</li>
           <li>Puedes ver, borrar uno a uno o borrar todo lo que recuerda cuando quieras.</li>
           <li>No guarda datos sensibles ni sustituye a la documentación de la empresa.</li>
         </ul>
@@ -265,32 +316,39 @@ function MemoriaPersonal() {
 
           {activa && (
             <form className="memoria-nuevo mt-2" onSubmit={anadir}>
-              <Entrada value={nuevo} maxLength={500} placeholder="Añade algo que quieras que recuerde, p. ej. «Trabajo en el turno de noche»"
+              {/* Corto para que no se corte en la tarjeta. */}
+              <Entrada value={nuevo} maxLength={500} placeholder="Añade un recuerdo, p. ej. «Trabajo en el turno de noche»"
                 onChange={(e) => setNuevo(e.target.value)} aria-label="Nuevo recuerdo" />
               <Boton type="submit" icono={<Plus />} cargando={anadiendo} disabled={!nuevo.trim()}>Añadir</Boton>
             </form>
           )}
 
           {datos.recuerdos.length === 0 ? (
-            <Vacio icono={<Sparkles />} titulo={activa ? 'Todavía no recuerda nada' : 'La memoria está desactivada'}>
+            <Vacio icono={<Sparkles />} titulo={activa ? 'Todavía no recuerda nada' : 'La memoria está desactivada'}
+              accion={!activa && (
+                <Boton variante="primario" icono={<Brain />} cargando={cambiando} onClick={() => activar(true)}>Activar la memoria</Boton>
+              )}>
               {activa
                 ? 'Irá apuntando lo útil cuando le cuentes cosas de tu trabajo en el copiloto. También puedes añadirlo tú.'
-                : 'Actívala con el interruptor si quieres que el copiloto te conozca mejor.'}
+                : 'Actívala si quieres que el copiloto te conozca mejor. Puedes desactivarla cuando quieras.'}
             </Vacio>
           ) : (
             <>
               <div className="fila entre mt-2 mb-1">
                 <span className="etiqueta-campo">Lo que recuerda de ti</span>
-                <span className="diminuto apagado">{datos.total} de {datos.maximo} como máximo</span>
+                <span className="diminuto apagado" title="Al llegar al máximo, se olvidan los recuerdos más antiguos.">
+                  {datos.total} de {datos.maximo} como máximo
+                </span>
               </div>
               <ul className={`recuerdos ${activa ? '' : 'inactivos'}`}>
                 {datos.recuerdos.map((r) => (
                   <li key={r.id} className="recuerdo">
-                    <span className="recuerdo-icono"><Brain /></span>
+                    <span className="recuerdo-icono" aria-hidden="true"><Brain /></span>
                     <div className="crece">
-                      <div>{r.contenido}</div>
+                      <div className="recuerdo-texto">{r.contenido}</div>
                       <div className="diminuto apagado">
-                        {r.origen === 'manual' ? 'Lo añadiste tú' : 'Lo aprendió el copiloto'}{r.creada ? ` · ${hace(r.creada)}` : ''}
+                        {r.origen === 'manual' ? 'Lo añadiste tú' : 'Lo aprendió el copiloto'}
+                        {r.creada && <> · <span title={fecha(r.creada, true)}>{hace(r.creada)}</span></>}
                       </div>
                     </div>
                     <Boton variante="fantasma" tamano="pequeno" icono={<Trash2 />} onClick={() => borrarUno(r)}

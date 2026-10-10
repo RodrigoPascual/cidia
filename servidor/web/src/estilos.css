@@ -289,7 +289,7 @@ body.sin-desplazamiento { overflow: hidden; }
 .recortar { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pre { white-space: pre-wrap; }
 .texto-alerta { color: var(--alerta); }
-.texto-aviso { color: var(--aviso); }
+.texto-aviso { color: #a35c00; } /* el ámbar de --aviso no llega al contraste mínimo en texto pequeño */
 .texto-verde { color: var(--verde); }
 .enlace-boton {
   background: none; border: none; padding: 2px 4px; margin: -2px -4px; border-radius: 6px; font: inherit; font-weight: 600;
@@ -506,6 +506,11 @@ body.sin-desplazamiento { overflow: hidden; }
 @media (max-width: 600px) {
   .avisos-flotantes { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   .aviso-flotante { min-width: 0; max-width: none; }
+}
+/* Con un diálogo abierto, los avisos van arriba: abajo a la derecha tapaban sus botones (Cerrar, Confirmar...). */
+body:has(.velo) .avisos-flotantes { top: 20px; bottom: auto; }
+@media (max-width: 600px) {
+  body:has(.velo) .avisos-flotantes { top: calc(12px + env(safe-area-inset-top, 0px)); bottom: auto; }
 }
 .aviso-flotante.exito > svg { color: #5fd3b0; }
 .aviso-flotante.error > svg { color: #ff8f7d; }

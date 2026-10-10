@@ -13,8 +13,8 @@
 //  · Paneles según perfil.servicios (GET /api/auth/yo, validado por el Host).
 //  · Marca CidIA (barra lateral, estado vacío del chat y título de la ventana).
 //  · Idioma: registra 'es' y los diccionarios en castellano de la interfaz de la app.
-//  · Micrófono: Electron solo concede el micrófono al marco principal; la interfaz embebida
-//    puede pedir aquí que se grabe por ella (mensajes 'cidia:microfono').
+//  · Micrófono: la app base solo concede el micrófono al marco principal; la interfaz embebida
+//    pide aquí que se grabe por ella (mensajes 'cidia:microfono', con el nivel para su medidor).
 window.__ModuleLoader__.load({
   id: 'cidia',
   factory(require) {
@@ -281,8 +281,39 @@ window.__ModuleLoader__.load({
       })
     }
 
-    // ---------------------------------------------------------------- mensajes de la interfaz
+    // ---------------------------------------------------------------- micrófono
+    // La app base solo concede el micrófono al marco principal (nunca a un iframe): este módulo
+    // graba por la interfaz embebida. Mensajes 'cidia:microfono' con un id por grabación:
+    //   de la interfaz:  accion 'empezar' | 'parar' | 'cancelar'
+    //   a la interfaz:   estado 'grabando' | 'nivel' (nivel 0..1, unas 10 veces por segundo, para
+    //                    el medidor) | 'lista' (audio: Blob, duracion_ms) | 'cancelada' | 'error'
+    // Abrir el micrófono tarda (medio segundo o más la primera vez). Si piden parar antes, se
+    // responde 'cancelada' al momento y el micrófono se cierra en cuanto se abre (antes la
+    // grabación seguía hasta 10 minutos). Si el marco que la pidió desaparece (otra sección, una
+    // recarga), se cancela.
     const grabaciones = new Map()
+    const MAX_GRABACION_MS = 10 * 60_000
+
+    /** Nivel 0..1 del micrófono, igual que el medidor de la interfaz (RMS amplificado). */
+    function nivelDe(analizador, muestras) {
+      analizador.getByteTimeDomainData(muestras)
+      let suma = 0
+      for (const v of muestras) { const x = (v - 128) / 128; suma += x * x }
+      return Math.min(1, Math.sqrt(suma / muestras.length) * 5)
+    }
+
+    function soltarMicrofono(g) {
+      clearInterval(g.vigilancia)
+      clearTimeout(g.limite)
+      g.flujo?.getTracks().forEach(t => t.stop())
+      try { void g.contexto?.close().catch(() => {}) } catch { /* ya cerrado */ }
+    }
+
+    function pararGrabacion(g) {
+      if (g.grabador && g.grabador.state !== 'inactive') {
+        try { g.grabador.stop() } catch { soltarMicrofono(g) }
+      }
+    }
 
     /** Graba audio en el marco principal para la interfaz embebida (el iframe no puede). */
     async function microfono(evento) {
@@ -293,35 +324,77 @@ window.__ModuleLoader__.load({
       }
       if (d.accion === 'empezar') {
         if (grabaciones.has(d.id)) return
+        const g = { abriendo: true, cancelada: false, grabador: null, flujo: null, contexto: null, medir: null, trozos: [], inicio: 0, vigilancia: null, limite: null }
+        grabaciones.set(d.id, g)
         try {
-          const flujo = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+          g.flujo = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+        } catch {
+          grabaciones.delete(d.id)
+          if (!g.cancelada) responder({ estado: 'error', mensaje: 'No se puede usar el micrófono. Revisa los permisos de Windows.' })
+          return
+        }
+        g.abriendo = false
+        if (g.cancelada || fuente?.closed) {
+          // Pidieron parar mientras se abría (ya se respondió 'cancelada'): se cierra sin grabar.
+          soltarMicrofono(g)
+          grabaciones.delete(d.id)
+          // Las interfaces anteriores a este cambio esperan a 'empezar' un 'grabando' o un 'error'.
+          responder({ estado: 'error', mensaje: 'Mantén pulsado el botón mientras hablas.' })
+          return
+        }
+        try {
           const tipo = window.MediaRecorder?.isTypeSupported?.('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : ''
-          const grabador = new MediaRecorder(flujo, tipo ? { mimeType: tipo } : undefined)
-          const g = { grabador, flujo, trozos: [], inicio: Date.now(), cancelada: false, limite: null }
-          // Si la sección se cierra sin parar, el micrófono no se queda abierto: 10 min como mucho.
-          g.limite = setTimeout(() => { if (grabador.state !== 'inactive') grabador.stop() }, 10 * 60_000)
+          const grabador = new MediaRecorder(g.flujo, tipo ? { mimeType: tipo } : undefined)
+          g.grabador = grabador
           grabador.ondataavailable = (e) => { if (e.data && e.data.size) g.trozos.push(e.data) }
           grabador.onstop = () => {
-            clearTimeout(g.limite)
-            flujo.getTracks().forEach(t => t.stop())
+            soltarMicrofono(g)
             grabaciones.delete(d.id)
             if (g.cancelada) { responder({ estado: 'cancelada' }); return }
             const audio = new Blob(g.trozos, { type: grabador.mimeType || 'audio/webm' })
             responder({ estado: 'lista', audio, duracion_ms: Date.now() - g.inicio })
           }
-          grabaciones.set(d.id, g)
+          // Medidor de nivel (sin él la grabación funciona igual).
+          try {
+            const Contexto = window.AudioContext ?? window.webkitAudioContext
+            if (Contexto) {
+              g.contexto = new Contexto()
+              const analizador = g.contexto.createAnalyser()
+              analizador.fftSize = 1024
+              g.contexto.createMediaStreamSource(g.flujo).connect(analizador)
+              const muestras = new Uint8Array(analizador.fftSize)
+              g.medir = () => nivelDe(analizador, muestras)
+              void g.contexto.resume?.()?.catch?.(() => {})
+            }
+          } catch { g.medir = null }
+          // Cada 100 ms: nivel a la interfaz y, si su marco ya no existe, fuera la grabación.
+          g.vigilancia = setInterval(() => {
+            if (fuente?.closed) { g.cancelada = true; pararGrabacion(g); return }
+            if (g.medir) responder({ estado: 'nivel', nivel: Math.round(g.medir() * 100) / 100 })
+          }, 100)
+          // Si nadie la para, el micrófono no se queda abierto: 10 minutos como mucho.
+          g.limite = setTimeout(() => pararGrabacion(g), MAX_GRABACION_MS)
+          g.inicio = Date.now()
           grabador.start()
           responder({ estado: 'grabando' })
         } catch {
-          responder({ estado: 'error', mensaje: 'No se puede usar el micrófono. Revisa los permisos de Windows.' })
+          soltarMicrofono(g)
+          grabaciones.delete(d.id)
+          responder({ estado: 'error', mensaje: 'No se ha podido empezar a grabar.' })
         }
       } else if (d.accion === 'parar' || d.accion === 'cancelar') {
         const g = grabaciones.get(d.id)
         if (!g) { responder({ estado: 'error', mensaje: 'No hay ninguna grabación en curso.' }); return }
+        if (g.abriendo) {
+          if (!g.cancelada) { g.cancelada = true; responder({ estado: 'cancelada' }) }
+          return
+        }
         g.cancelada = d.accion === 'cancelar'
-        if (g.grabador.state !== 'inactive') g.grabador.stop()
+        pararGrabacion(g)
       }
     }
+
+    // ---------------------------------------------------------------- mensajes de la interfaz
 
     function alMensaje(evento) {
       // Solo marcos de la propia app (la interfaz embebida tiene el mismo origen).
@@ -661,7 +734,7 @@ window.__ModuleLoader__.load({
           observador?.disconnect()
           window.removeEventListener('message', alMensaje)
           window.removeEventListener('storage', alAlmacenamiento)
-          for (const g of grabaciones.values()) { g.cancelada = true; try { g.grabador.stop() } catch { /* ya parada */ } }
+          for (const g of grabaciones.values()) { g.cancelada = true; pararGrabacion(g) }
           alCambiarModo = () => {}
           abrirPanel = () => {}
           if (/^CidIA$| · CidIA$/.test(document.title)) {

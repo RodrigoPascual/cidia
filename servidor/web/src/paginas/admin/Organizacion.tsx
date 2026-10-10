@@ -127,7 +127,8 @@ function Estructura({ org, cargando, sel, setSel, recargar }: {
           <div className="adm-arbol-busca">
             <div className="entrada-icono">
               <Search />
-              <Entrada placeholder="Buscar departamento, puesto o tarea" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
+              <Entrada placeholder="Buscar departamento, puesto o tarea" aria-label="Buscar departamento, puesto o tarea"
+                value={filtro} onChange={(e) => setFiltro(e.target.value)} />
             </div>
           </div>
           <div className="adm-arbol-lista">
@@ -737,7 +738,7 @@ function EmpresaReglas() {
   const escala = [
     { n: 1, letra: 'I', titulo: 'En formación', texto: 'Ha empezado el itinerario: micro-lección vista, ejecución iniciada o formación activa.' },
     { n: 2, letra: 'L', titulo: 'Ejecuta con apoyo', texto: `Cuestionario aprobado con un ${umbral} % o más y ${ejecuciones} ${ejecuciones === 1 ? 'ejecución completada' : 'ejecuciones completadas'}.` },
-    { n: 3, letra: 'U', titulo: 'Autónomo', texto: 'Nivel L, observación aprobada por un supervisor y última ejecución sin consultas en pasos críticos.' },
+    { n: 3, letra: 'U', titulo: 'Autónomo', texto: 'Nivel L, observación en el puesto aprobada por un responsable y última ejecución sin consultas en pasos críticos.' },
     { n: 4, letra: 'O', titulo: 'Puede formar a otros', texto: 'Nivel U y validado como formador por un jefe o un experto.' },
   ]
 

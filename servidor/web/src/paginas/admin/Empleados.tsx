@@ -71,7 +71,8 @@ export default function Empleados() {
       <div className="adm-filtros">
         <div className="entrada-icono">
           <Search />
-          <Entrada placeholder="Buscar por nombre, usuario o correo" value={texto} onChange={(e) => setTexto(e.target.value)} />
+          <Entrada placeholder="Buscar por nombre, usuario o correo" aria-label="Buscar por nombre, usuario o correo"
+            value={texto} onChange={(e) => setTexto(e.target.value)} />
         </div>
         {esAdmin && (
           <Selector value={dep} onChange={(e) => setDep(e.target.value)} vacio="Todos los departamentos" aria-label="Departamento" className="selector adm-filtro-ancho"
