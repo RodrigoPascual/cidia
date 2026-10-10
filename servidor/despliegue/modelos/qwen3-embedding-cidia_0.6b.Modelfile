@@ -1,0 +1,12 @@
+# Modelo de búsqueda de CidIA: qwen3-embedding:0.6b con contexto propio.
+#
+# Ollama carga cada modelo con el contexto de OLLAMA_CONTEXT_LENGTH (32768 en el MSI), también el
+# de embeddings, y reserva memoria para todo ese contexto. Los trozos que indexa CidIA rondan los
+# 300 tokens y el gateway corta cada texto a 6.000 caracteres, así que 4096 tokens sobran.
+# Los pesos son los mismos: los vectores no cambian y no hay que reindexar.
+#
+# No se descarga del registro: «sudo cidia modelos descargar» (y el instalador) baja el modelo
+# base y crea este con «ollama create qwen3-embedding-cidia:0.6b». El nombre tiene que seguir
+# conteniendo «qwen3-embedding»: el gateway lo usa para poner la instrucción a las preguntas.
+FROM qwen3-embedding:0.6b
+PARAMETER num_ctx 4096

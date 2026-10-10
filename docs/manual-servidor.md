@@ -34,11 +34,11 @@ Las cifras de capacidad son orientativas y hay que medirlas en cada equipo.
 | Memoria | 16 GB (8 como mínimo, con modelos pequeños) | 32 GB | 64-128 GB |
 | GPU | No | NVIDIA con 12-16 GB (RTX 4080 Laptop, 4070 Ti, 4060 Ti 16 GB…) | NVIDIA con 24-48 GB o varias |
 | Disco | SSD con 100 GB libres (50 como mínimo) | SSD con 150 GB libres | NVMe con 1 TB o más |
-| Modelos | `ministral-3:3b` (con menos de 16 GB: `qwen3:1.7b` y `qwen3.5:0.8b`) y `qwen3-embedding:0.6b` | `ministral-3:8b` y `qwen3-embedding:0.6b`, contexto 32K | modelos mayores, más contexto y varias peticiones en paralelo |
+| Modelos | `ministral-3:3b` (con menos de 16 GB: `qwen3:1.7b` y `qwen3.5:0.8b`) y `qwen3-embedding-cidia:0.6b` | `ministral-3:8b` y `qwen3-embedding-cidia:0.6b`, contexto 32K | modelos mayores, más contexto y varias peticiones en paralelo |
 | Qué esperar | Funciona, con respuestas lentas. Bien para captura, consulta e instrucciones de los puestos críticos | Todo CidIA para un centro y varios puestos, del orden de 40 a 60 tokens por segundo con un usuario, más rápido de lo que se lee | Muchos usuarios a la vez y varias plantas; directorio de la empresa, MES, GMAO y LMS |
 | Sistema | Ubuntu 24.04 o 22.04 (escritorio o servidor), amd64 o arm64 | Ubuntu 24.04 en arranque dual con Windows | Ubuntu Server 24.04 |
 
-Todos los perfiles usan el mismo modelo de búsqueda por significado (`qwen3-embedding:0.6b`), así que se puede empezar sin GPU y pasar a un equipo con GPU sin volver a procesar los documentos. Para la gran empresa, el MVP instala Ollama; servir los modelos con vLLM queda para una fase posterior.
+Todos los perfiles usan el mismo modelo de búsqueda por significado (`qwen3-embedding-cidia:0.6b`, que es `qwen3-embedding:0.6b` con un contexto propio más pequeño; apartado 8.2), así que se puede empezar sin GPU y pasar a un equipo con GPU sin volver a procesar los documentos. Para la gran empresa, el MVP instala Ollama; servir los modelos con vLLM queda para una fase posterior.
 
 Además, en todos los casos: conexión por cable a la red de la empresa, una IP fija (o reservada en el router) y acceso a Internet durante la instalación (`download.docker.com`, Docker Hub, `registry.ollama.ai`, GitHub, PyPI, npm y Hugging Face).
 
@@ -150,7 +150,7 @@ Te preguntará, con una propuesta que puedes aceptar con Intro:
 | ¿Publicar en la red local? | Sí, para que lleguen los portátiles (lee el aviso y el apartado 6). |
 | ¿Desactivar la suspensión? | Sí. |
 
-Después trabaja sola: instala Docker y el soporte de GPU, copia el código a `/opt/cidia`, genera los secretos, construye las imágenes (la primera vez, de 5 a 15 minutos), arranca los servicios, descarga los modelos (unos 7 GB en el MSI, con barra de progreso) y crea la cuenta de administración. Todo queda registrado en `/opt/cidia/registros/`.
+Después trabaja sola: instala Docker y el soporte de GPU, copia el código a `/opt/cidia`, genera los secretos, construye las imágenes (la primera vez, de 5 a 15 minutos), arranca los servicios, descarga los modelos (unos 7 GB en el MSI, con barra de progreso), crea a partir de ellos el modelo de búsqueda con contexto propio (apartado 8.2) y crea la cuenta de administración. Todo queda registrado en `/opt/cidia/registros/`.
 
 Al terminar muestra algo así:
 
@@ -237,7 +237,7 @@ Todo con la orden `cidia` (siempre con `sudo`):
 | `sudo cidia registros gateway -f` | Ver qué pasa en el gateway en directo (Ctrl+C para salir). También `postgres`, `ollama`, `asr`. |
 | `sudo cidia reiniciar [servicio]` | Reiniciar todo o un servicio. |
 | `sudo cidia parar` / `sudo cidia arrancar` | Parar o arrancar CidIA sin perder datos. |
-| `sudo cidia modelos` | Modelos descargados y los que faltan. `modelos descargar` baja los que falten. |
+| `sudo cidia modelos` | Modelos descargados y los que faltan. `modelos descargar` baja los que falten y crea el modelo de búsqueda con contexto propio (apartado 8.2). |
 | `sudo cidia admin-restablecer` | Nueva contraseña para la cuenta de administración si se ha olvidado. |
 | `sudo cidia abrir-puerto` / `cerrar-puerto` | Publicar CidIA en la red local o dejarlo solo en el equipo. |
 | `sudo cidia demo preparar` / `demo restaurar` | Dejar el servidor listo para una demostración y volver después a lo normal (apartado 8.1). |
@@ -256,6 +256,18 @@ sudo cidia demo restaurar          # al terminar
 * **`demo preparar`** carga en la GPU los modelos de chat y de búsqueda del perfil para que no caduquen, carga el modelo de voz (la primera vez lo descarga: necesita Internet), para WeKnora y el espacio de trabajo si están en marcha (`--con-weknora` y `--con-espacio` los dejan), comprueba que están las cuentas del guion y muestra la corriente, la suspensión, la memoria, la GPU y la dirección para los portátiles. Si un modelo no cabe entero en los 12 GB de la gráfica, lo dice: baja `OLLAMA_CONTEXT_LENGTH` (por ejemplo, a 16384) en `/opt/cidia/secretos/cidia.env` y repite. Tras reiniciar el equipo hay que volver a ejecutarlo.
 * **`demo restaurar`** vuelve a la configuración que había (los modelos vuelven a salir de la memoria tras 30 minutos sin uso) y arranca de nuevo los servicios opcionales. Mientras el modo demo está activo, `sudo cidia estado` lo recuerda.
 * **`demo reiniciar-datos`** borra todo el contenido de demostración, también lo añadido después (por ejemplo, la captura del ensayo), y vuelve a sembrar los datos sintéticos. Pide escribir `REINICIAR` y solo funciona en un servidor marcado como de demostración. Para marcar el MSI: `CIDIA_CREAR_SEMILLA=true` en `/opt/cidia/cidia/servidor/despliegue/perfiles/msi.env` y `sudo cidia arrancar`. La semilla se niega en una base con datos propios.
+
+### 8.2 Modelo de búsqueda con contexto propio
+
+El modelo de búsqueda por significado es `qwen3-embedding-cidia:0.6b`: el mismo `qwen3-embedding:0.6b` (los mismos pesos y los mismos vectores) con un contexto de 4096 tokens en lugar del de todo el servidor.
+
+**Por qué.** Ollama carga cada modelo con el contexto de `OLLAMA_CONTEXT_LENGTH`, también el de búsqueda, y le reserva memoria para todo ese contexto. Medido en el servidor de pruebas de Oracle (Ollama 0.40.2 en CPU, contexto 8192 y caché KV en f16), `ollama ps` daba **2,9 GB** (2.857.810.001 bytes) para `qwen3-embedding:0.6b`, cuando sus pesos son 639 MB. Según el registro de Ollama, eran 604 MiB de pesos, 896 MiB de caché KV y 1.225 MiB de búferes de cálculo. Con el derivado, en el mismo servidor, baja a **2,4 GB** (2.371.270.737 bytes, contexto 4096): la caché KV pasa a 448 MiB y los búferes se quedan en 1.209 MiB, porque dependen del tamaño de lote (2.048 tokens) y no del contexto. En el MSI el ahorro es mayor: con 32768 de contexto y la caché en `q8_0`, la caché KV del modelo base ocuparía unos 1,75 GiB y la del derivado unos 0,22 GiB, y sin ese ahorro no cabría todo en los 12 GB de la gráfica junto a `ministral-3:8b` ([`presupuesto-hardware.md`](presupuesto-hardware.md) §2). Los trozos que indexa CidIA rondan los 300 tokens y el gateway corta cada texto a 6.000 caracteres, así que 4096 tokens sobran.
+
+**Cómo se crea.** No se descarga: lo define `servidor/despliegue/modelos/qwen3-embedding-cidia_0.6b.Modelfile` (`FROM qwen3-embedding:0.6b` y `PARAMETER num_ctx 4096`). `sudo cidia modelos descargar`, y con ella el instalador, descarga `qwen3-embedding:0.6b` y crea el derivado con `ollama create`. `sudo cidia arrancar`, `actualizar` y `demo preparar` lo crean también si falta (o lo rehacen si cambia el Modelfile), siempre que la base ya esté descargada, así que no necesitan Internet. `sudo cidia modelos` marca `qwen3-embedding:0.6b` como «base de un modelo derivado»: no lo borres.
+
+**No hay que volver a indexar.** Los vectores son los mismos con los dos nombres, porque los pesos son los mismos (comprobado en Oracle: coseno 1,000000 y diferencia máxima 0 en cinco textos, y las mismas búsquedas devuelven los mismos fragmentos con la misma similitud), y CidIA no guarda con ellos qué modelo los calculó. Al arrancar, el gateway pasa la fila del modelo de búsqueda del panel de administración (Modelos) al nombre nuevo, que sigue marcado como el que indexa los documentos.
+
+**Si hay que cambiarlo.** El nombre tiene que seguir conteniendo `qwen3-embedding` (el gateway lo usa para poner la instrucción de búsqueda delante de cada pregunta). Para otro contexto, cambia `num_ctx` en el Modelfile y ejecuta `sudo cidia arrancar`. Con WeKnora (motor opcional), su base de conocimiento conserva el modelo con el que se dio de alta.
 
 ## 9. Copias de seguridad
 
@@ -309,7 +321,7 @@ Ubuntu se actualiza como siempre (`sudo apt update && sudo apt upgrade`). Si se 
 | «permission denied» al guardar documentos | `datos/` debe ser del uid 1000: `sudo chown -R 1000:1000 /opt/cidia/datos` y `sudo cidia reiniciar gateway`. |
 | La GPU no se usa (respuestas lentas en el MSI) | `nvidia-smi` debe responder. Si no: controlador (apartado 3.3) y Secure Boot (`mokutil --sb-state`, clave MOK registrada). `docker info \| grep -i nvidia` debe mostrar el runtime; si no, vuelve a ejecutar el instalador. `sudo cidia estado` muestra «100% GPU» con el modelo cargado. |
 | Ollama se queda sin memoria o los modelos tardan mucho | Baja `OLLAMA_CONTEXT_LENGTH` o sube `CIDIA_MEM_OLLAMA` en `/opt/cidia/secretos/cidia.env` y `sudo cidia arrancar`. Con cgroups v1 (Ubuntu 20.04) Ollama no ve el límite de su contenedor: usa modelos pequeños o Ubuntu 22.04/24.04. |
-| Faltan modelos | `sudo cidia modelos descargar` (necesita Internet). |
+| Faltan modelos | `sudo cidia modelos descargar` (necesita Internet). Si solo falta `qwen3-embedding-cidia:0.6b` y ya está `qwen3-embedding:0.6b`, basta `sudo cidia arrancar`, sin Internet (apartado 8.2). |
 | Puerto ocupado | El instalador lo detecta: usa `--puerto 18800` (y cámbialo en el cortafuegos). |
 | Red de la empresa en 172.29.x.x | El instalador elige otras subredes para Docker. A mano: `CIDIA_RED_BORDE` y `CIDIA_RED_INTERNA` en `cidia.env`. |
 | Sin Internet o con proxy de empresa | Docker necesita el proxy en `/etc/systemd/system/docker.service.d/http-proxy.conf` (`Environment="HTTPS_PROXY=http://proxy:3128"`), `sudo systemctl daemon-reload && sudo systemctl restart docker`, y para construir, `~/.docker/config.json` con `"proxies"`. |
@@ -347,4 +359,5 @@ No se ejecutaron en Oracle, por cambiar el estado del servidor compartido: la in
 - [ ] `sudo cidia admin-restablecer` y entrar con la nueva contraseña.
 - [ ] Reiniciar el MSI y comprobar que CidIA vuelve solo.
 - [ ] Volver a ejecutar el instalador: no debe cambiar secretos ni datos.
+- [ ] Tras una pregunta en el chat, `docker exec $(docker ps -q -f label=com.docker.compose.service=ollama) ollama ps`: `qwen3-embedding-cidia:0.6b` con contexto 4096 y «100% GPU». Anotar su tamaño en [`presupuesto-hardware.md`](presupuesto-hardware.md) §2.
 - [ ] `sudo cidia demo preparar`: «Listo para la demo», los dos modelos «100 % en la GPU» y la voz transcribiendo; después `sudo cidia demo restaurar` (ver [`docs/guia-demo.md`](guia-demo.md)).

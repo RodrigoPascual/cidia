@@ -22,7 +22,7 @@ comprobar "ruta canónica" '[[ $DIR == "$BANCO/inst" ]]'
 mkdir -p "$DIR_DESP/perfiles" "$DIR/secretos" "$COPIAS"
 cp "$BANCO/repo/servidor/despliegue/perfiles/msi.env" "$DIR_DESP/perfiles/"
 printf 'CIDIA_PERFIL=msi\nCIDIA_IP_PUBLICACION=0.0.0.0\nCIDIA_DIRECCION=192.168.1.50\nCIDIA_PUERTO=18700\n' >"$ENV_FILE"
-comprobar "modelos del perfil msi" '[[ $(modelos_del_perfil | paste -sd " ") == "ministral-3:8b qwen3-embedding:0.6b" ]]'
+comprobar "modelos del perfil msi" '[[ $(modelos_del_perfil | paste -sd " ") == "ministral-3:8b qwen3-embedding-cidia:0.6b" ]]'
 calcular_urls
 comprobar "URL de los portátiles" '[[ $URL_PORTATILES == http://192.168.1.50:18700 ]]'
 comprobar "URL local" '[[ $URL_LOCAL == http://127.0.0.1:18700 ]]'

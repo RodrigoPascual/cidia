@@ -6,7 +6,8 @@
    igual, contra la base de pruebas.
 2. Los dos scripts de bash, con Docker simulado: se cargan sus funciones (todo menos la última
    línea, que llama a main) y se comprueban la configuración y los secretos, las carpetas
-   protegidas, la copia del código, las copias de seguridad, la restauración y el modo demo. Necesitan bash
+   protegidas, la copia del código, las copias de seguridad, la restauración, el modo demo y los
+   modelos derivados (el de búsqueda con contexto propio). Necesitan bash
    (en Windows, el de Git); si no lo hay, se saltan.
 """
 
@@ -242,3 +243,8 @@ def test_herramienta_copia_y_restauracion_con_docker_simulado():
 @requiere_bash
 def test_herramienta_modo_demo_con_docker_simulado():
     _banco("demo_herramienta", HERRAMIENTA)
+
+
+@requiere_bash
+def test_herramienta_crea_el_modelo_de_busqueda_derivado():
+    _banco("modelos_herramienta", HERRAMIENTA)

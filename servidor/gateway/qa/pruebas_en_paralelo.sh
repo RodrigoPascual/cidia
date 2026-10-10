@@ -2,10 +2,13 @@
 # Ejecuta TODA la batería (tests/test_*.py) en N grupos en paralelo, cada uno con su base de datos
 # de pruebas. Los ficheros se reparten por tamaño para equilibrar los grupos.
 # Uso: qa/pruebas_en_paralelo.sh [grupos] [carpeta_de_registros]
+# Las bases se llaman cidia_t_<prefijo>_gN; el prefijo es CIDIA_TEST_BD (por defecto «par»), para
+# que dos sesiones puedan pasar la batería a la vez sin borrarse las bases.
 set -u
 cd "$(dirname "$0")/.."
 N="${1:-6}"
 REG="${2:-_registros_pruebas}"
+PREFIJO="${CIDIA_TEST_BD:-par}"
 rm -rf "$REG"; mkdir -p "$REG"
 PY=".venv/Scripts/python"
 [ -x "$PY" ] || PY=".venv/bin/python"
@@ -26,7 +29,7 @@ FIN
 
 for lista in "$REG"/g*.lista; do
   g=$(basename "$lista" .lista)
-  ( CIDIA_TEST_BD="par_$g" "$PY" -m pytest -q -p no:cacheprovider -rfE $(cat "$lista") > "$REG/$g.log" 2>&1
+  ( CIDIA_TEST_BD="${PREFIJO}_$g" "$PY" -m pytest -q -p no:cacheprovider -rfE $(cat "$lista") > "$REG/$g.log" 2>&1
     echo "$g fin $?" >> "$REG/estado.txt" ) &
 done
 wait

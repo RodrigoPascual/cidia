@@ -8,9 +8,10 @@
 
 SCRIPT_PROBADO=$1
 BANCO=$(mktemp -d)
-mkdir -p "$BANCO/repo/servidor/despliegue/perfiles"
+mkdir -p "$BANCO/repo/servidor/despliegue/perfiles" "$BANCO/repo/servidor/despliegue/modelos"
 head -n -1 "$SCRIPT_PROBADO" >"$BANCO/repo/servidor/despliegue/lib.sh"
 cp "$(dirname "$SCRIPT_PROBADO")"/perfiles/*.env "$BANCO/repo/servidor/despliegue/perfiles/"
+cp "$(dirname "$SCRIPT_PROBADO")"/modelos/*.Modelfile "$BANCO/repo/servidor/despliegue/modelos/"
 # shellcheck disable=SC1091
 source "$BANCO/repo/servidor/despliegue/lib.sh"
 trap 'rm -rf "$BANCO"' EXIT

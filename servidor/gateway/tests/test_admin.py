@@ -8,9 +8,13 @@ import pytest
 from fabrica import CONTRASENA, cab
 from sqlalchemy import select
 
+from cidia.ia import llm
 from cidia.modelos import Auditoria, Formacion, Instruccion, Nivel, Observacion, Sesion, Tarea, Usuario
 from cidia.permisos import alcance_de
 from cidia.seguridad import Actor, hash_contrasena
+
+# La función de verdad, antes de que la fixture «ia» la cambie por la falsa en cada prueba.
+EMBEDDINGS_REAL = llm.embeddings
 
 
 def _sufijo() -> str:
@@ -638,3 +642,61 @@ def test_modelo_de_busqueda_lo_fija_el_servidor(cliente, h_admin, servidor_model
     finally:
         assert cliente.put(f"/api/admin/modelos/{nuevo['id']}", headers=h_admin, json={"permitido": False}).status_code == 200
         assert cliente.delete(f"/api/admin/modelos/{nuevo['id']}", headers=h_admin).status_code == 200
+
+
+def test_modelo_de_busqueda_derivado_sin_reindexar(cliente, bd, h_admin, servidor_modelos, monkeypatch):
+    """qwen3-embedding-cidia:0.6b es qwen3-embedding:0.6b con contexto propio (mismos vectores). Pasar
+    de uno a otro no obliga a reindexar: los vectores no guardan el modelo, la fila de búsqueda sigue a
+    la configuración y las preguntas conservan la instrucción de Qwen3-Embedding."""
+    from cidia.arranque import valores_por_defecto
+    from cidia.config import ajustes
+    from cidia.modelos import Fragmento, Laguna, Memoria, ModeloIA
+
+    base, derivado = "qwen3-embedding:0.6b", "qwen3-embedding-cidia:0.6b"
+    assert ajustes().llm_modelo_embeddings == base
+    for tabla in (Fragmento, Laguna, Memoria):
+        assert not any("modelo" in c.name for c in tabla.__table__.columns), tabla.__tablename__
+
+    def busqueda():
+        bd.expire_all()
+        return bd.scalars(select(ModeloIA).where(ModeloIA.tipo == "embeddings")).all()
+
+    antes = {m.ref: m.id for m in busqueda()}
+    servidor_modelos["modelos"].append(derivado)
+    monkeypatch.setattr(ajustes(), "llm_modelo_embeddings", derivado)
+    try:
+        valores_por_defecto()
+        valores_por_defecto()  # idempotente
+        filas = busqueda()
+        fila = next(m for m in filas if m.ref == derivado)
+        assert fila.id == antes[base] and fila.nombre == derivado and fila.permitido and fila.predeterminado
+        assert base not in {m.ref for m in filas} and len(filas) == len(antes)
+        assert [m.ref for m in filas if m.predeterminado] == [derivado]
+
+        datos = cliente.get("/api/admin/modelos", headers=h_admin).json()
+        panel = next(m for m in datos["modelos"] if m["ref"] == derivado)
+        assert panel["indexa_documentos"] and panel["descargado"] and panel["uso"] == "Búsqueda de documentos"
+        r = cliente.put(f"/api/admin/modelos/{panel['id']}", headers=h_admin, json={"predeterminado": False})
+        assert r.status_code == 400 and derivado in r.json()["detail"]
+
+        # La indexación y las preguntas piden el derivado, y la pregunta lleva la instrucción.
+        enviados: list[dict] = []
+
+        class Respuesta:
+            status_code, text = 200, ""
+
+            @staticmethod
+            def json():
+                return {"data": [{"index": i, "embedding": [0.5]} for i, _ in enumerate(enviados[-1]["input"])]}
+
+        monkeypatch.setattr(llm, "embeddings", EMBEDDINGS_REAL)
+        monkeypatch.setattr(llm.httpx, "post", lambda url, json, **k: enviados.append(json) or Respuesta())
+        llm.embeddings(["Montaje de la brida B"])
+        llm.embedding_consulta("¿Qué par de apriete lleva la brida?")
+        assert [e["model"] for e in enviados] == [derivado, derivado]
+        assert enviados[1]["input"] == [ajustes().llm_instruccion_consulta + "¿Qué par de apriete lleva la brida?"]
+    finally:
+        monkeypatch.setattr(ajustes(), "llm_modelo_embeddings", base)
+        valores_por_defecto()
+    # Y de vuelta: la misma fila vuelve al modelo base.
+    assert {m.ref: m.id for m in busqueda()} == antes

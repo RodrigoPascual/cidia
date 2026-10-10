@@ -9,8 +9,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/comun.sh" "$1"
 
 DIR=$BANCO/inst
 detectar_dir
-mkdir -p "$DIR_DESP/perfiles" "$DIR/secretos" "$DIR/datos"
+mkdir -p "$DIR_DESP/perfiles" "$DIR_DESP/modelos" "$DIR/secretos" "$DIR/datos"
 cp "$BANCO/repo/servidor/despliegue/perfiles/msi.env" "$DIR_DESP/perfiles/"
+cp "$BANCO/repo/servidor/despliegue/modelos/"*.Modelfile "$DIR_DESP/modelos/"
 printf 'CIDIA_PERFIL=msi\nCIDIA_IP_PUBLICACION=0.0.0.0\nCIDIA_DIRECCION=192.168.1.50\nCIDIA_PUERTO=18700\nOLLAMA_KEEP_ALIVE=30m\nCIDIA_PG_PASSWORD=abc\n' >"$ENV_FILE"
 
 # Docker simulado: los servicios de EN_MARCHA tienen contenedor «cid-<servicio>»; Ollama tiene los
@@ -18,7 +19,7 @@ printf 'CIDIA_PERFIL=msi\nCIDIA_IP_PUBLICACION=0.0.0.0\nCIDIA_DIRECCION=192.168.
 # dc, curl y docker exec se anotan en LLAMADAS.
 LLAMADAS=$BANCO/llamadas
 EN_MARCHA="gateway postgres ollama asr weknora weknora-ui docreader qdrant redis espacio-trabajo"
-MODELOS="ministral-3:8b qwen3-embedding:0.6b"
+MODELOS="ministral-3:8b qwen3-embedding-cidia:0.6b qwen3-embedding:0.6b"
 EN_GPU="100% GPU"
 SEMILLA=false
 docker() {
@@ -47,6 +48,12 @@ docker() {
 			echo "NAME ID SIZE PROCESSOR CONTEXT UNTIL"
 			for m in $MODELOS; do echo "$m abc 9.1 GB $EN_GPU 32768 Forever"; done
 			;;
+		"ollama show")
+			m=${*: -1}
+			[[ " $MODELOS " == *" $m "* ]] || return 1
+			if [[ $4 == --parameters && $m == qwen3-embedding-cidia:0.6b ]]; then echo "num_ctx                        4096"; fi
+			;;
+		"ollama create") [[ " $MODELOS " == *" $4 "* ]] || MODELOS+=" $4" ;;
 		"printenv CIDIA_CREAR_SEMILLA") echo "$SEMILLA" ;;
 		"psql -U") echo 6 ;;
 		"python -m")
@@ -87,7 +94,7 @@ comprobar "guarda los valores anteriores" '[[ $(var CIDIA_DEMO_PREVIO_OLLAMA_KEE
 comprobar "para WeKnora y el espacio de trabajo" 'grep -qx "dc stop weknora weknora-ui docreader qdrant redis espacio-trabajo" "$LLAMADAS"'
 comprobar "aplica solo a los servicios de la demo" 'grep -qx "dc up -d postgres gateway ollama asr" "$LLAMADAS"'
 comprobar "chat mínimo con keep_alive -1" 'grep "/api/chat" "$LLAMADAS" | grep -q "\"model\":\"ministral-3:8b\".*\"keep_alive\":-1"'
-comprobar "embeddings con keep_alive -1" 'grep "/api/embed" "$LLAMADAS" | grep -q "\"model\":\"qwen3-embedding:0.6b\".*\"keep_alive\":-1"'
+comprobar "embeddings con keep_alive -1" 'grep "/api/embed" "$LLAMADAS" | grep -q "\"model\":\"qwen3-embedding-cidia:0.6b\".*\"keep_alive\":-1"'
 comprobar "sin fijar el contexto" '! grep -q num_ctx "$LLAMADAS"'
 comprobar "prueba la transcripción" 'grep -q "/v1/audio/transcriptions" "$LLAMADAS"'
 comprobar "los dos modelos en la GPU" '[[ $(grep -c "en memoria: 100 % en la GPU" <<<"$salida") == 2 ]]'
@@ -109,8 +116,13 @@ EN_GPU="100% GPU"
 MODELOS="ministral-3:8b"
 rc=0
 salida=$(demo_preparar 2>&1) || rc=$?
-comprobar "falta un modelo: no está listo" '[[ $rc == 1 ]] && grep -q "Falta qwen3-embedding:0.6b" <<<"$salida" && ! grep -q "Listo para la demo" <<<"$salida"'
+comprobar "falta un modelo: no está listo" '[[ $rc == 1 ]] && grep -q "Falta qwen3-embedding-cidia:0.6b" <<<"$salida" && ! grep -q "Listo para la demo" <<<"$salida"'
 MODELOS="ministral-3:8b qwen3-embedding:0.6b"
+: >"$LLAMADAS"
+rc=0
+salida=$(demo_preparar 2>&1) || rc=$?
+comprobar "falta el derivado y está la base: lo crea y queda listo" '[[ $rc == 0 ]] && grep -q "exec cid-ollama ollama create qwen3-embedding-cidia:0.6b -f /dev/stdin" "$LLAMADAS" && grep -q "Listo para la demo" <<<"$salida"'
+MODELOS="ministral-3:8b qwen3-embedding-cidia:0.6b qwen3-embedding:0.6b"
 
 echo "== demo restaurar"
 : >"$LLAMADAS"
