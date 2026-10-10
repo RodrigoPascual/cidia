@@ -104,6 +104,7 @@ services:
       ASR_DISPOSITIVO: cpu
       ASR_PRECISION: int8
       ASR_HILOS: ${ASR_HILOS:-2}
+      ASR_LIBERAR_TRAS_S: "${ASR_LIBERAR_TRAS_S:-600}"   # 0: no libera nunca el modelo (cidia demo preparar)
       HF_HUB_DISABLE_TELEMETRY: "1"
     volumes: [asr-modelos:/modelos]
     ports: ["127.0.0.1:${CIDIA_PUERTO_ASR:-18721}:8000"]

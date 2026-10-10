@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
-# Ejecuta la batería completa en 6 grupos en paralelo, cada uno con su base de datos de pruebas.
-# Uso: qa/pruebas_en_paralelo.sh [carpeta_de_registros]
+# Ejecuta TODA la batería (tests/test_*.py) en N grupos en paralelo, cada uno con su base de datos
+# de pruebas. Los ficheros se reparten por tamaño para equilibrar los grupos.
+# Uso: qa/pruebas_en_paralelo.sh [grupos] [carpeta_de_registros]
 set -u
 cd "$(dirname "$0")/.."
-REG="${1:-_registros_pruebas}"
-mkdir -p "$REG"
+N="${1:-6}"
+REG="${2:-_registros_pruebas}"
+rm -rf "$REG"; mkdir -p "$REG"
 PY=".venv/Scripts/python"
 [ -x "$PY" ] || PY=".venv/bin/python"
-declare -A GRUPOS=(
-  [g1]="tests/test_base.py tests/test_consulta.py tests/test_openai.py"
-  [g2]="tests/test_documentos.py tests/test_weknora.py tests/test_aportaciones.py"
-  [g3]="tests/test_captura.py tests/test_instrucciones.py"
-  [g4]="tests/test_planta.py tests/test_formacion.py tests/test_iluo.py"
-  [g5]="tests/test_evaluacion.py tests/test_progreso.py tests/test_admin.py tests/test_inicio.py"
-  [g6]="tests/test_espacio.py tests/test_mcp.py tests/test_semilla.py tests/test_instalador_servidor.py"
-)
-for g in "${!GRUPOS[@]}"; do
-  ( CIDIA_TEST_BD="par_$g" "$PY" -m pytest -q -p no:cacheprovider -rfE ${GRUPOS[$g]} > "$REG/$g.log" 2>&1; echo "$g fin $?" >> "$REG/estado.txt" ) &
+
+# Reparto voraz: el fichero más grande al grupo con menos carga.
+"$PY" - "$N" "$REG" <<'FIN'
+import os, sys, glob
+n, reg = int(sys.argv[1]), sys.argv[2]
+ficheros = sorted(glob.glob("tests/test_*.py"), key=os.path.getsize, reverse=True)
+grupos = [[0, []] for _ in range(n)]
+for f in ficheros:
+    g = min(grupos, key=lambda x: x[0])
+    g[0] += os.path.getsize(f)
+    g[1].append(f)
+for i, (_, fs) in enumerate(grupos, start=1):
+    open(os.path.join(reg, f"g{i}.lista"), "w").write(" ".join(fs))
+FIN
+
+for lista in "$REG"/g*.lista; do
+  g=$(basename "$lista" .lista)
+  ( CIDIA_TEST_BD="par_$g" "$PY" -m pytest -q -p no:cacheprovider -rfE $(cat "$lista") > "$REG/$g.log" 2>&1
+    echo "$g fin $?" >> "$REG/estado.txt" ) &
 done
 wait
-for g in $(printf '%s\n' "${!GRUPOS[@]}" | sort); do
+for lista in "$REG"/g*.lista; do
+  g=$(basename "$lista" .lista)
   echo "== $g: $(tail -1 "$REG/$g.log")"
 done
 grep -h "^FAILED\|^ERROR" "$REG"/g*.log || echo "Sin fallos."

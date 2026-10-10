@@ -34,7 +34,11 @@ _ALUCINACION = re.compile(
 def limpiar_transcripcion(texto: str | None) -> str:
     """Texto transcrito listo para enviar al copiloto, o «» si es una alucinación típica del silencio."""
     texto = " ".join((texto or "").split())
-    return "" if _ALUCINACION.search(texto) else texto
+    if _ALUCINACION.search(texto):
+        return ""
+    from cidia.servicios.aportaciones import transcripcion_util
+
+    return transcripcion_util(texto) or ""
 
 
 @router.post("/transcribir")

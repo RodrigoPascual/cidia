@@ -310,3 +310,9 @@
   .adm-rango { flex: 1 1 100%; min-width: 0; gap: 6px; }
   .adm-rango .fecha { flex: 1 1 0; min-width: 0; width: auto; padding-left: 8px; padding-right: 6px; }
 }
+
+/* Rango de fechas del Registro: en pantallas estrechas, cada fecha en su fila. */
+@media (max-width: 640px) {
+  .adm-rango { flex-wrap: wrap; }
+  .adm-rango .fecha { flex: 1 1 100%; }
+}

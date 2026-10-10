@@ -240,7 +240,22 @@ Todo con la orden `cidia` (siempre con `sudo`):
 | `sudo cidia modelos` | Modelos descargados y los que faltan. `modelos descargar` baja los que falten. |
 | `sudo cidia admin-restablecer` | Nueva contraseña para la cuenta de administración si se ha olvidado. |
 | `sudo cidia abrir-puerto` / `cerrar-puerto` | Publicar CidIA en la red local o dejarlo solo en el equipo. |
+| `sudo cidia demo preparar` / `demo restaurar` | Dejar el servidor listo para una demostración y volver después a lo normal (apartado 8.1). |
 | `sudo cidia ayuda` | Todas las órdenes. |
+
+### 8.1 Modo demo
+
+Para una demostración en el MSI. La guía completa (preparación, guion, planes B y vídeo de respaldo) está en [`docs/guia-demo.md`](guia-demo.md).
+
+```bash
+sudo cidia demo preparar           # una hora antes: tiene que terminar con «Listo para la demo»
+sudo cidia demo reiniciar-datos    # entre ensayos: vuelve a sembrar los datos sintéticos
+sudo cidia demo restaurar          # al terminar
+```
+
+* **`demo preparar`** carga en la GPU los modelos de chat y de búsqueda del perfil para que no caduquen, carga el modelo de voz (la primera vez lo descarga: necesita Internet), para WeKnora y el espacio de trabajo si están en marcha (`--con-weknora` y `--con-espacio` los dejan), comprueba que están las cuentas del guion y muestra la corriente, la suspensión, la memoria, la GPU y la dirección para los portátiles. Si un modelo no cabe entero en los 12 GB de la gráfica, lo dice: baja `OLLAMA_CONTEXT_LENGTH` (por ejemplo, a 16384) en `/opt/cidia/secretos/cidia.env` y repite. Tras reiniciar el equipo hay que volver a ejecutarlo.
+* **`demo restaurar`** vuelve a la configuración que había (los modelos vuelven a salir de la memoria tras 30 minutos sin uso) y arranca de nuevo los servicios opcionales. Mientras el modo demo está activo, `sudo cidia estado` lo recuerda.
+* **`demo reiniciar-datos`** borra todo el contenido de demostración, también lo añadido después (por ejemplo, la captura del ensayo), y vuelve a sembrar los datos sintéticos. Pide escribir `REINICIAR` y solo funciona en un servidor marcado como de demostración. Para marcar el MSI: `CIDIA_CREAR_SEMILLA=true` en `/opt/cidia/cidia/servidor/despliegue/perfiles/msi.env` y `sudo cidia arrancar`. La semilla se niega en una base con datos propios.
 
 ## 9. Copias de seguridad
 
@@ -332,3 +347,4 @@ No se ejecutaron en Oracle, por cambiar el estado del servidor compartido: la in
 - [ ] `sudo cidia admin-restablecer` y entrar con la nueva contraseña.
 - [ ] Reiniciar el MSI y comprobar que CidIA vuelve solo.
 - [ ] Volver a ejecutar el instalador: no debe cambiar secretos ni datos.
+- [ ] `sudo cidia demo preparar`: «Listo para la demo», los dos modelos «100 % en la GPU» y la voz transcribiendo; después `sudo cidia demo restaurar` (ver [`docs/guia-demo.md`](guia-demo.md)).

@@ -4,6 +4,7 @@
 # El instalador (instalar-servidor.sh) la enlaza como /usr/local/bin/cidia. Uso habitual:
 #   sudo cidia estado              servicios, salud, recursos y modelos
 #   sudo cidia copia               copia de seguridad de la base de datos y de datos/
+#   sudo cidia demo preparar       deja el servidor listo para una demostración
 #   sudo cidia ayuda               todas las órdenes
 #
 # Solo actúa sobre el proyecto de Docker Compose «cidia»: nunca para, borra ni limpia
@@ -140,6 +141,17 @@ poner_var() {
 		printf '%s=%s\n' "$k" "$v" >"$tmp"
 		chmod 600 "$tmp"
 	fi
+	mv -f "$tmp" "$f"
+}
+
+# quitar_var FICHERO CLAVE: borra la línea (si está) conservando dueño y permisos.
+quitar_var() {
+	local f=$1 k=$2 tmp
+	tiene_var "$f" "$k" || return 0
+	tmp=$(mktemp "$(dirname "$f")/.cidia-env.XXXXXX")
+	awk -v k="$k" '$0 !~ "^[[:space:]]*" k "=" { print }' "$f" >"$tmp"
+	chmod --reference="$f" "$tmp"
+	chown --reference="$f" "$tmp" 2>/dev/null || true
 	mv -f "$tmp" "$f"
 }
 
@@ -284,6 +296,40 @@ esperar_salud() {
 	return 1
 }
 
+# esperar_url URL [segundos]: espera en silencio a que la URL responda.
+esperar_url() {
+	local t0=$SECONDS
+	while ((SECONDS - t0 < ${2:-90})); do
+		if curl -fsS -m 4 "$1" >/dev/null 2>&1; then return 0; fi
+		sleep 2
+	done
+	return 1
+}
+
+# Uso de CPU y memoria de los contenedores de CidIA, memoria del equipo y GPU.
+mostrar_recursos() {
+	local ids
+	ids=$(docker ps -q --filter "$ETIQUETA" | paste -sd ' ') || true
+	if [[ -n $ids ]]; then
+		# shellcheck disable=SC2086  # lista de identificadores separados por espacios
+		docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}' $ids 2>/dev/null | sort |
+			awk -F'\t' 'BEGIN { printf "    %-22s %8s   %-24s %7s\n", "CONTENEDOR", "CPU", "MEMORIA (uso / límite)", "%" }
+				{ printf "    %-22s %8s   %-24s %7s\n", $1, $2, $3, $4 }' || true
+	fi
+	if command -v free >/dev/null; then
+		info "Memoria del equipo: $(LC_ALL=C free -b | awk '/^Mem/ { printf "%.1f GB disponibles de %.1f GB", $7 / 1e9, $2 / 1e9 }' | sed 's/\./,/g')"
+	fi
+	if hay_gpu; then
+		nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits |
+			while IFS=, read -r nombre usada total uso temp; do
+				info "GPU: $nombre · memoria ${usada// /} / ${total// /} MiB · uso ${uso// /} % · ${temp// /} °C"
+			done
+	fi
+	return 0
+}
+
+hay_gpu() { command -v nvidia-smi >/dev/null && nvidia-smi -L >/dev/null 2>&1; }
+
 # ----------------------------------------------------------------------------- modelos
 
 # Ollama muestra «modelo:latest» cuando no se indica etiqueta.
@@ -406,7 +452,7 @@ modelos_borrar() {
 # ----------------------------------------------------------------------------- estado
 
 orden_estado() {
-	local perfil version cid servicios t0 ms nombre estado detalle tam necesarios modelos ids gid
+	local perfil version cid servicios t0 ms nombre estado detalle tam necesarios modelos gid
 	local libre total datos_t copias_t ultima
 	calcular_urls
 	perfil=$(leer_var "$ENV_FILE" CIDIA_PERFIL)
@@ -421,6 +467,9 @@ orden_estado() {
 			aviso "El espacio de trabajo no podrá usar Docker: CIDIA_DOCKER_GID=${gid:-120} y el socket es del grupo $(stat -c %g /var/run/docker.sock)."
 			tenue "Corrígelo en $ENV_FILE (o vuelve a ejecutar el instalador) y aplica con: sudo cidia arrancar"
 		fi
+	fi
+	if [[ $(leer_var "$ENV_FILE" CIDIA_MODO_DEMO) == activo ]]; then
+		aviso "Modo demo activo: modelos cargados sin caducidad. Al terminar la demostración: sudo cidia demo restaurar"
 	fi
 	if [[ -n $URL_PORTATILES ]]; then
 		info "Publicado en la red local ($IP_PUB:$PUERTO)"
@@ -477,24 +526,11 @@ orden_estado() {
 	fi
 
 	titulo "Recursos"
-	ids=$(docker ps -q --filter "$ETIQUETA" | paste -sd ' ') || true
-	if [[ -n $ids ]]; then
-		# shellcheck disable=SC2086  # lista de identificadores separados por espacios
-		docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}' $ids 2>/dev/null | sort |
-			awk -F'\t' 'BEGIN { printf "    %-22s %8s   %-24s %7s\n", "CONTENEDOR", "CPU", "MEMORIA (uso / límite)", "%" }
-				{ printf "    %-22s %8s   %-24s %7s\n", $1, $2, $3, $4 }' || true
-	fi
+	mostrar_recursos
 	read -r libre total < <(df -P -B1 "$DIR" | awk 'NR == 2 { print $4, $2 }')
 	datos_t=$(du -sb "$DIR/datos" 2>/dev/null | cut -f1) || true
 	copias_t=$(du -sb "$COPIAS" 2>/dev/null | cut -f1) || true
 	info "Disco ($DIR): $(legible "$libre") libres de $(legible "$total") · datos $(legible "${datos_t:-0}") · copias $(legible "${copias_t:-0}")"
-	info "Memoria del equipo: $(LC_ALL=C free -b | awk '/^Mem/ { printf "%.1f GB disponibles de %.1f GB", $7 / 1e9, $2 / 1e9 }' | sed 's/\./,/g')"
-	if command -v nvidia-smi >/dev/null && nvidia-smi -L >/dev/null 2>&1; then
-		nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits |
-			while IFS=, read -r nombre usada total uso temp; do
-				info "GPU: $nombre · memoria ${usada// /} / ${total// /} MiB · uso ${uso// /} % · ${temp// /} °C"
-			done
-	fi
 
 	titulo "Modelos"
 	cid=$(contenedor ollama)
@@ -989,6 +1025,313 @@ orden_cerrar_puerto() {
 	ok "CidIA escucha solo en 127.0.0.1:$PUERTO (desde este equipo o por túnel SSH)."
 }
 
+# ----------------------------------------------------------------------------- modo demo
+#
+# «demo preparar» deja el servidor listo para una demostración (pensado para el MSI con 12 GB de
+# VRAM): los modelos de chat y embeddings del perfil cargados sin caducidad, el modelo de voz
+# cargado, los servicios opcionales que no se enseñan parados y un resumen con la dirección para
+# los portátiles. Lo que cambia en cidia.env guarda antes su valor en CIDIA_DEMO_PREVIO_<variable>
+# para que «demo restaurar» lo devuelva. «demo reiniciar-datos» vuelve a sembrar los datos
+# sintéticos, solo en servidores de demostración (CIDIA_CREAR_SEMILLA=true).
+
+DEMO_WEKNORA=(weknora weknora-ui docreader qdrant redis)
+DEMO_CUENTAS="'ana', 'luis', 'carmen', 'marta', 'javier', 'lucia'" # las del guion de 3 minutos
+
+# demo_fijar CLAVE VALOR: guarda el valor anterior (solo la primera vez) y pone el de la demo.
+demo_fijar() {
+	local k=$1 previo=""
+	if ! tiene_var "$ENV_FILE" "CIDIA_DEMO_PREVIO_$k"; then
+		if tiene_var "$ENV_FILE" "$k"; then previo=$(leer_var "$ENV_FILE" "$k"); fi
+		poner_var "$ENV_FILE" "CIDIA_DEMO_PREVIO_$k" "${previo:-ninguno}"
+	fi
+	poner_var "$ENV_FILE" "$k" "$2"
+}
+
+# demo_devolver CLAVE: vuelve al valor que guardó demo_fijar (o quita la variable si no estaba).
+demo_devolver() {
+	local k=$1 previo
+	tiene_var "$ENV_FILE" "CIDIA_DEMO_PREVIO_$k" || return 0
+	previo=$(leer_var "$ENV_FILE" "CIDIA_DEMO_PREVIO_$k")
+	if [[ $previo == ninguno ]]; then quitar_var "$ENV_FILE" "$k"; else poner_var "$ENV_FILE" "$k" "$previo"; fi
+	quitar_var "$ENV_FILE" "CIDIA_DEMO_PREVIO_$k"
+}
+
+# ¿Servidor de demostración? CIDIA_CREAR_SEMILLA=true en el gateway en marcha o, si no lo está,
+# en el perfil.
+es_demo() {
+	local cid v="" perfil
+	cid=$(contenedor gateway)
+	if [[ -n $cid ]]; then
+		v=$(docker exec "$cid" printenv CIDIA_CREAR_SEMILLA 2>/dev/null) || true
+	else
+		perfil=$(leer_var "$ENV_FILE" CIDIA_PERFIL)
+		v=$(leer_var "$DIR_DESP/perfiles/${perfil:-oracle}.env" CIDIA_CREAR_SEMILLA)
+	fi
+	[[ ${v,,} =~ ^(1|on|t|true|y|yes)$ ]]
+}
+
+# Dónde está la contraseña de las cuentas de demostración (nunca la muestra).
+contrasena_demo_en() {
+	local datos
+	if [[ -n $(leer_var "$ENV_FILE" CIDIA_DEMO_CONTRASENA) ]]; then
+		printf 'la de CIDIA_DEMO_CONTRASENA en %s' "$ENV_FILE"
+	else
+		datos=$(leer_var "$ENV_FILE" CIDIA_DATOS)
+		printf 'en %s/usuarios-demo.txt' "${datos:-$DIR/datos}"
+	fi
+}
+
+# Un segundo de silencio en WAV (PCM de 16 bits, 16 kHz, mono) para cargar el modelo de voz.
+wav_silencio() {
+	printf 'RIFF\x24\x7d\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x7d\x00\x00'
+	head -c 32000 /dev/zero
+}
+
+# precargar MODELO chat|embeddings: petición mínima a Ollama para que el modelo quede cargado sin
+# caducidad. No fija num_ctx: con otro contexto, Ollama lo volvería a cargar en la primera pregunta.
+precargar() {
+	local m=$1 ruta=api/chat cuerpo
+	[[ $m =~ ^[A-Za-z0-9._/:-]+$ ]] || return 1
+	if [[ $2 == embeddings ]]; then
+		ruta=api/embed
+		printf -v cuerpo '{"model":"%s","input":"Montaje de la brida B","keep_alive":-1}' "$m"
+	else
+		printf -v cuerpo '{"model":"%s","messages":[{"role":"user","content":"Hola"}],"stream":false,"keep_alive":-1,"options":{"num_predict":1}}' "$m"
+	fi
+	curl -fsS -m 300 -H 'Content-Type: application/json' -d "$cuerpo" "http://127.0.0.1:$PUERTO_OLLAMA/$ruta" >/dev/null 2>&1
+}
+
+# Corriente y suspensión: un portátil con batería o que se suspende deja la demo a medias.
+demo_energia() {
+	local f v red=""
+	for f in /sys/class/power_supply/*/type; do
+		if [[ -r $f && $(cat "$f") == Mains ]]; then
+			v=$(cat "${f%/type}/online" 2>/dev/null) || true
+			if [[ -z $red || $v == 1 ]]; then red=$v; fi
+		fi
+	done
+	if [[ $red == 1 ]]; then
+		ok "Enchufado a la corriente"
+	elif [[ $red == 0 ]]; then
+		aviso "Funciona con batería: enchufa el cargador (con batería la GPU rinde menos)."
+	fi
+	if command -v systemctl >/dev/null; then
+		if [[ $(systemctl is-enabled suspend.target 2>/dev/null) == masked ]]; then
+			ok "Suspensión desactivada"
+		else
+			aviso "El equipo puede suspenderse: sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target"
+		fi
+	fi
+	return 0
+}
+
+orden_demo() {
+	local sub=${1:-}
+	if (($#)); then shift; fi
+	case $sub in
+	preparar) demo_preparar "$@" ;;
+	restaurar) demo_restaurar ;;
+	reiniciar-datos) demo_reiniciar_datos ;;
+	*) morir "Uso: cidia demo [preparar [--con-weknora] [--con-espacio] | restaurar | reiniciar-datos]" ;;
+	esac
+}
+
+demo_preparar() {
+	local con_weknora=0 con_espacio=0 problemas=0 perfil fich chat embed vision tipo m s t0 ps proc salud n=""
+	local parar=() cargados=() wav cid_pg
+	while (($#)); do
+		case $1 in
+		--con-weknora) con_weknora=1 ;;
+		--con-espacio) con_espacio=1 ;;
+		*) morir "Opción desconocida: $1 (admite --con-weknora y --con-espacio)" ;;
+		esac
+		shift
+	done
+	calcular_urls
+	perfil=$(leer_var "$ENV_FILE" CIDIA_PERFIL)
+	fich=$DIR_DESP/perfiles/${perfil:-oracle}.env
+	printf '%sCidIA · preparar la demostración%s  %s(perfil %s)%s\n' "$C_N" "$C_R" "$C_T" "${perfil:-oracle}" "$C_R"
+
+	titulo "Servicios"
+	if ((!con_weknora)) && [[ $(leer_var "$fich" CIDIA_MOTOR_CONOCIMIENTO) == weknora ]]; then
+		con_weknora=1
+		info "El motor de conocimiento es WeKnora: sigue en marcha."
+	fi
+	if ((!con_weknora)); then
+		for s in "${DEMO_WEKNORA[@]}"; do
+			if [[ -n $(contenedor "$s") ]]; then parar+=("$s"); fi
+		done
+	fi
+	if ((!con_espacio)) && [[ -n $(contenedor espacio-trabajo) ]]; then parar+=(espacio-trabajo); fi
+	if ((${#parar[@]})); then
+		dc stop "${parar[@]}"
+		ok "Parados para dejar la memoria a la demo: ${parar[*]}"
+	else
+		ok "No hay servicios opcionales que parar."
+	fi
+	demo_fijar OLLAMA_KEEP_ALIVE -1
+	demo_fijar ASR_LIBERAR_TRAS_S 0
+	poner_var "$ENV_FILE" CIDIA_MODO_DEMO activo
+	dc up -d postgres gateway ollama asr
+	esperar_salud 240 || exit 1
+	ok "Modo demo: los modelos y la voz no salen de la memoria hasta «cidia demo restaurar»"
+
+	titulo "Modelos"
+	esperar_url "http://127.0.0.1:$PUERTO_OLLAMA/api/version" 90 ||
+		morir "Ollama no responde en 127.0.0.1:$PUERTO_OLLAMA. Mira sus registros: sudo cidia registros ollama"
+	necesitar ollama
+	s=$(modelos_descargados "$CID")
+	chat=$(leer_var "$fich" CIDIA_LLM_MODELO_CHAT | normalizar_modelo)
+	embed=$(leer_var "$fich" CIDIA_LLM_MODELO_EMBEDDINGS | normalizar_modelo)
+	vision=$(leer_var "$fich" CIDIA_LLM_MODELO_VISION | normalizar_modelo)
+	for tipo in chat embeddings; do
+		m=$chat
+		if [[ $tipo == embeddings ]]; then m=$embed; fi
+		if [[ -z $m ]]; then
+			fallo "El perfil no indica el modelo de $tipo."
+			problemas=$((problemas + 1))
+		elif ! grep -q "^$m"$'\t' <<<"$s"; then
+			fallo "Falta $m. Descárgalo con: sudo cidia modelos descargar"
+			problemas=$((problemas + 1))
+		else
+			t0=$SECONDS
+			if precargar "$m" "$tipo"; then
+				ok "$m ($tipo) responde · $((SECONDS - t0)) s"
+				cargados+=("$m")
+			else
+				fallo "$m ($tipo) no responde. Mira los registros: sudo cidia registros ollama"
+				problemas=$((problemas + 1))
+			fi
+		fi
+	done
+	# ollama ps: NOMBRE ID TAMAÑO(2) PROCESADOR(2) …  Se mira al final: cargar el segundo modelo
+	# puede haber echado al primero si no caben los dos en la GPU.
+	ps=$(docker exec "$CID" ollama ps 2>/dev/null) || true
+	for m in "${cargados[@]}"; do
+		proc=$(awk -v m="$m" 'NR > 1 && $1 == m { print $5 " " $6 }' <<<"$ps")
+		if [[ -z $proc ]]; then
+			fallo "$m no sigue en memoria (¿no caben los dos modelos? Revisa OLLAMA_MAX_LOADED_MODELS)."
+			problemas=$((problemas + 1))
+		elif [[ $proc == "100% GPU" ]]; then
+			ok "$m en memoria: 100 % en la GPU"
+		elif hay_gpu; then
+			aviso "$m en memoria: $proc. No cabe entero en la GPU y responderá más despacio."
+			tenue "Para lo que use la GPU o baja OLLAMA_CONTEXT_LENGTH (por ejemplo, a 16384) en $ENV_FILE y repite."
+		else
+			info "$m en memoria: $proc (equipo sin GPU)"
+		fi
+	done
+	if [[ -n $vision && $vision != "$chat" ]]; then
+		tenue "El modelo de visión ($vision) se cargará la primera vez que se use."
+	fi
+
+	titulo "Voz"
+	if ! esperar_url "http://127.0.0.1:$PUERTO_ASR/health" 90; then
+		fallo "La voz no responde en 127.0.0.1:$PUERTO_ASR. Mira sus registros: sudo cidia registros asr"
+		problemas=$((problemas + 1))
+	else
+		wav=$(mktemp)
+		wav_silencio >"$wav"
+		info "Cargando el modelo de voz (la primera vez lo descarga: necesita Internet)…"
+		t0=$SECONDS
+		if curl -fsS -m 600 -F "file=@$wav;type=audio/wav" -F language=es \
+			"http://127.0.0.1:$PUERTO_ASR/v1/audio/transcriptions" >/dev/null 2>&1; then
+			salud=$(curl -fsS -m 5 "http://127.0.0.1:$PUERTO_ASR/health" 2>/dev/null) || true
+			s=$(sed -n 's/.*"modelo":"\([^"]*\)".*/\1/p' <<<"$salud")
+			ok "Voz: transcribe con el modelo ${s:-de voz} · $((SECONDS - t0)) s"
+		else
+			fallo "La voz no transcribe. Mira sus registros: sudo cidia registros asr"
+			problemas=$((problemas + 1))
+		fi
+		rm -f "$wav"
+	fi
+
+	titulo "Datos de demostración"
+	cid_pg=$(contenedor postgres)
+	if [[ -n $cid_pg ]]; then
+		n=$(docker exec "$cid_pg" psql -U cidia -d cidia -tAc \
+			"SELECT count(*) FROM usuarios WHERE activo AND usuario IN ($DEMO_CUENTAS)" 2>/dev/null | tr -d '[:space:]') || true
+	fi
+	if [[ $n == 6 ]]; then
+		ok "Cuentas del guion: ana, luis, carmen, marta, javier y lucia"
+		s=$(contrasena_demo_en)
+		info "Contraseña de las cuentas de demostración: $s"
+	elif es_demo; then
+		aviso "Faltan cuentas del guion (${n:-0} de 6). Si el servidor acaba de arrancar, espera uno o dos minutos (Administración › Sistema)."
+		tenue "Para volver a sembrarlas: sudo cidia demo reiniciar-datos"
+	else
+		aviso "Servidor no marcado como de demostración (CIDIA_CREAR_SEMILLA=true en perfiles/${perfil:-oracle}.env): sin datos sintéticos."
+	fi
+
+	titulo "Equipo"
+	demo_energia
+	mostrar_recursos
+
+	if ((problemas)); then
+		titulo "No está listo: $problemas problema(s)"
+		tenue "Corrige lo marcado con ✘ y repite: sudo cidia demo preparar"
+	else
+		titulo "Listo para la demo"
+	fi
+	if [[ -n $URL_PORTATILES ]]; then
+		info "Dirección para los portátiles: $C_N$URL_PORTATILES$C_R"
+		info "Navegador: $URL_PORTATILES/app/"
+	else
+		aviso "Solo local (127.0.0.1:$PUERTO): los portátiles no llegan. Para publicarlo: sudo cidia abrir-puerto"
+	fi
+	tenue "Para repetir el ensayo desde cero: sudo cidia demo reiniciar-datos"
+	tenue "Al terminar la demostración: sudo cidia demo restaurar"
+	if ((problemas)); then exit 1; fi
+	return 0
+}
+
+demo_restaurar() {
+	local ka
+	titulo "Volver a la configuración normal"
+	if [[ $(leer_var "$ENV_FILE" CIDIA_MODO_DEMO) != activo ]]; then
+		info "El modo demo no estaba activo: se arranca lo que falte con la configuración actual."
+	fi
+	demo_devolver OLLAMA_KEEP_ALIVE
+	demo_devolver ASR_LIBERAR_TRAS_S
+	quitar_var "$ENV_FILE" CIDIA_MODO_DEMO
+	dc up -d
+	calcular_urls
+	esperar_salud 240 || exit 1
+	ka=$(leer_var "$ENV_FILE" OLLAMA_KEEP_ALIVE)
+	ok "Configuración normal: los modelos salen de la memoria tras ${ka:-30m} sin uso."
+	if [[ -n $PERFILES_COMPOSE ]]; then ok "Servicios opcionales en marcha de nuevo ($PERFILES_COMPOSE)"; fi
+	return 0
+}
+
+demo_reiniciar_datos() {
+	local salida errores rc=0 datos l
+	necesitar gateway
+	titulo "Volver a sembrar los datos de demostración"
+	es_demo || morir "Este servidor no está marcado como de demostración (CIDIA_CREAR_SEMILLA=true en su perfil): no se borra nada."
+	if ! confirmar_palabra REINICIAR "Se borrarán los documentos, las instrucciones y la actividad de la demostración, también lo añadido después (por ejemplo, la captura del ensayo), y se volverán a crear los datos sintéticos."; then
+		info "No se ha cambiado nada."
+		return 0
+	fi
+	info "Sembrando: uno o dos minutos (indexa los documentos con el modelo de embeddings)…"
+	salida=$(mktemp)
+	errores=$(mktemp)
+	docker exec "$CID" python -m cidia.semilla --forzar >"$salida" 2>"$errores" || rc=$?
+	if [[ -n $REGISTRO ]]; then cat "$salida" "$errores" >>"$REGISTRO"; fi
+	if ((rc)) || ! grep -q '^Datos de demostración cargados' "$salida"; then
+		l=$(grep -h '^No se ha sembrado' "$salida" | tail -n1) || true
+		if [[ -z $l ]]; then l=$(tail -n 3 "$errores"); fi
+		rm -f "$salida" "$errores"
+		morir "${l:-La semilla ha fallado.} Más detalle: sudo cidia registros gateway"
+	fi
+	datos=$(leer_var "$ENV_FILE" CIDIA_DATOS)
+	while IFS= read -r l; do
+		tenue "${l#  }"
+	done < <(sed -n '2,$p' "$salida" | sed "s#: /datos/#: ${datos:-$DIR/datos}/#")
+	rm -f "$salida" "$errores"
+	ok "Datos de demostración sembrados de nuevo."
+	tenue "Vuelve a entrar en las ventanas de la demo si alguna pide la sesión."
+}
+
 # ----------------------------------------------------------------------------- ayuda y arranque
 
 uso() {
@@ -1011,6 +1354,10 @@ Uso: sudo cidia [--dir CARPETA] [--si] <orden> [argumentos]
   admin-restablecer [usuario]      nueva contraseña para la cuenta de administración
   abrir-puerto [IP]                publica CidIA en la red local (0.0.0.0 o una IP del equipo)
   cerrar-puerto                    deja CidIA solo en este equipo (127.0.0.1)
+  demo preparar [--con-weknora] [--con-espacio]
+                                   modelos cargados en la GPU, voz lista y solo lo necesario en marcha
+  demo restaurar                   vuelve a la configuración normal tras la demostración
+  demo reiniciar-datos             vuelve a sembrar los datos sintéticos (solo servidores de demo)
 
 Opciones: --dir CARPETA (o la variable CIDIA_DIR) · --si responde que sí a las preguntas.
 Manual: docs/manual-servidor.md
@@ -1042,7 +1389,7 @@ main() {
 		return 0
 		;;
 	estado | status | registros | logs | reiniciar | restart | parar | stop | arrancar | start | actualizar | modelos) ;;
-	copia | backup | copias | restaurar | admin-restablecer | _admin-inicial | abrir-puerto | cerrar-puerto) ;;
+	copia | backup | copias | restaurar | admin-restablecer | _admin-inicial | abrir-puerto | cerrar-puerto | demo) ;;
 	*)
 		# Una orden mal escrita se rechaza antes de pedir sudo o hablar con Docker.
 		fallo "Orden desconocida: $orden"
@@ -1069,6 +1416,7 @@ main() {
 	_admin-inicial) orden_admin_inicial "${args[@]}" ;;
 	abrir-puerto) orden_abrir_puerto "${args[@]}" ;;
 	cerrar-puerto) orden_cerrar_puerto ;;
+	demo) orden_demo "${args[@]}" ;;
 	*)
 		fallo "Orden desconocida: $orden"
 		uso

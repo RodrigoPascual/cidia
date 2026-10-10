@@ -121,7 +121,7 @@ Cada nivel caduca (12 meses por defecto). Al publicar una nueva versión de una 
 
 ## 8. Despliegue
 
-Manual paso a paso: `docs/manual-servidor.md`. Tras instalar, la herramienta `cidia` (estado, registros, actualizar, modelos, copias y restauración, puerto en la LAN) administra el servidor.
+Manual paso a paso: `docs/manual-servidor.md`. Tras instalar, la herramienta `cidia` (estado, registros, actualizar, modelos, copias y restauración, puerto en la LAN y modo demo) administra el servidor. La demostración de 3 minutos está en `docs/guia-demo.md`.
 
 
 `servidor/despliegue/` contiene el `docker-compose.yml` y un fichero de entorno por equipo (`perfiles/oracle.env`, `perfiles/msi.env`). `instalar-servidor.sh` deja cualquier Ubuntu con Docker listo como servidor CidIA: comprueba requisitos, instala Docker Engine y el soporte de GPU si hace falta, genera secretos, descarga imágenes y modelos, arranca los servicios, crea el administrador y muestra la dirección que hay que poner en el instalador de los portátiles.

@@ -113,8 +113,15 @@ def _token_de(request: Request) -> str | None:
     return request.query_params.get("token")
 
 
-def actor_desde_token(bd: Session, token: str | None) -> Actor:
-    """Valida un token y devuelve el actor. Lanza 401 si no es válido."""
+RUTAS_CON_CONTRASENA_PENDIENTE = ("/api/auth/", "/api/sistema/info", "/salud")
+
+
+def actor_desde_token(bd: Session, token: str | None, ruta: str | None = None) -> Actor:
+    """Valida un token y devuelve el actor. Lanza 401 si no es válido.
+
+    Si la cuenta tiene una contraseña inicial o temporal que hay que cambiar, solo se admiten
+    las rutas de sesión (para cambiarla o salir): el resto responde 403 aunque el token sea
+    válido. `ruta` es la ruta de la petición ('/mcp' para las herramientas del agente)."""
     if not token:
         raise HTTPException(401, "Inicia sesión para continuar.")
     try:
@@ -131,12 +138,15 @@ def actor_desde_token(bd: Session, token: str | None) -> Actor:
         usuario = bd.get(Usuario, s.usuario_id)
         if not usuario or not usuario.activo:
             raise HTTPException(401, "Tu cuenta no está activa.")
+        pendiente = getattr(usuario, "debe_cambiar_contrasena", False) and usuario.origen_identidad == "local"
+        if pendiente and ruta is not None and not ruta.startswith(RUTAS_CON_CONTRASENA_PENDIENTE):
+            raise HTTPException(403, "Antes de seguir tienes que cambiar tu contraseña inicial.")
     return Actor(sesion=s, usuario=usuario)
 
 
 def actor_actual(request: Request, bd: Session = Depends(obtener_bd)) -> Actor:
     """Usuario o invitado con sesión válida."""
-    return actor_desde_token(bd, _token_de(request))
+    return actor_desde_token(bd, _token_de(request), request.url.path)
 
 
 def usuario_actual(actor: Actor = Depends(actor_actual)) -> Actor:

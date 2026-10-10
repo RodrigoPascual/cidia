@@ -240,8 +240,9 @@ export function hace(iso?: string | null): string {
 
 export function tamano(bytes?: number | null): string {
   if (!bytes && bytes !== 0) return ''
+  const n = (v: number, dec: number) => v.toLocaleString('es-ES', { maximumFractionDigits: dec })
   if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`
+  if (bytes < 1024 * 1024) return `${n(bytes / 1024, 0)} KB`
+  if (bytes < 1024 ** 3) return `${n(bytes / 1024 / 1024, 1)} MB`
+  return `${n(bytes / 1024 ** 3, 2)} GB`
 }

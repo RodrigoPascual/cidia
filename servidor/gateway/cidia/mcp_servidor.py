@@ -100,7 +100,7 @@ def _verificar(token: str) -> AccessToken | None:
     """Valida el JWT de CidIA contra la BD. None si no es válido (el SDK responde 401)."""
     try:
         with nueva_sesion() as bd:
-            actor = actor_desde_token(bd, token)
+            actor = actor_desde_token(bd, token, "/mcp")
             sesion_id = actor.sesion.id
             expira = int(actor.sesion.expira.timestamp())
             sujeto = str(actor.id) if actor.id else f"invitado:{sesion_id}"
@@ -131,7 +131,7 @@ def _sesion(requiere_usuario: bool = True) -> Iterator[tuple[Session, Actor]]:
         raise ToolError("Falta la sesión de CidIA. Vuelve a iniciar sesión en la app.")
     with nueva_sesion() as bd:
         try:
-            actor = actor_desde_token(bd, token.token)
+            actor = actor_desde_token(bd, token.token, "/mcp")
         except HTTPException as e:
             raise ToolError(str(e.detail)) from None
         if requiere_usuario and actor.es_invitado:

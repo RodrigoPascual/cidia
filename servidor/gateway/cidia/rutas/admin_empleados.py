@@ -72,6 +72,7 @@ def empleado_dict(u: Usuario, formaciones_activas: int = 0) -> dict[str, Any]:
     return {
         "id": u.id,
         "usuario": u.usuario,
+        "debe_cambiar_contrasena": bool(getattr(u, "debe_cambiar_contrasena", False)),
         "nombre": u.nombre,
         "iniciales": iniciales(u.nombre),
         "email": u.email,

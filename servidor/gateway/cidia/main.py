@@ -82,7 +82,7 @@ def _montar_web(app: FastAPI) -> None:
         html = html.replace("<head>", f'<head>\n    <base href="{prefijo}/app/" />', 1)
         # Solo la propia app (mismo origen: el proxy del plugin) puede mostrar la interfaz en un marco.
         return HTMLResponse(html, headers={"Cache-Control": "no-cache", "Content-Security-Policy": "frame-ancestors 'self'",
-                                           "X-Content-Type-Options": "nosniff"})
+                                           "X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin"})
 
 
 _MENSAJES_VALIDACION = {
@@ -132,6 +132,9 @@ def crear_app() -> FastAPI:
         expose_headers=["Content-Disposition"],
     )
     app.add_exception_handler(RequestValidationError, _error_validacion)  # type: ignore[arg-type]
+    from cidia import proteccion
+
+    proteccion.instalar(app)
     _incluir_rutas(app)
     _montar_mcp(app)
     _montar_web(app)

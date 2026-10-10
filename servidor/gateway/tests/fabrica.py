@@ -98,6 +98,10 @@ def crear_planta(bd: Session) -> Planta:
             )
             bd.add(u)
             bd.flush()
+        elif getattr(u, "debe_cambiar_contrasena", False):
+            # Otra prueba del mismo fichero pudo restablecer su contraseña: vuelve al estado inicial.
+            u.debe_cambiar_contrasena = False
+            u.hash_contrasena = _hash()
         p.personas[usuario] = u
     marta = p.personas["marta"]
     if not bd.scalar(select(Formacion).where(Formacion.usuario_id == marta.id)):

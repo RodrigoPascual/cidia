@@ -92,7 +92,8 @@ Lo usan `docker compose --env-file` y la orden `cidia`. Tiene tres bloques:
 | Bloque | Variables |
 |---|---|
 | Instalación | `CIDIA_PERFIL`, `CIDIA_DATOS`, `CIDIA_DIRECCION`, `CIDIA_PUERTO`, `CIDIA_IP_PUBLICACION`, `CIDIA_URL_PUBLICA`, `CIDIA_COMPOSE_FICHEROS` (`gpu`, `debug`), `CIDIA_COMPOSE_PERFILES` (`weknora`, `espacio`), `CIDIA_DOCKER_GID` (grupo del socket de Docker, para el espacio de trabajo) y, si hizo falta, `CIDIA_PUERTO_OLLAMA`, `CIDIA_PUERTO_ASR`, `CIDIA_RED_BORDE`, `CIDIA_RED_INTERNA`. |
-| Recursos | `OLLAMA_CONTEXT_LENGTH` (32768 en el MSI), `OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`, `OLLAMA_KEEP_ALIVE`, `CIDIA_MEM_*` y `CIDIA_CPU_*` calculados según la RAM y los núcleos, `ASR_MODELO` (`small` o `base`) y `ASR_HILOS`. Se pueden ajustar a mano; se aplican con `sudo cidia arrancar`. |
+| Recursos | `OLLAMA_CONTEXT_LENGTH` (32768 en el MSI), `OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`, `OLLAMA_KEEP_ALIVE`, `CIDIA_MEM_*` y `CIDIA_CPU_*` calculados según la RAM y los núcleos, `ASR_MODELO` (`small` o `base`) y `ASR_HILOS`. Se pueden ajustar a mano; se aplican con `sudo cidia arrancar`. `ASR_LIBERAR_TRAS_S` (segundos sin uso tras los que la voz libera su modelo; 600 por defecto, 0 nunca) solo lo pone el modo demo. |
+| Modo demo | Solo mientras está activo: `CIDIA_MODO_DEMO=activo` y `CIDIA_DEMO_PREVIO_*` (valores anteriores que devuelve `cidia demo restaurar`). |
 | Secretos | `CIDIA_PG_PASSWORD`, `CIDIA_SECRETO_JWT`, `CIDIA_ESPACIO_SECRETO`, `CIDIA_REDIS_PASSWORD`, `WEKNORA_DB_PASSWORD`, `WEKNORA_JWT_SECRET` y `WEKNORA_AES_KEY` (32 caracteres exactos, `openssl rand -hex 16`). |
 
 Para trabajar con compose a mano:
@@ -116,8 +117,24 @@ sudo $DC ps
 | `restaurar <copia> [--sin-copia]` | Verifica las sumas, pide escribir `RESTAURAR`, hace una copia del estado actual, restaura en una base temporal y solo si sale bien sustituye la actual; `datos/` anterior queda en `datos.previo-FECHA`. |
 | `admin-restablecer [usuario]` | Nueva contraseña aleatoria para la cuenta de administración (la crea si no hay ninguna), cierra sus sesiones y lo anota en la auditoría. |
 | `abrir-puerto [IP]` · `cerrar-puerto` | Publica el gateway en la LAN (0.0.0.0 o una IP del equipo) o lo deja solo en 127.0.0.1. Al publicar, actualiza también `CIDIA_DIRECCION` y `CIDIA_URL_PUBLICA`. |
+| `demo preparar [--con-weknora] [--con-espacio]` | Modo demo (ver abajo): modelos cargados sin caducidad, voz lista, servicios opcionales parados, memoria y GPU, y la dirección para los portátiles. Sale con código 1 si algo no está listo. |
+| `demo restaurar` | Devuelve los valores guardados, `up -d` de todo (vuelven los servicios opcionales) y comprobación de salud. |
+| `demo reiniciar-datos` | `python -m cidia.semilla --forzar` en el gateway. Solo si el gateway tiene `CIDIA_CREAR_SEMILLA=true`; pide escribir `REINICIAR` (con `--si` no pregunta). |
 
 Busca la instalación en `--dir`, `CIDIA_DIR`, la carpeta en la que vive el propio script o el proyecto `cidia` en marcha. Si no puede leer los secretos o hablar con Docker, se vuelve a ejecutar con `sudo`.
+
+### Modo demo
+
+Pensado para el MSI con 12 GB de VRAM; la demostración completa está en [`docs/guia-demo.md`](../../docs/guia-demo.md). `cidia demo preparar`:
+
+1. Para los servicios opcionales en marcha que la demo no usa: WeKnora (`weknora`, `weknora-ui`, `docreader`, `qdrant`, `redis`; se queda si es el motor de conocimiento del perfil o con `--con-weknora`) y `espacio-trabajo` (salvo `--con-espacio`).
+2. Pone en `cidia.env` `OLLAMA_KEEP_ALIVE=-1` (los modelos no caducan) y `ASR_LIBERAR_TRAS_S=0` (la voz no libera su modelo), guardando antes los valores anteriores como `CIDIA_DEMO_PREVIO_<variable>` (`ninguno` si no estaban), y marca `CIDIA_MODO_DEMO=activo`. Aplica con `up -d postgres gateway ollama asr`, que recrea Ollama y la voz.
+3. Precarga los modelos de chat y embeddings del perfil con una petición mínima a Ollama (`/api/chat` con `num_predict: 1` y `/api/embed`, ambos con `keep_alive: -1` y sin `num_ctx`, para que la primera pregunta no los vuelva a cargar con otro contexto) y comprueba con `ollama ps` que siguen en memoria y si van «100% GPU». Si no caben enteros en la GPU, avisa y propone bajar `OLLAMA_CONTEXT_LENGTH`.
+4. Envía a la voz un segundo de silencio en WAV: carga el modelo (y, la primera vez, lo descarga).
+5. Comprueba que existen las cuentas del guion (`ana`, `luis`, `carmen`, `marta`, `javier`, `lucia`) y dice dónde está su contraseña, sin mostrarla.
+6. Muestra la corriente (en portátiles), si la suspensión está desactivada, el uso de memoria de los contenedores y del equipo, la GPU y la dirección para los portátiles.
+
+`cidia estado` avisa mientras el modo demo está activo. `cidia demo restaurar` devuelve los valores guardados (o quita las variables que no estaban), quita las marcas y hace `up -d`: Ollama y la voz se recrean con la caducidad normal y vuelven los servicios opcionales. Para marcar un servidor como de demostración, `CIDIA_CREAR_SEMILLA=true` en su perfil (el de `oracle` ya lo trae; en el MSI hay que cambiarlo en `perfiles/msi.env` de la instalación).
 
 ## Perfiles
 
@@ -138,10 +155,10 @@ Para un perfil a medida (por ejemplo, un servidor con una GPU de 48 GB): `cp per
 
 ## Pruebas
 
-* `shellcheck -x -S style` (0.11.0, imagen `koalaman/shellcheck:stable`) sobre los dos scripts: sin avisos.
+* `shellcheck -x -S style` (0.11.0, imagen `koalaman/shellcheck:stable`) sobre los dos scripts: sin avisos. Tras añadir el modo demo se repitió en Oracle sobre `cidia` y los bancos `comun.sh` y `demo_herramienta.sh`: sin avisos.
 * `servidor/gateway/tests/test_instalador_servidor.py`: extrae del script `cidia` el programa que crea o restablece la cuenta de administración y lo ejecuta contra la base de pruebas (alta, no tocar una cuenta existente, restablecer y cerrar sesiones, auditoría, entrar con la clave nueva, rechazar cuentas que no son de administración, inexistentes o claves cortas).
 
-  El mismo fichero ejecuta con bash (en Windows, el de Git) los bancos de `servidor/gateway/tests/bancos_instalador/`, que cargan las funciones de los dos scripts con Docker simulado: carpetas protegidas y rutas canónicas, subredes, URLs sin credenciales, `cidia.env` (secretos de la longitud correcta, nunca vacíos ni regenerados, idempotencia, recursos por perfil, `CIDIA_DOCKER_GID`), la copia del código sin `.env`, `datos/`, `node_modules` ni claves y conservando los perfiles locales, `abrir-puerto`/`cerrar-puerto`, la copia de seguridad con rotación y la restauración (incluida una copia dañada).
+  El mismo fichero ejecuta con bash (en Windows, el de Git) los bancos de `servidor/gateway/tests/bancos_instalador/`, que cargan las funciones de los dos scripts con Docker simulado: carpetas protegidas y rutas canónicas, subredes, URLs sin credenciales, `cidia.env` (secretos de la longitud correcta, nunca vacíos ni regenerados, idempotencia, recursos por perfil, `CIDIA_DOCKER_GID`), la copia del código sin `.env`, `datos/`, `node_modules` ni claves y conservando los perfiles locales, `abrir-puerto`/`cerrar-puerto`, la copia de seguridad con rotación y la restauración (incluida una copia dañada), y el modo demo (`demo_herramienta.sh`: servicios que se paran, peticiones de precarga con `keep_alive: -1` y sin `num_ctx`, aviso si un modelo no cabe en la GPU o falta, valores guardados y devueltos sin tocar el resto de `cidia.env`, y `reiniciar-datos` que se niega sin `CIDIA_CREAR_SEMILLA=true` o sin confirmación).
 
   ```bash
   cd servidor/gateway && CIDIA_TEST_BD=instalador_servidor .venv/Scripts/python -m pytest tests/test_instalador_servidor.py -q

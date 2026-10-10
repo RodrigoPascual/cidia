@@ -1,0 +1,3951 @@
+{
+ "fecha": "2026-10-10T07:12:13",
+ "url": "http://127.0.0.1:18721/v1",
+ "modelo": "base",
+ "salud": {
+  "estado": "ok",
+  "modelo": "base",
+  "cargado": true
+ },
+ "voz": "Microsoft Helena Desktop",
+ "formato": "ogg",
+ "semilla": 2026,
+ "n_frases": 20,
+ "niveles": "limpio,20,10,5,0",
+ "prompt": "Metalúrgica Arlanza. Instrucciones IT-023, IT-031, IT-051, IT-061 e IT-071. Montaje de la brida B, prensa 3, línea 2, estación E2, sensor S4. Par de apriete en newton metro, llave dinamométrica, apriete en cruz, marca de testigo, junta tórica, prueba de estanqueidad. Cambio de molde, consignar la prensa, amarres hidráulicos, punto muerto inferior, primera pieza. Utillaje de soldadura, referencias 3-2-1, EPI, calibre, cota, rebaba.",
+ "carga_s": 2.0,
+ "resumen": [
+  {
+   "nivel": "limpio",
+   "con_prompt": false,
+   "frases": 20,
+   "wer": 0.10050251256281408,
+   "cer": 0.02168021680216802,
+   "terminos": 0.7105263157894737,
+   "terminos_vocab": 0.6666666666666666,
+   "n_vocab": 24,
+   "terminos_fuera": 0.7857142857142857,
+   "n_fuera": 14,
+   "exactas": 8,
+   "tiempo_medio_s": 2.0533,
+   "rtf": 0.43619021317726536
+  },
+  {
+   "nivel": "20",
+   "con_prompt": false,
+   "frases": 20,
+   "wer": 0.09045226130653267,
+   "cer": 0.01987353206865402,
+   "terminos": 0.7368421052631579,
+   "terminos_vocab": 0.6666666666666666,
+   "n_vocab": 24,
+   "terminos_fuera": 0.8571428571428571,
+   "n_fuera": 14,
+   "exactas": 9,
+   "tiempo_medio_s": 2.0200500000000003,
+   "rtf": 0.4291267910820313
+  },
+  {
+   "nivel": "10",
+   "con_prompt": false,
+   "frases": 20,
+   "wer": 0.20603015075376885,
+   "cer": 0.06413730803974707,
+   "terminos": 0.47368421052631576,
+   "terminos_vocab": 0.4166666666666667,
+   "n_vocab": 24,
+   "terminos_fuera": 0.5714285714285714,
+   "n_fuera": 14,
+   "exactas": 4,
+   "tiempo_medio_s": 1.9847000000000001,
+   "rtf": 0.42161725811762457
+  },
+  {
+   "nivel": "5",
+   "con_prompt": false,
+   "frases": 20,
+   "wer": 1.4221105527638191,
+   "cer": 0.7714543812104788,
+   "terminos": 0.34210526315789475,
+   "terminos_vocab": 0.2916666666666667,
+   "n_vocab": 24,
+   "terminos_fuera": 0.42857142857142855,
+   "n_fuera": 14,
+   "exactas": 0,
+   "tiempo_medio_s": 2.30415,
+   "rtf": 0.48947921866867766
+  },
+  {
+   "nivel": "0",
+   "con_prompt": false,
+   "frases": 20,
+   "wer": 0.5226130653266332,
+   "cer": 0.23577235772357724,
+   "terminos": 0.10526315789473684,
+   "terminos_vocab": 0.125,
+   "n_vocab": 24,
+   "terminos_fuera": 0.07142857142857142,
+   "n_fuera": 14,
+   "exactas": 0,
+   "tiempo_medio_s": 2.0093,
+   "rtf": 0.4268431282993616
+  },
+  {
+   "nivel": "limpio",
+   "con_prompt": true,
+   "frases": 20,
+   "wer": 0.04522613065326633,
+   "cer": 0.011743450767841012,
+   "terminos": 0.9210526315789473,
+   "terminos_vocab": 1.0,
+   "n_vocab": 24,
+   "terminos_fuera": 0.7857142857142857,
+   "n_fuera": 14,
+   "exactas": 15,
+   "tiempo_medio_s": 2.19125,
+   "rtf": 0.4654954486069657
+  },
+  {
+   "nivel": "20",
+   "con_prompt": true,
+   "frases": 20,
+   "wer": 0.03015075376884422,
+   "cer": 0.008130081300813009,
+   "terminos": 0.9210526315789473,
+   "terminos_vocab": 0.9583333333333334,
+   "n_vocab": 24,
+   "terminos_fuera": 0.8571428571428571,
+   "n_fuera": 14,
+   "exactas": 15,
+   "tiempo_medio_s": 2.1813,
+   "rtf": 0.46338173282207606
+  },
+  {
+   "nivel": "10",
+   "con_prompt": true,
+   "frases": 20,
+   "wer": 0.12060301507537688,
+   "cer": 0.037940379403794036,
+   "terminos": 0.7631578947368421,
+   "terminos_vocab": 0.8333333333333334,
+   "n_vocab": 24,
+   "terminos_fuera": 0.6428571428571429,
+   "n_fuera": 14,
+   "exactas": 8,
+   "tiempo_medio_s": 2.1923,
+   "rtf": 0.46571850404155196
+  },
+  {
+   "nivel": "5",
+   "con_prompt": true,
+   "frases": 20,
+   "wer": 0.21105527638190955,
+   "cer": 0.07588075880758807,
+   "terminos": 0.5789473684210527,
+   "terminos_vocab": 0.7083333333333334,
+   "n_vocab": 24,
+   "terminos_fuera": 0.35714285714285715,
+   "n_fuera": 14,
+   "exactas": 6,
+   "tiempo_medio_s": 2.2538,
+   "rtf": 0.4787831794958947
+  },
+  {
+   "nivel": "0",
+   "con_prompt": true,
+   "frases": 20,
+   "wer": 0.32160804020100503,
+   "cer": 0.16982836495031617,
+   "terminos": 0.5,
+   "terminos_vocab": 0.6666666666666666,
+   "n_vocab": 24,
+   "terminos_fuera": 0.21428571428571427,
+   "n_fuera": 14,
+   "exactas": 2,
+   "tiempo_medio_s": 2.2763999999999998,
+   "rtf": 0.48358418218318155
+  }
+ ],
+ "filas": [
+  {
+   "id": 1,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "que parte de apriete lleva la brida B.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "que parte de apriete lleva la brida b",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 2,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": false,
+    "brida b": true
+   },
+   "tiempo_s": 1.859,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa 3 se ha atascado al cambiar el molde",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": true,
+    "molde": true
+   },
+   "tiempo_s": 1.92,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "Abre la instrucción, y T, 0, 23, paso 4.",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion y t cero veintitres paso cuatro",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 2,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": false,
+    "paso 4": true
+   },
+   "tiempo_s": 2.022,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Los 4 tornillos se aprietan en cruza 25 Newton metro.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "los cuatro tornillos se aprietan en cruza veinticinco newton metro",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 1,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": false,
+    "25 newton metro": true
+   },
+   "tiempo_s": 1.976,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "¿Cuánto tiempo dura la prueba de estanqueída?",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo dura la prueba de estanqueida",
+   "err_palabras": 1,
+   "n_palabras": 7,
+   "err_caracteres": 1,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": false
+   },
+   "tiempo_s": 2.011,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "tengo que consignar la prensa 3 antes de sacar el molde",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": true
+   },
+   "tiempo_s": 2.005,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "El sensor ese 4 marca error de calibración.",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor ese cuatro marca error de calibracion",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 2,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": true
+   },
+   "tiempo_s": 2.065,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "A que presión van los amares hidráulicos, a 150 bar.",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amares hidraulicos a ciento cincuenta bar",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 1,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": true
+   },
+   "tiempo_s": 2.859,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "Mide la cota de 12,5 milímetros con el calibre.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": true,
+    "calibre": true
+   },
+   "tiempo_s": 2.019,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica está cortada, la cambio.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambio",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 1.901,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": true,
+    "calidad": true
+   },
+   "tiempo_s": 1.926,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la linea 2, estación 2, falta la llave dinamométrica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la linea dos estacion dos falta la llave dinamometrica",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": true,
+    "estacion e 2": false,
+    "llave dinamometrica": true
+   },
+   "tiempo_s": 2.173,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "¿Qué he pinecesito para soldar en el utillaje?",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "que he pinecesito para soldar en el utillaje",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 3,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": false,
+    "utillaje": true
+   },
+   "tiempo_s": 2.089,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "La temperatura de los no ha subido a 180 grados",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la temperatura de los no ha subido a ciento ochenta grados",
+   "err_palabras": 3,
+   "n_palabras": 10,
+   "err_caracteres": 4,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": false,
+    "180 grados": true
+   },
+   "tiempo_s": 1.921,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "Marca los tornillos con la marca de testigo después de la priete.",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca los tornillos con la marca de testigo despues de la priete",
+   "err_palabras": 3,
+   "n_palabras": 11,
+   "err_caracteres": 3,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": true
+   },
+   "tiempo_s": 2.03,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "El Note 4.521 tiene tres piezas rechazadas por debaba.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "el note cuatro mil quinientos veintiuno tiene tres piezas rechazadas por debaba",
+   "err_palabras": 2,
+   "n_palabras": 12,
+   "err_caracteres": 2,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": false
+   },
+   "tiempo_s": 2.013,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el carro de la prensa al punto muerto inferior.",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": true,
+    "punto muerto inferior": true
+   },
+   "tiempo_s": 2.069,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "donde se registran las referencias 3, 2, 1, del utillaje.",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": true
+   },
+   "tiempo_s": 2.055,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "err_palabras": 0,
+   "n_palabras": 12,
+   "err_caracteres": 0,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": true
+   },
+   "tiempo_s": 2.036,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "limpio",
+   "con_prompt": false,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "¿A cuántas revoluciones va el usillo con la fresa de 10 mm?",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "a cuantas revoluciones va el usillo con la fresa de diez milimetros",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 1,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": true
+   },
+   "tiempo_s": 2.117,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "que parte de apriete lleva la brida",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "que parte de apriete lleva la brida",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 4,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": false,
+    "brida b": false
+   },
+   "tiempo_s": 1.941,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa 3 se ha atascado al cambiar el molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": true,
+    "molde": true
+   },
+   "tiempo_s": 1.971,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "Abre la instrucción y T, 023, paso 4.",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion y t cero veintitres paso cuatro",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 2,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": false,
+    "paso 4": true
+   },
+   "tiempo_s": 2.021,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Los cuatro tornillos se aprietan en cruza 25 nm.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "los cuatro tornillos se aprietan en cruza veinticinco newton metro",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 1,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": false,
+    "25 newton metro": true
+   },
+   "tiempo_s": 2.067,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": true
+   },
+   "tiempo_s": 1.948,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": true
+   },
+   "tiempo_s": 2.229,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "El sensor ese 4 marca error de calibración",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor ese cuatro marca error de calibracion",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 2,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": true
+   },
+   "tiempo_s": 1.856,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "A que presión van los amares hidráulicos a 150 bar.",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amares hidraulicos a ciento cincuenta bar",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 1,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": true
+   },
+   "tiempo_s": 2.129,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "Mide la cota de 12,5 milímetros con el calibre.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": true,
+    "calibre": true
+   },
+   "tiempo_s": 2.062,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica está cortada, la cambio.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambio",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 1.907,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "pide la primera pieza a calidad antes de arrancar la serie",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": true,
+    "calidad": true
+   },
+   "tiempo_s": 1.967,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la linea 2, estación 2, falta la llave dinamométrica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la linea dos estacion dos falta la llave dinamometrica",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": true,
+    "estacion e 2": false,
+    "llave dinamometrica": true
+   },
+   "tiempo_s": 2.12,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "¿Qué he pinecesito para soldar en el utillaje?",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "que he pinecesito para soldar en el utillaje",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 3,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": false,
+    "utillaje": true
+   },
+   "tiempo_s": 1.979,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "la temperatura del horno ha subido a 180°.",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": true,
+    "180 grados": true
+   },
+   "tiempo_s": 1.936,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "Marca los tornillos con la marca de testigo después de la priete",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca los tornillos con la marca de testigo despues de la priete",
+   "err_palabras": 3,
+   "n_palabras": 11,
+   "err_caracteres": 3,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": true
+   },
+   "tiempo_s": 2.005,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "El Note 4.521 tiene tres piezas rechazadas por rebaba.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "el note cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 1,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": true
+   },
+   "tiempo_s": 2.08,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el carro de la prensa al punto muerto inferior",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": true,
+    "punto muerto inferior": true
+   },
+   "tiempo_s": 1.952,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "donde se registran las referencias 3, 2, 1 de lutillaje",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno de lutillaje",
+   "err_palabras": 2,
+   "n_palabras": 10,
+   "err_caracteres": 2,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": false
+   },
+   "tiempo_s": 2.075,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la máquina hay una fuga de aceite en el grupo hidráulico.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "err_palabras": 0,
+   "n_palabras": 12,
+   "err_caracteres": 0,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": true
+   },
+   "tiempo_s": 2.025,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "20",
+   "con_prompt": false,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "A cuántas revoluciones va el usillo con la fresa de 10 milímetros.",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "a cuantas revoluciones va el usillo con la fresa de diez milimetros",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 1,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": true
+   },
+   "tiempo_s": 2.131,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "que parte de apriete lleva la brida.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "que parte de apriete lleva la brida",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 4,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": false,
+    "brida b": false
+   },
+   "tiempo_s": 1.918,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa 13a cascado al cambiar el molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa trece a cascado al cambiar el molde",
+   "err_palabras": 4,
+   "n_palabras": 10,
+   "err_caracteres": 6,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": false,
+    "molde": true
+   },
+   "tiempo_s": 1.96,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "abre la instrucción y té cero veintitrés paso cuatro",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion y te cero veintitres paso cuatro",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 3,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": false,
+    "paso 4": true
+   },
+   "tiempo_s": 2.121,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Los 4 tornillos se aprietan en cruza de 25 nt.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "los cuatro tornillos se aprietan en cruza de veinticinco nt",
+   "err_palabras": 4,
+   "n_palabras": 11,
+   "err_caracteres": 13,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": false,
+    "25 newton metro": false
+   },
+   "tiempo_s": 1.998,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": true
+   },
+   "tiempo_s": 1.914,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": true
+   },
+   "tiempo_s": 2.023,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "el sensor ese 4 marca error de calibración",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor ese cuatro marca error de calibracion",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 2,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": true
+   },
+   "tiempo_s": 1.87,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "a que presión van los amares hidráunicos a 150 bath",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amares hidraunicos a ciento cincuenta bath",
+   "err_palabras": 3,
+   "n_palabras": 11,
+   "err_caracteres": 4,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": false
+   },
+   "tiempo_s": 1.971,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "Mide la cota de 12,5 mm con el calibre.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": true,
+    "calibre": true
+   },
+   "tiempo_s": 1.98,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica está cortada, la cambie.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambie",
+   "err_palabras": 1,
+   "n_palabras": 7,
+   "err_caracteres": 1,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 1.934,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "y de la primera fiesta a calidad antes de arrancar la sede.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "y de la primera fiesta a calidad antes de arrancar la sede",
+   "err_palabras": 4,
+   "n_palabras": 11,
+   "err_caracteres": 7,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": false,
+    "calidad": true
+   },
+   "tiempo_s": 1.989,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la línea 2, estación 2, falta la llave dinamométrica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la linea dos estacion dos falta la llave dinamometrica",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": true,
+    "estacion e 2": false,
+    "llave dinamometrica": true
+   },
+   "tiempo_s": 2.097,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "¿Qué te necesito para soldar en el utiliaje?",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "que te necesito para soldar en el utiliaje",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 4,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": false,
+    "utillaje": false
+   },
+   "tiempo_s": 1.921,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "la temperatura de los no ha subido a 180 grados.",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la temperatura de los no ha subido a ciento ochenta grados",
+   "err_palabras": 3,
+   "n_palabras": 10,
+   "err_caracteres": 4,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": false,
+    "180 grados": true
+   },
+   "tiempo_s": 1.885,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "marca los tornillos con la marca detestigo después de la frieta.",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca los tornillos con la marca detestigo despues de la frieta",
+   "err_palabras": 5,
+   "n_palabras": 11,
+   "err_caracteres": 6,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": false
+   },
+   "tiempo_s": 2.043,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "El Note 4.521 tiene tres piezas rechazadas por debaba.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "el note cuatro mil quinientos veintiuno tiene tres piezas rechazadas por debaba",
+   "err_palabras": 2,
+   "n_palabras": 12,
+   "err_caracteres": 2,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": false
+   },
+   "tiempo_s": 2.018,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el caddo de la prensa al punto muerto interior.",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el caddo de la prensa al punto muerto interior",
+   "err_palabras": 2,
+   "n_palabras": 10,
+   "err_caracteres": 3,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": false,
+    "punto muerto inferior": false
+   },
+   "tiempo_s": 2.026,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "donde se registran las referencias 3, 2, 1 de lupillaje",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno de lupillaje",
+   "err_palabras": 2,
+   "n_palabras": 10,
+   "err_caracteres": 3,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": false
+   },
+   "tiempo_s": 2.0,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la máquina hay una fuga de aceite en el grupo hidráulico",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "err_palabras": 0,
+   "n_palabras": 12,
+   "err_caracteres": 0,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": true
+   },
+   "tiempo_s": 2.013,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "10",
+   "con_prompt": false,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "¿A cuántas revoluciones va en un sitio con la fresa de 10 mm?",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "a cuantas revoluciones va en uno sitio con la fresa de diez milimetros",
+   "err_palabras": 3,
+   "n_palabras": 12,
+   "err_caracteres": 7,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": true
+   },
+   "tiempo_s": 2.013,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "que van de apunyete y llaman a brindar.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "que van de apunyete y llaman a brindar",
+   "err_palabras": 6,
+   "n_palabras": 8,
+   "err_caracteres": 14,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": false,
+    "brida b": false
+   },
+   "tiempo_s": 1.946,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa trece a cascado al cambiar el molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa trece a cascado al cambiar el molde",
+   "err_palabras": 4,
+   "n_palabras": 10,
+   "err_caracteres": 6,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": false,
+    "molde": true
+   },
+   "tiempo_s": 1.975,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "abre la instrucción y ten 0.23 paso 4",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion y ten cero coma veintitres paso cuatro",
+   "err_palabras": 3,
+   "n_palabras": 8,
+   "err_caracteres": 9,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": false,
+    "paso 4": true
+   },
+   "tiempo_s": 1.949,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Nos cuatro tornillos se aprietan en cruza de 15,8 metros.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "nos cuatro tornillos se aprietan en cruza de quince coma ocho metros",
+   "err_palabras": 7,
+   "n_palabras": 11,
+   "err_caracteres": 17,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": false,
+    "25 newton metro": false
+   },
+   "tiempo_s": 2.069,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "¿Cuánto tiempo dugan la prueba de esta clica?",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo dugan la prueba de esta clica",
+   "err_palabras": 3,
+   "n_palabras": 7,
+   "err_caracteres": 8,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": false
+   },
+   "tiempo_s": 1.913,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "tengo que consignar la prensa a tres antes de sacar el molde.",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa a tres antes de sacar el molde",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": false
+   },
+   "tiempo_s": 2.019,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "el sensor ese cuatro marca error de calibración",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor ese cuatro marca error de calibracion",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 2,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": true
+   },
+   "tiempo_s": 1.857,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "¿A qué presión van los amares hidráunicos a 150 bathes?",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amares hidraunicos a ciento cincuenta bathes",
+   "err_palabras": 3,
+   "n_palabras": 11,
+   "err_caracteres": 6,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": false
+   },
+   "tiempo_s": 2.02,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "miren la cota de 2,5 mm con el calibre",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "miren la cota de dos coma cinco milimetros con el calibre",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 4,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": false,
+    "calibre": true
+   },
+   "tiempo_s": 1.913,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica está cortada, la cambie.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambie",
+   "err_palabras": 1,
+   "n_palabras": 7,
+   "err_caracteres": 1,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 1.941,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "y de la primera fiesta a calidad antes de arrancar la serie.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "y de la primera fiesta a calidad antes de arrancar la serie",
+   "err_palabras": 3,
+   "n_palabras": 11,
+   "err_caracteres": 5,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": false,
+    "calidad": true
+   },
+   "tiempo_s": 1.984,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la linea 2, esta acción de 2, falta la guía del Inamomérica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la linea dos esta accion de dos falta la guia del inamomerica",
+   "err_palabras": 6,
+   "n_palabras": 11,
+   "err_caracteres": 12,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": true,
+    "estacion e 2": false,
+    "llave dinamometrica": false
+   },
+   "tiempo_s": 2.154,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que es el que",
+   "err_palabras": 221,
+   "n_palabras": 8,
+   "err_caracteres": 720,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": false,
+    "utillaje": false
+   },
+   "tiempo_s": 8.059,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "la temperatura de los no ha subido a 180°.",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la temperatura de los no ha subido a ciento ochenta grados",
+   "err_palabras": 3,
+   "n_palabras": 10,
+   "err_caracteres": 4,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": false,
+    "180 grados": true
+   },
+   "tiempo_s": 1.921,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "marca nuestros vídeos con la marca detetiva después de la pieca",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca nuestros videos con la marca detetiva despues de la pieca",
+   "err_palabras": 7,
+   "n_palabras": 11,
+   "err_caracteres": 20,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": false
+   },
+   "tiempo_s": 2.045,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "En lo que 4.521 tiene tres piezas rechazadas por de vara.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "en lo que cuatro mil quinientos veintiuno tiene tres piezas rechazadas por de vara",
+   "err_palabras": 5,
+   "n_palabras": 12,
+   "err_caracteres": 8,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": false
+   },
+   "tiempo_s": 2.094,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el carro de la prensa al punto muerto interior",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el carro de la prensa al punto muerto interior",
+   "err_palabras": 1,
+   "n_palabras": 10,
+   "err_caracteres": 1,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": true,
+    "punto muerto inferior": false
+   },
+   "tiempo_s": 1.961,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "donde se registran las referencias 3, 2, 1, del lujillaje.",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno del lujillaje",
+   "err_palabras": 1,
+   "n_palabras": 10,
+   "err_caracteres": 2,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": false
+   },
+   "tiempo_s": 2.078,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la máquina, hay una fuga de aceite en el grupo Draúl.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo draul",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 5,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": false
+   },
+   "tiempo_s": 2.056,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "5",
+   "con_prompt": false,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "¿A cuántas revoluciones va en un sitio con la presa de diez milímetros?",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "a cuantas revoluciones va en uno sitio con la presa de diez milimetros",
+   "err_palabras": 4,
+   "n_palabras": 12,
+   "err_caracteres": 8,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": false
+   },
+   "tiempo_s": 2.129,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "Y para el día que me seguimos a la vida.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "y para el dia que me seguimos a la vida",
+   "err_palabras": 10,
+   "n_palabras": 8,
+   "err_caracteres": 26,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": false,
+    "brida b": false
+   },
+   "tiempo_s": 1.868,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa aprecia a Tastado a cambiar el molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa aprecia a tastado a cambiar el molde",
+   "err_palabras": 5,
+   "n_palabras": 10,
+   "err_caracteres": 10,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": false,
+    "molde": true
+   },
+   "tiempo_s": 2.068,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "Abre la instrucción en el 0-23 vaso cuatro.",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion en el cero veintitres vaso cuatro",
+   "err_palabras": 3,
+   "n_palabras": 8,
+   "err_caracteres": 6,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": false,
+    "paso 4": false
+   },
+   "tiempo_s": 1.983,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Nos cuatro tornillos se aprietan en chuta del 5.000 metros.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "nos cuatro tornillos se aprietan en chuta del cinco mil metros",
+   "err_palabras": 6,
+   "n_palabras": 11,
+   "err_caracteres": 16,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": false,
+    "25 newton metro": false
+   },
+   "tiempo_s": 2.073,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "¿Cuánto tiempo ayuda a la prueba de esta vida?",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo ayuda a la prueba de esta vida",
+   "err_palabras": 4,
+   "n_palabras": 7,
+   "err_caracteres": 10,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": false
+   },
+   "tiempo_s": 1.89,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "tengo que consignar la prensa a tres antes de sacar el molde",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa a tres antes de sacar el molde",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": false
+   },
+   "tiempo_s": 1.958,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "El sensor es el cuadro mal caído de calilación.",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor es el cuadro mal caido de calilacion",
+   "err_palabras": 6,
+   "n_palabras": 8,
+   "err_caracteres": 14,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": false,
+    "calibracion": false
+   },
+   "tiempo_s": 1.941,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "a que presión van los amables hidráulicos, a 150 bajos.",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amables hidraulicos a ciento cincuenta bajos",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 5,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": false
+   },
+   "tiempo_s": 2.032,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "y de la puta de 2,5 mm con el camino.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "y de la puta de dos coma cinco milimetros con el camino",
+   "err_palabras": 5,
+   "n_palabras": 11,
+   "err_caracteres": 10,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": false,
+    "calibre": false
+   },
+   "tiempo_s": 1.972,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "la punta tólica está cortada, la cama.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la punta tolica esta cortada la cama",
+   "err_palabras": 3,
+   "n_palabras": 7,
+   "err_caracteres": 5,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": false
+   },
+   "tiempo_s": 1.901,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "de la primera fieta agaliada antes de arrancar la sede.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "de la primera fieta agaliada antes de arrancar la sede",
+   "err_palabras": 5,
+   "n_palabras": 11,
+   "err_caracteres": 10,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": false,
+    "calidad": false
+   },
+   "tiempo_s": 2.058,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "en la dinero de esta acción de Dios, faltan a que ya desiname en el mundo.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la dinero de esta accion de dios faltan a que ya desiname en el mundo",
+   "err_palabras": 14,
+   "n_palabras": 11,
+   "err_caracteres": 32,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": false,
+    "estacion e 2": false,
+    "llave dinamometrica": false
+   },
+   "tiempo_s": 2.133,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "que tiene que decirlo para soldar en el estudio.",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "que tiene que decirlo para soldar en el estudio",
+   "err_palabras": 4,
+   "n_palabras": 8,
+   "err_caracteres": 19,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": false,
+    "utillaje": false
+   },
+   "tiempo_s": 1.938,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "la gente la dura de los más subidos a 180 razones",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la gente la dura de los mas subidos a ciento ochenta razones",
+   "err_palabras": 8,
+   "n_palabras": 10,
+   "err_caracteres": 19,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": false,
+    "180 grados": false
+   },
+   "tiempo_s": 1.964,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "marcas nuestros vídeos con la marca de petitos después de la fiel",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marcas nuestros videos con la marca de petitos despues de la fiel",
+   "err_palabras": 7,
+   "n_palabras": 11,
+   "err_caracteres": 21,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": false
+   },
+   "tiempo_s": 1.991,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "en lo que 4.521 tiene tres piezas rejajadas por llevar.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "en lo que cuatro mil quinientos veintiuno tiene tres piezas rejajadas por llevar",
+   "err_palabras": 5,
+   "n_palabras": 12,
+   "err_caracteres": 12,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": false
+   },
+   "tiempo_s": 2.018,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja elcado de la prensa al punto de muerto interior.",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja elcado de la prensa al punto de muerto interior",
+   "err_palabras": 4,
+   "n_palabras": 10,
+   "err_caracteres": 7,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": false,
+    "punto muerto inferior": false
+   },
+   "tiempo_s": 2.03,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "donde se registran las referencias tres, dos, uno, se luchen ya.",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno se luchen ya",
+   "err_palabras": 3,
+   "n_palabras": 10,
+   "err_caracteres": 10,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": false
+   },
+   "tiempo_s": 2.052,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la maquina, hay una fuga de aceite en el grupo y Raúl.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo y raul",
+   "err_palabras": 2,
+   "n_palabras": 12,
+   "err_caracteres": 6,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": false
+   },
+   "tiempo_s": 2.073,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "0",
+   "con_prompt": false,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "¿A cuántas evoluciones van al incitio con la presa de guioneta?",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "a cuantas evoluciones van al incitio con la presa de guioneta",
+   "err_palabras": 7,
+   "n_palabras": 12,
+   "err_caracteres": 21,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": false
+   },
+   "tiempo_s": 2.243,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "Par de apriete lleva la brida B.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "par de apriete lleva la brida b",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 4,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": true,
+    "brida b": true
+   },
+   "tiempo_s": 2.063,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa 3 se ha atascado al cambiar el molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": true,
+    "molde": true
+   },
+   "tiempo_s": 2.236,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "Abre la instrucción IT-023, paso 4.",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": true,
+    "paso 4": true
+   },
+   "tiempo_s": 2.162,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Los 4 tornillos se aprietan en cruz a 25 newton metro.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": true,
+    "25 newton metro": true
+   },
+   "tiempo_s": 2.255,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "Cuanto tiempo dura la prueba de estanqueidad.",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": true
+   },
+   "tiempo_s": 2.094,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": true
+   },
+   "tiempo_s": 2.27,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "El sensor S4 marca error de calibración.",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor s cuatro marca error de calibracion",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": true
+   },
+   "tiempo_s": 2.036,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "A que presión van los amarres hidráulicos, a 150 bar.",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": true,
+    "150 bar": true
+   },
+   "tiempo_s": 2.207,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "Mide la cota de 12,5 mm con el calibre.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": true,
+    "calibre": true
+   },
+   "tiempo_s": 2.179,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica está cortada, la cambio.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambio",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 2.101,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": true,
+    "calidad": true
+   },
+   "tiempo_s": 2.175,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": true,
+    "estacion e 2": true,
+    "llave dinamometrica": true
+   },
+   "tiempo_s": 2.358,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "¿Qué EPI necesito para soldar en el utillaje?",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "que epi necesito para soldar en el utillaje",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": true,
+    "utillaje": true
+   },
+   "tiempo_s": 2.142,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "La temperatura de los no ha subido a 180 grados.",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la temperatura de los no ha subido a ciento ochenta grados",
+   "err_palabras": 3,
+   "n_palabras": 10,
+   "err_caracteres": 4,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": false,
+    "180 grados": true
+   },
+   "tiempo_s": 2.066,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "Marca los tornillos con la marca de testigo después de la priete.",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca los tornillos con la marca de testigo despues de la priete",
+   "err_palabras": 3,
+   "n_palabras": 11,
+   "err_caracteres": 3,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": true
+   },
+   "tiempo_s": 2.204,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "El Note 4.521 tiene 3 piezas rechazadas por rebaba.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "el note cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 1,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": true
+   },
+   "tiempo_s": 2.249,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el carro de la prensa al punto muerto inferior.",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": true,
+    "punto muerto inferior": true
+   },
+   "tiempo_s": 2.11,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "Donde se registran las referencias 3-2-1, del utillaje.",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": true
+   },
+   "tiempo_s": 2.36,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "err_palabras": 0,
+   "n_palabras": 12,
+   "err_caracteres": 0,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": true
+   },
+   "tiempo_s": 2.249,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "limpio",
+   "con_prompt": true,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "¿A cuántas revoluciones va el usillo con la fresa de 10 milímetros?",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "a cuantas revoluciones va el usillo con la fresa de diez milimetros",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 1,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": true
+   },
+   "tiempo_s": 2.309,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "Par de apriete lleva la brida B.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "par de apriete lleva la brida b",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 4,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": true,
+    "brida b": true
+   },
+   "tiempo_s": 2.04,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa 3 se ha atascado al cambiar el molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": true,
+    "molde": true
+   },
+   "tiempo_s": 2.215,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "Abre la instrucción IT-023, paso 4.",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": true,
+    "paso 4": true
+   },
+   "tiempo_s": 2.196,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Los 4 tornillos se aprietan en cruz a 25nm.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": true,
+    "25 newton metro": true
+   },
+   "tiempo_s": 2.228,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "Cuanto tiempo dura la prueba de estanqueidad.",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": true
+   },
+   "tiempo_s": 2.056,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": true
+   },
+   "tiempo_s": 2.237,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "El sensor S4 marca error de calibración.",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor s cuatro marca error de calibracion",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": true
+   },
+   "tiempo_s": 2.008,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "A que presión van los amares hidráulicos, a 150 bar.",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amares hidraulicos a ciento cincuenta bar",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 1,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": true
+   },
+   "tiempo_s": 2.194,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "Mide la cota de 12,5mm con el calibre.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": true,
+    "calibre": true
+   },
+   "tiempo_s": 2.158,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica esta cortada, la Cambio.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambio",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 2.139,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": true,
+    "calidad": true
+   },
+   "tiempo_s": 2.171,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": true,
+    "estacion e 2": true,
+    "llave dinamometrica": true
+   },
+   "tiempo_s": 2.279,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "¿Qué EPI necesito para soldar en el utillaje?",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "que epi necesito para soldar en el utillaje",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": true,
+    "utillaje": true
+   },
+   "tiempo_s": 2.215,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "La temperatura del horno ha subido a 180 grados.",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": true,
+    "180 grados": true
+   },
+   "tiempo_s": 2.08,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "Marca los tornillos con la marca de testigo después de la apriete.",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca los tornillos con la marca de testigo despues de la apriete",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": true
+   },
+   "tiempo_s": 2.223,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "El Note 4.521 tiene 3 piezas rechazadas por rebaba.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "el note cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 1,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": true
+   },
+   "tiempo_s": 2.245,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el carro de la prensa al punto muerto inferior.",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": true,
+    "punto muerto inferior": true
+   },
+   "tiempo_s": 2.1,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "Donde se registran las referencias 3-2-1 del utillaje.",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": true
+   },
+   "tiempo_s": 2.295,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la máquina hay una fuga de aceite en el grupo hidráulico.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "err_palabras": 0,
+   "n_palabras": 12,
+   "err_caracteres": 0,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": true
+   },
+   "tiempo_s": 2.295,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "20",
+   "con_prompt": true,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "A cuántas revoluciones va el usillo con la fresa de 10 mm.",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "a cuantas revoluciones va el usillo con la fresa de diez milimetros",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 1,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": true
+   },
+   "tiempo_s": 2.252,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "Que fan de apriete lleva la brida B.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "que fan de apriete lleva la brida b",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 2,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": false,
+    "brida b": true
+   },
+   "tiempo_s": 2.01,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa 3-2 cascado al cambiar el molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa tres dos cascado al cambiar el molde",
+   "err_palabras": 3,
+   "n_palabras": 10,
+   "err_caracteres": 7,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": true,
+    "molde": true
+   },
+   "tiempo_s": 2.215,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "Abre la instrucción IT-023, paso 4.",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": true,
+    "paso 4": true
+   },
+   "tiempo_s": 2.138,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Los 4 tornillos se aprietan en cruza de 25 nt.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "los cuatro tornillos se aprietan en cruza de veinticinco nt",
+   "err_palabras": 4,
+   "n_palabras": 11,
+   "err_caracteres": 13,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": false,
+    "25 newton metro": false
+   },
+   "tiempo_s": 2.205,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "Cuanto tiempo dura la prueba de estanqueidad.",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": true
+   },
+   "tiempo_s": 2.042,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": true
+   },
+   "tiempo_s": 2.331,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "El sensor S4 marca error de calibración.",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor s cuatro marca error de calibracion",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": true
+   },
+   "tiempo_s": 2.005,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "A que presión van los amares hidráulicos a 150 bar.",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amares hidraulicos a ciento cincuenta bar",
+   "err_palabras": 1,
+   "n_palabras": 11,
+   "err_caracteres": 1,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": true
+   },
+   "tiempo_s": 2.275,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "Mide la cota de 12,5mm con el calibre.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": true,
+    "calibre": true
+   },
+   "tiempo_s": 2.126,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica está cortada, la Cambio.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambio",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 2.107,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "Y de la primera pieza a calidad antes de arrancar la serie.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "y de la primera pieza a calidad antes de arrancar la serie",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": true,
+    "calidad": true
+   },
+   "tiempo_s": 2.252,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": true,
+    "estacion e 2": true,
+    "llave dinamometrica": true
+   },
+   "tiempo_s": 2.313,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "¿Qué te necesito para soldar en el utillaje?",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "que te necesito para soldar en el utillaje",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 3,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": false,
+    "utillaje": true
+   },
+   "tiempo_s": 2.148,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "La temperatura de los no ha subido a 180 grados.",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la temperatura de los no ha subido a ciento ochenta grados",
+   "err_palabras": 3,
+   "n_palabras": 10,
+   "err_caracteres": 4,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": false,
+    "180 grados": true
+   },
+   "tiempo_s": 2.08,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "Marca los tornillos con la marca de testigo después de la apriete.",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca los tornillos con la marca de testigo despues de la apriete",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": true
+   },
+   "tiempo_s": 2.281,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "El Note 4.521 tiene 3 piezas rechazadas por rebaba.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "el note cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 1,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": true
+   },
+   "tiempo_s": 2.259,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el cadro de la prensa al punto muerto inferior.",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el cadro de la prensa al punto muerto inferior",
+   "err_palabras": 1,
+   "n_palabras": 10,
+   "err_caracteres": 1,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": false,
+    "punto muerto inferior": true
+   },
+   "tiempo_s": 2.133,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "Lónde se registran las referencias 3-2-1 del utillaje.",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "londe se registran las referencias tres dos uno del utillaje",
+   "err_palabras": 1,
+   "n_palabras": 10,
+   "err_caracteres": 1,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": true
+   },
+   "tiempo_s": 2.304,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la máquina hay una fuga de aceite en el grupo hidráulico.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "err_palabras": 0,
+   "n_palabras": 12,
+   "err_caracteres": 0,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": true
+   },
+   "tiempo_s": 2.327,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "10",
+   "con_prompt": true,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "Acuantas de evoluciones va el usillo con la fresa de 10 mm.",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "acuantas de evoluciones va el usillo con la fresa de diez milimetros",
+   "err_palabras": 4,
+   "n_palabras": 12,
+   "err_caracteres": 5,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": true
+   },
+   "tiempo_s": 2.295,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "Que parte de apriete llave la brida.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "que parte de apriete llave la brida",
+   "err_palabras": 3,
+   "n_palabras": 8,
+   "err_caracteres": 6,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": false,
+    "brida b": false
+   },
+   "tiempo_s": 2.104,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa 3-2 cascador cambiará el molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa tres dos cascador cambiara el molde",
+   "err_palabras": 5,
+   "n_palabras": 10,
+   "err_caracteres": 11,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": true,
+    "molde": true
+   },
+   "tiempo_s": 2.292,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "Abre la instrucción IT-023, paso 4.",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "err_palabras": 0,
+   "n_palabras": 8,
+   "err_caracteres": 0,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": true,
+    "paso 4": true
+   },
+   "tiempo_s": 2.197,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Nos 4 tornillos se aprietan en cruz, a 25 nt.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "nos cuatro tornillos se aprietan en cruz a veinticinco nt",
+   "err_palabras": 3,
+   "n_palabras": 11,
+   "err_caracteres": 11,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": true,
+    "25 newton metro": false
+   },
+   "tiempo_s": 2.362,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "Cuanto tiempo dura la prueba de estanqueidad.",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": true
+   },
+   "tiempo_s": 2.058,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": true
+   },
+   "tiempo_s": 2.344,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "El sensor S4 marca error de calibration.",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor s cuatro marca error de calibration",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 1,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": false
+   },
+   "tiempo_s": 2.054,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "A que presión van los amares hidráulicos a 150 bathes.",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amares hidraulicos a ciento cincuenta bathes",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 5,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": false
+   },
+   "tiempo_s": 2.248,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "Miren la cota de 2,5 mm con el calibre.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "miren la cota de dos coma cinco milimetros con el calibre",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 4,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": false,
+    "calibre": true
+   },
+   "tiempo_s": 2.18,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica esta cortada, la Cambio.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambio",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 2.104,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "Y de la primera pieza a calidad antes de arrancar la serie.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "y de la primera pieza a calidad antes de arrancar la serie",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 2,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": true,
+    "calidad": true
+   },
+   "tiempo_s": 2.37,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la linea 2, estación E2, falta la llave dinamométrica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": true,
+    "estacion e 2": true,
+    "llave dinamometrica": true
+   },
+   "tiempo_s": 2.555,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "Quedis necesito para soldar en el utiliaje.",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "quedis necesito para soldar en el utiliaje",
+   "err_palabras": 3,
+   "n_palabras": 8,
+   "err_caracteres": 5,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": false,
+    "utillaje": false
+   },
+   "tiempo_s": 2.162,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "La temperatura de los no ha subido a 180°.",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la temperatura de los no ha subido a ciento ochenta grados",
+   "err_palabras": 3,
+   "n_palabras": 10,
+   "err_caracteres": 4,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": false,
+    "180 grados": true
+   },
+   "tiempo_s": 2.187,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "Marca nuestros vídeos con la marca de testigo después de la aprieta.",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca nuestros videos con la marca de testigo despues de la aprieta",
+   "err_palabras": 5,
+   "n_palabras": 11,
+   "err_caracteres": 13,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": true
+   },
+   "tiempo_s": 2.301,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "En lo que 4.521 tiene 3 piezas rechazadas por debaba.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "en lo que cuatro mil quinientos veintiuno tiene tres piezas rechazadas por debaba",
+   "err_palabras": 4,
+   "n_palabras": 12,
+   "err_caracteres": 5,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": false
+   },
+   "tiempo_s": 2.307,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el carro de la prensa al punto muerto inferior.",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "err_palabras": 0,
+   "n_palabras": 10,
+   "err_caracteres": 0,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": true,
+    "punto muerto inferior": true
+   },
+   "tiempo_s": 2.193,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "Donde se registran las referencias 3-2-1 del bufillaje.",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno del bufillaje",
+   "err_palabras": 1,
+   "n_palabras": 10,
+   "err_caracteres": 2,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": false
+   },
+   "tiempo_s": 2.351,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la máquina, hay una fuga de aceite en el grupo de raúl.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno fuga de aceite en el grupo de raul",
+   "err_palabras": 2,
+   "n_palabras": 12,
+   "err_caracteres": 6,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": true,
+    "grupo hidraulico": false
+   },
+   "tiempo_s": 2.398,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "5",
+   "con_prompt": true,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "Acuantas revoluciones va en un sitio con la presa de 10 mm.",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "acuantas revoluciones va en uno sitio con la presa de diez milimetros",
+   "err_palabras": 6,
+   "n_palabras": 12,
+   "err_caracteres": 9,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": false
+   },
+   "tiempo_s": 2.309,
+   "duracion_s": 4.964
+  },
+  {
+   "id": 1,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "¿Qué par de apriete lleva la brida B?",
+   "hipotesis": "Un par de apriete lleva la brida.",
+   "ref_normalizada": "que par de apriete lleva la brida b",
+   "hip_normalizada": "uno par de apriete lleva la brida",
+   "err_palabras": 2,
+   "n_palabras": 8,
+   "err_caracteres": 5,
+   "n_caracteres": 35,
+   "terminos": {
+    "par de apriete": true,
+    "brida b": false
+   },
+   "tiempo_s": 2.126,
+   "duracion_s": 3.544
+  },
+  {
+   "id": 2,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "La prensa 3 se ha atascado al cambiar el molde.",
+   "hipotesis": "La prensa 3-2-2, Cambio de molde.",
+   "ref_normalizada": "la prensa tres se ha atascado al cambiar el molde",
+   "hip_normalizada": "la prensa tres dos dos cambio de molde",
+   "err_palabras": 6,
+   "n_palabras": 10,
+   "err_caracteres": 18,
+   "n_caracteres": 49,
+   "terminos": {
+    "prensa 3": true,
+    "molde": true
+   },
+   "tiempo_s": 2.277,
+   "duracion_s": 4.047
+  },
+  {
+   "id": 3,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "Abre la instrucción IT-023, paso 4.",
+   "hipotesis": "Abra la instrucción IT-023, paso 4.",
+   "ref_normalizada": "abre la instruccion it cero veintitres paso cuatro",
+   "hip_normalizada": "abra la instruccion it cero veintitres paso cuatro",
+   "err_palabras": 1,
+   "n_palabras": 8,
+   "err_caracteres": 1,
+   "n_caracteres": 50,
+   "terminos": {
+    "IT-023": true,
+    "paso 4": true
+   },
+   "tiempo_s": 2.167,
+   "duracion_s": 5.728
+  },
+  {
+   "id": 4,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "Los cuatro tornillos se aprietan en cruz a 25 newton metro.",
+   "hipotesis": "Nos 4-2-2-1, se apriete en cruz, en 5-0-1.",
+   "ref_normalizada": "los cuatro tornillos se aprietan en cruz a veinticinco newton metro",
+   "hip_normalizada": "nos cuatro dos dos uno se apriete en cruz en cinco cero uno",
+   "err_palabras": 9,
+   "n_palabras": 11,
+   "err_caracteres": 27,
+   "n_caracteres": 67,
+   "terminos": {
+    "en cruz": true,
+    "25 newton metro": false
+   },
+   "tiempo_s": 2.552,
+   "duracion_s": 5.009
+  },
+  {
+   "id": 5,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "¿Cuánto tiempo dura la prueba de estanqueidad?",
+   "hipotesis": "Cuanto tiempo ayuda la prueba de estanqueidad.",
+   "ref_normalizada": "cuanto tiempo dura la prueba de estanqueidad",
+   "hip_normalizada": "cuanto tiempo ayuda la prueba de estanqueidad",
+   "err_palabras": 1,
+   "n_palabras": 7,
+   "err_caracteres": 3,
+   "n_caracteres": 44,
+   "terminos": {
+    "prueba de estanqueidad": true
+   },
+   "tiempo_s": 2.131,
+   "duracion_s": 3.944
+  },
+  {
+   "id": 6,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "hipotesis": "Tengo que consignar la prensa 3 antes de sacar el molde.",
+   "ref_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "hip_normalizada": "tengo que consignar la prensa tres antes de sacar el molde",
+   "err_palabras": 0,
+   "n_palabras": 11,
+   "err_caracteres": 0,
+   "n_caracteres": 58,
+   "terminos": {
+    "consignar": true,
+    "prensa 3": true
+   },
+   "tiempo_s": 2.314,
+   "duracion_s": 4.6
+  },
+  {
+   "id": 7,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "El sensor S4 marca error de calibración.",
+   "hipotesis": "El sensor S4 marca el borde de calilación.",
+   "ref_normalizada": "el sensor s cuatro marca error de calibracion",
+   "hip_normalizada": "el sensor s cuatro marca el borde de calilacion",
+   "err_palabras": 3,
+   "n_palabras": 8,
+   "err_caracteres": 7,
+   "n_caracteres": 45,
+   "terminos": {
+    "sensor S4|sensor ese 4": true,
+    "calibracion": false
+   },
+   "tiempo_s": 2.174,
+   "duracion_s": 4.146
+  },
+  {
+   "id": 8,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "¿A qué presión van los amarres hidráulicos, a 150 bar?",
+   "hipotesis": "A que presión van los amales hidráulicos, a 150 bases.",
+   "ref_normalizada": "a que presion van los amarres hidraulicos a ciento cincuenta bar",
+   "hip_normalizada": "a que presion van los amales hidraulicos a ciento cincuenta bases",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 5,
+   "n_caracteres": 64,
+   "terminos": {
+    "amarres hidraulicos": false,
+    "150 bar": false
+   },
+   "tiempo_s": 2.36,
+   "duracion_s": 5.229
+  },
+  {
+   "id": 9,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "Mide la cota de 12,5 milímetros con el calibre.",
+   "hipotesis": "Mide la cota de 2,5 mm con el camino.",
+   "ref_normalizada": "mide la cota de doce coma cinco milimetros con el calibre",
+   "hip_normalizada": "mide la cota de dos coma cinco milimetros con el camino",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 6,
+   "n_caracteres": 57,
+   "terminos": {
+    "12,5 milimetros": false,
+    "calibre": false
+   },
+   "tiempo_s": 2.238,
+   "duracion_s": 4.568
+  },
+  {
+   "id": 10,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "La junta tórica está cortada, ¿la cambio?",
+   "hipotesis": "La junta tórica esta cortada, la Cambio.",
+   "ref_normalizada": "la junta torica esta cortada la cambio",
+   "hip_normalizada": "la junta torica esta cortada la cambio",
+   "err_palabras": 0,
+   "n_palabras": 7,
+   "err_caracteres": 0,
+   "n_caracteres": 38,
+   "terminos": {
+    "junta torica": true
+   },
+   "tiempo_s": 2.134,
+   "duracion_s": 4.24
+  },
+  {
+   "id": 11,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "Pide la primera pieza a calidad antes de arrancar la serie.",
+   "hipotesis": "De la primera pieza ganada antes de arrancar la serie.",
+   "ref_normalizada": "pide la primera pieza a calidad antes de arrancar la serie",
+   "hip_normalizada": "de la primera pieza ganada antes de arrancar la serie",
+   "err_palabras": 3,
+   "n_palabras": 11,
+   "err_caracteres": 8,
+   "n_caracteres": 58,
+   "terminos": {
+    "primera pieza": true,
+    "calidad": false
+   },
+   "tiempo_s": 2.224,
+   "duracion_s": 4.497
+  },
+  {
+   "id": 12,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "En la línea 2, estación E2, falta la llave dinamométrica.",
+   "hipotesis": "En la dinero, estación E2, falta la llave dinamométrica.",
+   "ref_normalizada": "en la linea dos estacion e dos falta la llave dinamometrica",
+   "hip_normalizada": "en la dinero estacion e dos falta la llave dinamometrica",
+   "err_palabras": 2,
+   "n_palabras": 11,
+   "err_caracteres": 5,
+   "n_caracteres": 59,
+   "terminos": {
+    "linea 2": false,
+    "estacion e 2": true,
+    "llave dinamometrica": true
+   },
+   "tiempo_s": 2.383,
+   "duracion_s": 5.535
+  },
+  {
+   "id": 13,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "¿Qué EPI necesito para soldar en el utillaje?",
+   "hipotesis": "Quien tiene que decirlo para soldar en el estudio.",
+   "ref_normalizada": "que epi necesito para soldar en el utillaje",
+   "hip_normalizada": "quien tiene que decirlo para soldar en el estudio",
+   "err_palabras": 5,
+   "n_palabras": 8,
+   "err_caracteres": 21,
+   "n_caracteres": 43,
+   "terminos": {
+    "EPI|EPIs": false,
+    "utillaje": false
+   },
+   "tiempo_s": 2.123,
+   "duracion_s": 3.957
+  },
+  {
+   "id": 14,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "La temperatura del horno ha subido a 180 grados.",
+   "hipotesis": "La gente la dura de los más subidos a 180°.",
+   "ref_normalizada": "la temperatura del horno ha subido a ciento ochenta grados",
+   "hip_normalizada": "la gente la dura de los mas subidos a ciento ochenta grados",
+   "err_palabras": 7,
+   "n_palabras": 10,
+   "err_caracteres": 15,
+   "n_caracteres": 58,
+   "terminos": {
+    "horno": false,
+    "180 grados": true
+   },
+   "tiempo_s": 2.16,
+   "duracion_s": 4.51
+  },
+  {
+   "id": 15,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "Marca los tornillos con la marca de testigo después del apriete.",
+   "hipotesis": "Marca nuestros videos con la marca de testigo después de la pieza.",
+   "ref_normalizada": "marca los tornillos con la marca de testigo despues del apriete",
+   "hip_normalizada": "marca nuestros videos con la marca de testigo despues de la pieza",
+   "err_palabras": 5,
+   "n_palabras": 11,
+   "err_caracteres": 16,
+   "n_caracteres": 63,
+   "terminos": {
+    "marca de testigo": true
+   },
+   "tiempo_s": 2.284,
+   "duracion_s": 4.762
+  },
+  {
+   "id": 16,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "El lote 4521 tiene tres piezas rechazadas por rebaba.",
+   "hipotesis": "El 9-4-521, tiene 3 piezas rejajadas por debajo.",
+   "ref_normalizada": "el lote cuatro mil quinientos veintiuno tiene tres piezas rechazadas por rebaba",
+   "hip_normalizada": "el nueve cuatro quinientos veintiuno tiene tres piezas rejajadas por debajo",
+   "err_palabras": 4,
+   "n_palabras": 12,
+   "err_caracteres": 14,
+   "n_caracteres": 79,
+   "terminos": {
+    "lote 4521": false,
+    "rebaba": false
+   },
+   "tiempo_s": 2.339,
+   "duracion_s": 5.477
+  },
+  {
+   "id": 17,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "Baja el carro de la prensa al punto muerto inferior.",
+   "hipotesis": "Baja el caso de la prensa al punto muerto inferior.",
+   "ref_normalizada": "baja el carro de la prensa al punto muerto inferior",
+   "hip_normalizada": "baja el caso de la prensa al punto muerto inferior",
+   "err_palabras": 1,
+   "n_palabras": 10,
+   "err_caracteres": 2,
+   "n_caracteres": 51,
+   "terminos": {
+    "carro": false,
+    "punto muerto inferior": true
+   },
+   "tiempo_s": 2.245,
+   "duracion_s": 4.177
+  },
+  {
+   "id": 18,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "¿Dónde se registran las referencias 3-2-1 del utillaje?",
+   "hipotesis": "Donde se registran las referencias 3-2-1, el luchillaje.",
+   "ref_normalizada": "donde se registran las referencias tres dos uno del utillaje",
+   "hip_normalizada": "donde se registran las referencias tres dos uno el luchillaje",
+   "err_palabras": 2,
+   "n_palabras": 10,
+   "err_caracteres": 4,
+   "n_caracteres": 60,
+   "terminos": {
+    "referencias 3 2 1": true,
+    "utillaje": false
+   },
+   "tiempo_s": 2.42,
+   "duracion_s": 6.187
+  },
+  {
+   "id": 19,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "Para la máquina, hay una fuga de aceite en el grupo hidráulico.",
+   "hipotesis": "Para la maquina, hay una cuba de aceite en el grupo hidráulico.",
+   "ref_normalizada": "para la maquina hay uno fuga de aceite en el grupo hidraulico",
+   "hip_normalizada": "para la maquina hay uno cuba de aceite en el grupo hidraulico",
+   "err_palabras": 1,
+   "n_palabras": 12,
+   "err_caracteres": 2,
+   "n_caracteres": 61,
+   "terminos": {
+    "fuga de aceite": false,
+    "grupo hidraulico": true
+   },
+   "tiempo_s": 2.375,
+   "duracion_s": 5.026
+  },
+  {
+   "id": 20,
+   "nivel": "0",
+   "con_prompt": true,
+   "referencia": "¿A cuántas revoluciones va el husillo con la fresa de 10 milímetros?",
+   "hipotesis": "Acuanta que evolucionos para el incitio con la prensa de guioneta.",
+   "ref_normalizada": "a cuantas revoluciones va el husillo con la fresa de diez milimetros",
+   "hip_normalizada": "acuanta que evolucionos para el incitio con la prensa de guioneta",
+   "err_palabras": 8,
+   "n_palabras": 12,
+   "err_caracteres": 29,
+   "n_caracteres": 68,
+   "terminos": {
+    "husillo": false,
+    "fresa de 10 milimetros": false
+   },
+   "tiempo_s": 2.502,
+   "duracion_s": 4.964
+  }
+ ]
+}
