@@ -1,0 +1,3696 @@
+{
+ "titulo": "CidIA · recorrido completo por la aplicación",
+ "descripcion": "Vídeo de unos 16 minutos que recorre todas las pestañas de CidIA con cada rol, prueba cada funcionalidad con los datos sintéticos de Metalúrgica Arlanza y explica para qué sirve y a qué punto de las bases del V DESAFÍO industrial responde. Hay además un resumen de 3,7 minutos (resumen.json).",
+ "version": 2,
+ "nota": "Proyecto del vídeo «CidIA · recorrido completo». Cada pieza es una tarjeta o una escena en línea con el formato de herramientas/video (README). Los campos rol, verificado, notas, preparacion y depende_de son para quien graba; las herramientas los ignoran. Guion legible: docs/video/guion.md. Cómo se graba y se monta: 04_VIDEO/LEEME.md y herramientas/video/README.md.",
+ "servidor": "http://127.0.0.1:18700 (servidor de pruebas Oracle por túnel SSH)",
+ "voz": {
+  "narrador": "kokoro:em_alex",
+  "microfono": "kokoro:ef_dora",
+  "nota": "Las narraciones se escriben como se leen en los subtítulos; herramientas/video/pronunciacion.json convierte IT-023, N·m, S4, ILUO, xAPI, MCP o € para la voz. Sin rayas largas."
+ },
+ "convenciones": {
+  "formato_escena": "Cada pieza de tipo «escena» lleva en «escena» un objeto con el formato de herramientas/video/grabador.mjs (id, titulo, bases, usuario, ruta, microfono, esperar_inicio, escala, acciones, narracion, duracion_minima_ms). El grabador lee hoy las escenas de ficheros sueltos: o se le añade que acepte el objeto en línea o se separan con un script (una escena por fichero, mismo id).",
+  "campos_extra": "capitulo, rol, duracion_estimada_s, preparacion, depende_de, verificado y notas son para el montaje y para quien graba; el grabador los ignora.",
+  "escala": "1.25 en todas las escenas web (ventana CSS de 1536 x 864 dentro del vídeo de 1920 x 1080): se lee bien en un móvil.",
+  "navegacion": "Para que se vea fluido, se cambia de sección con un clic en la barra lateral ({\"clic\": \".lateral-nav a[href='/app/...']\"}); «ir» solo para entrar en una ruta interna.",
+  "esperas": "Toda espera del servidor (transcribir, responder, procesar vídeo, comparar la foto) va con esperarTexto o esperarSelector y «acelerar»: el montaje la acorta y lo rotula. Nunca se corta en silencio.",
+  "secretos": "Las contraseñas no aparecen nunca: el grabador inicia sesión por token salvo en 02b, donde se teclea en el campo de tipo password con el marcador {contrasena} (se ven puntos)."
+ },
+ "preparacion": [
+  {
+   "id": "P1",
+   "que": "Datos de demostración limpios, justo antes de grabar",
+   "como": "ssh ... ubuntu@143.47.56.7 'docker exec cidia-gateway-1 python -m cidia.semilla --forzar' y esperar a que Administración › Sistema muestre «Cargar los datos de demostración · Completado» (1 o 2 minutos). Las sesiones anteriores dejan de valer: volver a pedir los tokens.",
+   "por_que": "Las exploraciones de hoy (las de este guion y las de otras pruebas) han dejado lagunas de prueba, una ejecución más de Lucía, un borrador v2 de IT-023, una ficha, una entrevista y una aportación validada de Pedro. Además los textos relativos de la semilla («hace 2 h» en la nota de Lucía) solo cuadran recién sembrado.",
+   "aviso": "Borra todo el contenido de demostración del servidor de pruebas: confirmarlo antes con quien esté usando el servidor (hoy hay más pruebas en marcha)."
+  },
+  {
+   "id": "P2",
+   "que": "Cuenta «prueba.escritorio» fuera de la lista",
+   "como": "Administración › Empleados › Prueba Escritorio › Desactivar (la semilla no la borra porque no la creó ella). Con el filtro «Activas» deja de verse.",
+   "por_que": "Si no, sale «Prueba Escritorio» en Empleados y la plantilla cuenta 16 personas en vez de 15."
+  },
+  {
+   "id": "P3",
+   "que": "Audios del micrófono",
+   "como": "python herramientas/video/voz.py frase \"<texto>\" --salida <voces>/microfono/<id>.wav --microfono, con los textos de «audios_microfono».",
+   "por_que": "El micrófono falso de Chromium «dice» ese WAV: la pregunta y las notas de voz se transcriben de verdad en el servidor."
+  },
+  {
+   "id": "P4",
+   "que": "Foto del resultado para el modo planta",
+   "como": "ffmpeg -ss 45.5 -i datos-demo/video/brida-b-sintetico.mp4 -frames:v 1 -vf crop=620:480:100:140 <grabaciones>/ficheros/foto-resultado.jpg: el dibujo del paso 6 (inspección visual final), que es la imagen de referencia de IT-023 v1.",
+   "por_que": "En el segundo 43 aún sale el manómetro del paso 5: con esa foto el modelo de visión ve diferencias (probado el 10/10) y, si coincide, la foto no pasa a revisión del jefe."
+  },
+  {
+   "id": "P5",
+   "que": "Ficheros del espacio de trabajo",
+   "como": "Crear los dos ficheros de «ficheros» en <salida>/ficheros/. Antes de grabar 11a, dejar informe_paradas.py ya en la carpeta de Javier (PUT /api/espacio/fichero con su token); paradas-prensa3.csv se sube en la escena.",
+   "por_que": "En pantalla se ve subir un fichero y lanzar un análisis corto y legible."
+  },
+  {
+   "id": "P6",
+   "que": "App de escritorio para el capítulo 2",
+   "como": "Cerrar la CidIA que esté abierta (solo los procesos de %LOCALAPPDATA%\\Programs\\CidIA\\app\\CidIA.exe; nunca DeepSeek Harness) y abrirla con \"%LOCALAPPDATA%\\Programs\\CidIA\\CidIA.exe\" --remote-debugging-port=9333, ventana maximizada a 1920 x 1080, sin sesión (botón del pie › Cerrar sesión). Comprobar con app/instalador/verificar.mjs --sin-marca.",
+   "por_que": "Las conversaciones de pruebas anteriores de la lista «Espacios» se ocultan en la grabación con «ocultar_css» (no se borran). Los menús «Application / Edit» siguen en inglés (límite conocido de la app base)."
+  },
+  {
+   "id": "P7",
+   "que": "Ensayo de las preguntas",
+   "como": "Lanzar cada pregunta de «comprobaciones_previas» con POST /api/consulta/simple y la cuenta indicada; si la respuesta no contiene lo esperado, repetir la toma (Nueva conversación) o cambiar la pregunta por la alternativa.",
+   "por_que": "El servidor de pruebas usa qwen3:0.6b: la misma pregunta puede salir bien o mal. Cada respuesta fallida crea además una laguna de prueba (otra razón para P1 justo antes)."
+  },
+  {
+   "id": "P8",
+   "que": "Volver a sembrar justo antes de 03a si se repite el capítulo 3",
+   "como": "Cada subida de vídeo crea otro borrador de IT-023; tras la semilla solo queda el de la toma buena (03a) y 03b, 03c lo usan.",
+   "por_que": "Con dos borradores, «IT-023 v2» de la tabla de Instrucciones es ambiguo."
+  }
+ ],
+ "audios_microfono": [
+  {
+   "id": "llave",
+   "fichero": "{voces}/microfono/llave.wav",
+   "texto": "¿Con qué llave aprieto?",
+   "usado_en": "06a-planta-pasos-lucia",
+   "nota": "Con ef_dora a 0,85 Whisper lo transcribe tal cual («¿Con qué llave aprieto?»). «¿Qué llave uso para apretar los tornillos?» no sirve: la frase de la instrucción dice «aprieta» y no «apretar», así que no hay evidencia y el modelo de pruebas dice que no lo sabe.",
+   "velocidad": 0.85,
+   "voz": "kokoro:ef_dora"
+  },
+  {
+   "id": "prensa3",
+   "fichero": "{voces}/microfono/prensa3.wav",
+   "texto": "La prensa 3 se ha atascado al cambiar el molde. ¿Qué hago?",
+   "usado_en": "05a-copiloto-voz-marta",
+   "voz": "kokoro:ef_dora"
+  },
+  {
+   "id": "truco-brida",
+   "fichero": "{voces}/microfono/truco-brida.wav",
+   "texto": "Un truco de la brida B. Si la junta JT-80 no se queda centrada, pon dos tornillos a mano en diagonal antes de presentar la brida: hacen de guía y la junta ya no se mueve. Y una junta que se ha caído al suelo no se reutiliza nunca: va a la caja roja.",
+   "usado_en": "03d-nota-voz-carmen",
+   "nota": "Probado con la voz Helena: transcripción buena; la ficha que propone el modelo trae errores («acendiendo la guía») que Carmen corrige en la escena.",
+   "voz": "kokoro:ef_dora"
+  },
+  {
+   "id": "entrevista-molde",
+   "fichero": "{voces}/microfono/entrevista-molde.wav",
+   "texto": "Sirve para cambiar el molde de la prensa 3 en menos de veinte minutos y sin riesgos. Se hace en cada cambio de referencia. Y lo primero, siempre, es consignar las cuatro energías antes de meter las manos.",
+   "usado_en": "03e-entrevista-carmen",
+   "voz": "kokoro:ef_dora"
+  },
+  {
+   "id": "purga",
+   "fichero": "{voces}/microfono/purga.wav",
+   "texto": "Para purgar el circuito de refrigeración del molde de la prensa 3: con la prensa parada y el molde frío, abro la válvula de purga de arriba del molde hasta que el agua sale sin burbujas, unos treinta segundos. Después la cierro y compruebo que el depósito está por encima de la marca de mínimo.",
+   "usado_en": "10a-aportar-voz-pedro",
+   "nota": "Voz masculina distinta del narrador (Pedro). Whisper la transcribe entera y sin errores.",
+   "voz": "kokoro:em_santa"
+  }
+ ],
+ "ficheros": [
+  {
+   "id": "paradas-csv",
+   "ruta": "{salida}/ficheros/paradas-prensa3.csv",
+   "contenido": "fecha,maquina,causa,minutos\n2026-09-01,P3,Sensor S4 sucio,18\n2026-09-03,P3,Cambio de molde,35\n2026-09-08,P3,Sensor S4 sucio,22\n2026-09-15,P3,Falta de material,12\n2026-09-22,P3,Cambio de molde,31\n2026-09-29,P3,Sensor S4 sucio,6\n2026-10-06,P3,Cambio de molde,24\n"
+  },
+  {
+   "id": "informe-py",
+   "ruta": "{salida}/ficheros/informe_paradas.py",
+   "contenido": "# Resumen de las paradas de la prensa 3: gráfico y tabla en Excel\nimport pandas as pd\nimport matplotlib\nmatplotlib.use(\"Agg\")\nimport matplotlib.pyplot as plt\n\nd = pd.read_csv(\"paradas-prensa3.csv\")\nr = d.groupby(\"causa\")[\"minutos\"].sum().sort_values()\nr.plot.barh(color=\"#F2C200\")\nplt.title(\"Minutos de parada de la prensa 3\")\nplt.xlabel(\"minutos\")\nplt.tight_layout()\nplt.savefig(\"paradas-prensa3.png\", dpi=130)\nr.to_excel(\"paradas-prensa3.xlsx\")\nprint(r.to_string())\nprint(\"Guardados paradas-prensa3.png y paradas-prensa3.xlsx\")\n",
+   "nota": "Probado hoy en la consola de Javier: 3,9 s, gráfico PNG y Excel. Sin red: una conexión a example.com falla (ver 11a)."
+  }
+ ],
+ "orden_grabacion": [
+  "01d-planta-admin",
+  "02a-app-invitado",
+  "02b-app-sesion-lucia",
+  "02c-jefe-javier",
+  "02d-admin",
+  "03a-captura-video-carmen",
+  "03b-borrador-carmen",
+  "03d-nota-voz-carmen",
+  "03e-entrevista-carmen",
+  "04a-documentos-javier",
+  "04b-probar-busqueda-ana",
+  "04c-luis-sin-acceso",
+  "04d-ana-con-acceso",
+  "05a-copiloto-voz-marta",
+  "05b-socratico-marta",
+  "05c-laguna-marta",
+  "05d-lagunas-javier",
+  "06a-planta-pasos-lucia",
+  "06b-planta-cierre-lucia",
+  "07a-itinerario-lucia",
+  "07b-microleccion-tutor-lucia",
+  "07c-formacion-cruzada-marta",
+  "06c-foto-javier",
+  "08a-cuestionario-lucia",
+  "08b-revisar-preguntas-nuria",
+  "08c-observacion-javier",
+  "09a-pasaporte-marta",
+  "09b-matriz-javier",
+  "10a-aportar-voz-pedro",
+  "10b-validar-javier",
+  "10c-cita-marta",
+  "11a-espacio-javier",
+  "11b-agente-app",
+  "12a-organizacion-admin",
+  "12b-empleados-admin",
+  "12c-modelos-admin",
+  "12d-registro-admin",
+  "12e-sistema-admin",
+  "03c-publicar-carmen"
+ ],
+ "motivo_orden": "03c (publicar la versión 2 de IT-023) se graba la última: deja obsoleta la v1, marca a Marta, Carmen y Lucía para reevaluación y regenera micro-lecciones y preguntas (que quedan pendientes de aprobar), lo que cambiaría el modo planta, la formación y el cuestionario de Lucía. 06c va después de 07 para dar tiempo a que el modelo de visión compare la foto (más de un minuto en el servidor de pruebas). 08c antes de 09b: la observación sube a Pedro a U y la matriz ya lo muestra. 10a, 10b y 10c en ese orden: la aportación pendiente, validada y citada.",
+ "piezas": [
+  {
+   "tipo": "tarjeta",
+   "id": "00-portada",
+   "capitulo": "1 · El problema",
+   "etiqueta": "V DESAFÍO industrial · POLO positivo",
+   "titulo": "CidIA",
+   "subtitulo": "El copiloto de IA que captura, enseña, evalúa y certifica el conocimiento de la planta. Todo en local.",
+   "tam_titulo": 120,
+   "duracion_estimada_s": 9,
+   "narracion": [
+    {
+     "texto": "Esto es CidIA: un copiloto de inteligencia artificial para la industria que funciona entero dentro de la empresa."
+    }
+   ]
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "01a-problema",
+   "capitulo": "1 · El problema",
+   "etiqueta": "Capítulo 1 · El problema",
+   "titulo": "El conocimiento se jubila",
+   "subtitulo": "Entre 2026 y 2035 saldrán del mercado laboral unos 5,3 millones de personas mayores de 55 años y entrarán unos 1,8 millones de jóvenes (Fundación Adecco a partir de la EPA)",
+   "duracion_estimada_s": 22,
+   "narracion": [
+    {
+     "texto": "En cada planta hay personas que hacen bien las cosas tras años de oficio. Cuando se jubilan, ese saber se va con ellas. En España, en los próximos diez años saldrán del mercado laboral más de cinco millones de mayores de cincuenta y cinco años, y entrarán menos de dos millones de jóvenes."
+    }
+   ]
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "01b-cidia",
+   "capitulo": "1 · El problema",
+   "etiqueta": "CidIA en una frase",
+   "titulo": "Capturar, estructurar, formar, acompañar, evaluar y certificar",
+   "subtitulo": "Un servidor en la empresa y una app en cada puesto. Sin nube y sin pago por consulta.",
+   "duracion_estimada_s": 21,
+   "narracion": [
+    {
+     "texto": "CidIA cierra el ciclo completo que piden las bases: captura lo que sabe el experto, lo convierte en instrucciones y formación, acompaña en el puesto y certifica quién domina cada tarea. Y los modelos de IA corren en un servidor de la empresa: los datos no salen de la planta."
+    }
+   ]
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "1 · El problema",
+   "escena": {
+    "id": "01d-planta-admin",
+    "titulo": "Metalúrgica Arlanza, S. L. · empresa ficticia con datos sintéticos",
+    "bases": "Bases: indicadores de desempeño · gestión centralizada del conocimiento",
+    "rol": "Administración (admin)",
+    "usuario": "admin",
+    "ruta": "/app/",
+    "escala": 1.25,
+    "esperar_inicio": "La planta en cifras",
+    "acciones": [
+     {
+      "esperar": 700
+     },
+     {
+      "resaltarTexto": "Personas en 4 departamentos",
+      "cerca": ".dato",
+      "ms": 3200,
+      "nota": "Empresa ficticia · datos sintéticos"
+     },
+     {
+      "hoverTexto": "Documentos listos para consultar"
+     },
+     {
+      "hoverTexto": "Instrucciones publicadas"
+     },
+     {
+      "marca": "cifras"
+     },
+     {
+      "resaltar": ".ini-cifras",
+      "ms": 2800
+     },
+     {
+      "marca": "equipo"
+     },
+     {
+      "scroll": 380
+     },
+     {
+      "resaltarTexto": "Aportaciones por validar",
+      "ms": 1800
+     },
+     {
+      "resaltarTexto": "Lagunas abiertas",
+      "ms": 1800
+     },
+     {
+      "esperar": 600
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Lo vemos en una empresa ficticia de Burgos, Metalúrgica Arlanza, con cuatro departamentos y datos sintéticos."
+     },
+     {
+      "marca": "cifras",
+      "texto": "Así ve la planta la administración: personas, documentos, instrucciones publicadas y consultas con respaldo,"
+     },
+     {
+      "marca": "equipo",
+      "texto": "y lo que pide atención: aportaciones por validar y lagunas de conocimiento."
+     }
+    ],
+    "duracion_estimada_s": 20,
+    "preparacion": [
+     "P1",
+     "P2"
+    ],
+    "verificado": "Inicio de admin recorrido hoy sin errores de consola: cifras, aportaciones por validar, lagunas, reevaluaciones y listos para observar."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "02-tarjeta",
+   "capitulo": "2 · La app y el acceso",
+   "etiqueta": "Capítulo 2",
+   "titulo": "Una app para todos; cada uno ve lo suyo",
+   "subtitulo": "La app de escritorio CidIA, el acceso sin sesión y con sesión",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "2 · La app y el acceso",
+   "escena": {
+    "id": "02a-app-invitado",
+    "titulo": "App de escritorio CidIA · sin iniciar sesión",
+    "bases": "Bases: implantación sencilla · proteger el conocimiento experto",
+    "rol": "Invitado (sin sesión) en la app de escritorio",
+    "contexto": "app",
+    "conectar": {
+     "puerto": 9333,
+     "objetivo": "dsh-app://app/"
+    },
+    "usuario": null,
+    "ruta": null,
+    "escala": 1.25,
+    "acciones": [
+     {
+      "esperar": 900
+     },
+     {
+      "resaltar": "nav[class*='panelList']",
+      "ms": 2600,
+      "nota": "Sin sesión: solo Acceso y Copiloto"
+     },
+     {
+      "clicTexto": "Copiloto",
+      "dentro": "nav[class*='panelList']"
+     },
+     {
+      "esperarSelector": "textarea[aria-label='Tu pregunta']",
+      "marco": "iframe",
+      "max": 20000,
+      "acelerar": false
+     },
+     {
+      "esperar": 700
+     },
+     {
+      "marca": "pregunta"
+     },
+     {
+      "escribir": [
+       "textarea[aria-label='Tu pregunta']",
+       "¿Cuál es el teléfono de emergencias?"
+      ],
+      "marco": "iframe",
+      "ms_tecla": 45
+     },
+     {
+      "tecla": "Enter"
+     },
+     {
+      "esperarSelector": ".acciones-respuesta",
+      "marco": "iframe",
+      "max": 90000,
+      "acelerar": "El copiloto busca en los documentos públicos"
+     },
+     {
+      "marca": "respuesta"
+     },
+     {
+      "resaltar": ".burbuja.asistente .globo",
+      "marco": "iframe",
+      "ms": 2600
+     },
+     {
+      "clicTexto": "Nueva conversación",
+      "marco": "iframe"
+     },
+     {
+      "esperar": 700
+     },
+     {
+      "escribir": [
+       "textarea[aria-label='Tu pregunta']",
+       "¿A cuánto se aprietan los tornillos de la brida B?"
+      ],
+      "marco": "iframe",
+      "ms_tecla": 40
+     },
+     {
+      "tecla": "Enter"
+     },
+     {
+      "esperarSelector": ".acciones-respuesta",
+      "marco": "iframe",
+      "max": 90000,
+      "acelerar": "El copiloto busca en los documentos públicos"
+     },
+     {
+      "marca": "restringida"
+     },
+     {
+      "resaltar": ".sin-respaldo",
+      "marco": "iframe",
+      "ms": 2800
+     },
+     {
+      "esperar": 500
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "La app CidIA se instala en cada portátil sin permisos de administrador. Sin iniciar sesión, solo ofrece el acceso y el copiloto con los documentos públicos."
+     },
+     {
+      "marca": "respuesta",
+      "texto": "Responde a lo general, como el teléfono de emergencias, y dice de dónde sale."
+     },
+     {
+      "marca": "restringida",
+      "texto": "Lo interno del puesto, en cambio, no existe para quien no ha entrado."
+     }
+    ],
+    "duracion_estimada_s": 27,
+    "preparacion": [
+     "P6",
+     "P1"
+    ],
+    "verificado": "Grabado el 10/10 en la app real (CDP, puerto 9333, emulando 1536 x 864 a 1,25): invitado, panel Copiloto en el iframe, teléfono 200 con cita y la brida B sin acceso (en una conversación nueva: con la anterior el modelo mezclaba preguntas).",
+    "notas": "«marco»: «iframe» indica que el selector se busca dentro del panel de la app (document.querySelector('iframe').contentDocument). Si el grabador no lo admite todavía, plan B: grabar el plano de la barra lateral en la app (resaltar Acceso y Copiloto) y las dos preguntas en el navegador como invitado (usuario «invitado», ruta /app/copiloto), que es la misma interfaz.",
+    "ocultar_css": "[data-row-key^='session:']",
+    "cursor_inicio": [
+     900,
+     520
+    ],
+    "antes_js": "(async () => {\n  const pausa = (ms) => new Promise((r) => setTimeout(r, ms));\n  let hecho = 'sin copiloto';\n  for (const f of document.querySelectorAll('iframe')) {\n    try { const d = f.contentDocument; if (!d || !/copiloto/.test(f.src)) continue;\n      const b = [...d.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Nueva conversación'); if (b) { b.click(); hecho = 'nueva' } } catch (e) {}\n  }\n  const acceso = [...document.querySelectorAll(\"nav[class*='panelList'] button\")].find((b) => b.innerText.trim() === 'Acceso');\n  if (acceso) acceso.click();\n  await pausa(1500);\n  return hecho;\n})()",
+    "asentar_ms": 1200
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "2 · La app y el acceso",
+   "escena": {
+    "id": "02b-app-sesion-lucia",
+    "titulo": "Lucía Herrero inicia sesión · operaria de Producción, nivel 1",
+    "bases": "Bases: adaptado al perfil · integración (módulo de identidad)",
+    "rol": "Empleada (operaria) que inicia sesión en la app",
+    "contexto": "app",
+    "conectar": {
+     "puerto": 9333,
+     "objetivo": "dsh-app://app/"
+    },
+    "usuario": null,
+    "cuenta_acceso": "lucia",
+    "ruta": null,
+    "escala": 1.25,
+    "acciones": [
+     {
+      "esperar": 500
+     },
+     {
+      "clicTexto": "Acceso",
+      "dentro": "nav[class*='panelList']"
+     },
+     {
+      "esperarSelector": "#usuario",
+      "marco": "iframe",
+      "max": 15000,
+      "acelerar": false
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "escribir": [
+       "#usuario",
+       "lucia"
+      ],
+      "marco": "iframe",
+      "ms_tecla": 75
+     },
+     {
+      "escribir": [
+       "#contrasena",
+       "{contrasena}"
+      ],
+      "marco": "iframe",
+      "ms_tecla": 55
+     },
+     {
+      "marca": "entrar"
+     },
+     {
+      "clicTexto": "Iniciar sesión",
+      "marco": "iframe"
+     },
+     {
+      "esperarTexto": "Modo planta",
+      "max": 30000,
+      "acelerar": false
+     },
+     {
+      "esperar": 1500
+     },
+     {
+      "marca": "secciones"
+     },
+     {
+      "resaltar": "nav[class*='panelList']",
+      "ms": 3200,
+      "nota": "Ocho secciones para una operaria"
+     },
+     {
+      "esperar": 900
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Lucía, recién incorporada a la línea 2, inicia sesión. La contraseña nunca se ve."
+     },
+     {
+      "marca": "secciones",
+      "texto": "Aparecen sus secciones: inicio, copiloto, modo planta, formación, evaluación, progreso, aportaciones y espacio de trabajo. Lo decide el servidor según su puesto y su nivel."
+     }
+    ],
+    "duracion_estimada_s": 18,
+    "preparacion": [
+     "P6"
+    ],
+    "verificado": "Grabado el 10/10 en la app real: usuario y contraseña tecleados en el iframe de Acceso (campo password, se ven puntos), la barra lateral pasa a las 8 secciones de Lucía. Después se cerró la sesión de la app.",
+    "notas": "Plan B sin app: /app/acceso en el navegador sin token, mismos campos #usuario y #contrasena y el botón «Iniciar sesión».",
+    "ocultar_css": "[data-row-key^='session:']",
+    "cursor_inicio": [
+     900,
+     520
+    ]
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "2 · La app y el acceso",
+   "escena": {
+    "id": "02c-jefe-javier",
+    "titulo": "Javier Martín · jefe de Producción",
+    "bases": "Bases: gestión centralizada del conocimiento · escalabilidad",
+    "rol": "Jefe de equipo (javier)",
+    "usuario": "javier",
+    "ruta": "/app/",
+    "escala": 1.25,
+    "esperar_inicio": "Buenos",
+    "acciones": [
+     {
+      "esperar": 800
+     },
+     {
+      "resaltar": ".lateral-grupo[aria-label='Mi equipo']",
+      "ms": 2400
+     },
+     {
+      "resaltar": ".lateral-grupo[aria-label='Conocimiento']",
+      "ms": 1600
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Javier, jefe de Producción, ve además el conocimiento de su departamento y a su equipo."
+     }
+    ],
+    "duracion_estimada_s": 9,
+    "verificado": "Barra lateral de javier (Mi trabajo, Conocimiento, Mi equipo) y de admin (más Administración) vistas hoy."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "2 · La app y el acceso",
+   "escena": {
+    "id": "02d-admin",
+    "titulo": "La administración",
+    "bases": "Bases: gestión centralizada del conocimiento · escalabilidad",
+    "rol": "Administración (admin)",
+    "usuario": "admin",
+    "ruta": "/app/",
+    "escala": 1.25,
+    "esperar_inicio": "La planta en cifras",
+    "acciones": [
+     {
+      "esperar": 600
+     },
+     {
+      "resaltar": ".lateral-grupo[aria-label='Administración']",
+      "ms": 2600
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Y la administración, la organización, los empleados, los modelos y el registro. Una sola app para toda la planta."
+     }
+    ],
+    "duracion_estimada_s": 11,
+    "verificado": "Barra lateral de admin con el grupo Administración (Organización, Empleados, Modelos, Registro de actividad, Sistema) vista hoy."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "03-tarjeta",
+   "capitulo": "3 · Capturar el saber del experto",
+   "etiqueta": "Capítulo 3",
+   "titulo": "Capturar el saber del experto",
+   "subtitulo": "Vídeo narrado, borrador y edición. Nota de voz y entrevista guiada.",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "3 · Capturar el saber del experto",
+   "escena": {
+    "id": "03a-captura-video-carmen",
+    "titulo": "Carmen Díaz, experta · captura en vídeo de la brida B",
+    "bases": "Bases: captura del conocimiento de operarios expertos · generación automática de instrucciones",
+    "rol": "Empleada experta (carmen)",
+    "usuario": "carmen",
+    "ruta": "/app/captura",
+    "escala": 1.25,
+    "esperar_inicio": "Elige cómo contarlo",
+    "acciones": [
+     {
+      "esperar": 800
+     },
+     {
+      "seleccionar": [
+       "select",
+       "IT-023"
+      ]
+     },
+     {
+      "marca": "subir"
+     },
+     {
+      "subir": "{repo}/datos-demo/video/brida-b-sintetico.mp4",
+      "clic": ".zona-subida"
+     },
+     {
+      "esperarTexto": "Extrayendo audio",
+      "max": 30000
+     },
+     {
+      "marca": "proceso"
+     },
+     {
+      "scroll": "#cap-fila-1, .cap-fila"
+     },
+     {
+      "esperarTexto": "Revisar borrador",
+      "max": 1500000,
+      "acelerar": "El servidor transcribe el vídeo, detecta los pasos y revisa cada imagen"
+     },
+     {
+      "marca": "listo"
+     },
+     {
+      "resaltarTexto": "Los pasos siguen los que nombras",
+      "ms": 2000
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Carmen, la experta en la brida B, se graba montándola mientras lo explica y sube el vídeo a Captura."
+     },
+     {
+      "marca": "proceso",
+      "texto": "El servidor extrae el audio, lo transcribe, detecta los pasos y un modelo con visión repasa cada imagen. En este servidor de pruebas tarda unos minutos; aquí va acelerado."
+     },
+     {
+      "marca": "listo",
+      "texto": "Borrador listo."
+     }
+    ],
+    "duracion_estimada_s": 22,
+    "preparacion": [
+     "P1"
+    ],
+    "verificado": "Grabado el 10/10: la captura tarda entre 4 y 12 minutos en Oracle (el modelo con visión repasa los 7 pasos); el montaje lo acelera con su rótulo. Borrador con los mismos fallos de transcripción que en la exploración («Prueba de esta enqueidad», «4 tornillos en 10»).",
+    "espera_objetivo_s": 9,
+    "recortes": [
+     [
+      259,
+      268.7
+     ]
+    ],
+    "notas_montaje": "La grabación esperó en directo a la voz (10 s con la pantalla quieta tras el borrador): ese rato se recorta. La espera del servidor (250 s reales) se acelera a 9 s con su rótulo."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "3 · Capturar el saber del experto",
+   "escena": {
+    "id": "03b-borrador-carmen",
+    "titulo": "El borrador: la IA propone, la experta decide",
+    "bases": "Bases: digitalización de procedimientos operativos · trazabilidad hasta versión y autor",
+    "rol": "Empleada experta (carmen)",
+    "usuario": "carmen",
+    "ruta": "/app/captura",
+    "escala": 1.25,
+    "depende_de": "03a-captura-video-carmen",
+    "esperar_inicio": "Revisar borrador",
+    "acciones": [
+     {
+      "clicTexto": "Revisar borrador",
+      "dentro": ".cap-fila"
+     },
+     {
+      "esperarTexto": "Borrador preparado por CidIA",
+      "max": 20000
+     },
+     {
+      "marca": "borrador"
+     },
+     {
+      "resaltar": ".ins-pasos",
+      "ms": 2200
+     },
+     {
+      "clic": ".ins-pasos li:nth-child(3)"
+     },
+     {
+      "esperar": 800
+     },
+     {
+      "resaltar": ".ins-medios",
+      "ms": 1800,
+      "nota": "Imagen y clip de este paso"
+     },
+     {
+      "resaltar": ".ins-interruptores",
+      "ms": 1800
+     },
+     {
+      "marca": "corrige"
+     },
+     {
+      "clic": ".ins-pasos li:nth-child(5)"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "resaltar": "input.ins-titulo-paso",
+      "ms": 1400,
+      "nota": "«Prueba de esta enqueidad»"
+     },
+     {
+      "escribir": [
+       "input.ins-titulo-paso",
+       "Prueba de estanqueidad"
+      ],
+      "limpiar": true,
+      "ms_tecla": 60
+     },
+     {
+      "clic": ".ins-interruptores .ins-interruptor:nth-child(2) .interruptor"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "marca": "guarda"
+     },
+     {
+      "clicTexto": "Guardar",
+      "dentro": ".cabecera .acciones"
+     },
+     {
+      "esperarTexto": "Cambios guardados",
+      "max": 15000
+     },
+     {
+      "esperar": 800
+     }
+    ],
+    "narracion": [
+     {
+      "marca": "borrador",
+      "texto": "Siete pasos con su imagen, su clip y lo que Carmen dice en cada uno. El paso 3 llega marcado como crítico porque ella lo dijo: cuatro tornillos en cruz a 25 N·m."
+     },
+     {
+      "marca": "corrige",
+      "texto": "La IA propone; decide la experta. Corrige el título del paso 5, que la transcripción dejó mal, y lo marca como paso de seguridad."
+     },
+     {
+      "marca": "guarda",
+      "texto": "Nada llega al copiloto hasta que lo publique."
+     }
+    ],
+    "duracion_estimada_s": 31,
+    "verificado": "Grabado el 10/10 sobre el borrador de 03a: paso 5 corregido a «Prueba de estanqueidad», marcado como seguridad y guardado.",
+    "notas": "El título exacto de los pasos sale de la transcripción y puede variar entre subidas: comprobar el del paso 5 antes de grabar y ajustar el resaltado."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "3 · Capturar el saber del experto",
+   "escena": {
+    "id": "03d-nota-voz-carmen",
+    "acelerar_tramos": [
+     {
+      "acciones": [
+       21,
+       21
+      ],
+      "factor": 2,
+      "etiqueta": "Carmen corrige la ficha"
+     }
+    ],
+    "titulo": "Nota de voz: lo que no se ve en un vídeo",
+    "bases": "Bases: captura del conocimiento de operarios expertos (voz)",
+    "rol": "Empleada experta (carmen)",
+    "usuario": "carmen",
+    "ruta": "/app/captura",
+    "escala": 1.25,
+    "microfono": "{voces}/microfono/truco-brida.wav",
+    "esperar_inicio": "Elige cómo contarlo",
+    "acciones": [
+     {
+      "seleccionar": [
+       "select",
+       "IT-023"
+      ]
+     },
+     {
+      "marca": "graba"
+     },
+     {
+      "clic": ".cap-via .boton-voz"
+     },
+     {
+      "microfono": true
+     },
+     {
+      "esperar": 18100,
+      "acelerar": "Carmen graba la nota de voz",
+      "nota": "lo que dura truco-brida.wav más medio segundo"
+     },
+     {
+      "clic": ".cap-via .boton-voz"
+     },
+     {
+      "esperarTexto": "Enviar nota",
+      "max": 10000,
+      "acelerar": false
+     },
+     {
+      "clicTexto": "Enviar nota"
+     },
+     {
+      "esperarTexto": "Nota recibida",
+      "max": 15000,
+      "acelerar": false
+     },
+     {
+      "marca": "proceso"
+     },
+     {
+      "esperarTexto": "está listo para revisar",
+      "max": 400000,
+      "acelerar": "El servidor transcribe la nota y la ordena en una ficha"
+     },
+     {
+      "clicTexto": "Revisar borrador",
+      "dentro": ".cap-fila:first-child"
+     },
+     {
+      "esperarTexto": "Borrador preparado por CidIA",
+      "max": 15000,
+      "acelerar": false
+     },
+     {
+      "marca": "ficha"
+     },
+     {
+      "resaltar": ".modal .cap-ficha-vista",
+      "ms": 2200,
+      "nota": "La ficha que propone CidIA"
+     },
+     {
+      "clicTexto": "Escuchar la nota y ver la transcripción"
+     },
+     {
+      "esperar": 1200
+     },
+     {
+      "scroll": ".cap-detalles"
+     },
+     {
+      "resaltar": ".cap-detalles",
+      "ms": 2000,
+      "nota": "Lo que dijo Carmen, palabra por palabra"
+     },
+     {
+      "clicTexto": "Editar",
+      "dentro": ".modal"
+     },
+     {
+      "esperarSelector": "textarea.mono-suave",
+      "max": 5000,
+      "acelerar": false
+     },
+     {
+      "escribir": [
+       "textarea.mono-suave",
+       "## Truco\n- Si la junta JT-80 no se queda centrada, pon dos tornillos a mano en diagonal antes de presentar la brida: hacen de guía y la junta ya no se mueve.\n\n## Error típico\n- Una junta que se ha caído al suelo no se reutiliza nunca: va a la caja roja."
+      ],
+      "limpiar": true,
+      "ms_tecla": 6
+     },
+     {
+      "clicTexto": "Vista previa",
+      "dentro": ".modal"
+     },
+     {
+      "esperar": 900
+     },
+     {
+      "marca": "publica"
+     },
+     {
+      "clicTexto": "Publicar ficha"
+     },
+     {
+      "esperarTexto": "Confirmar",
+      "max": 5000,
+      "acelerar": false
+     },
+     {
+      "clicTexto": "Confirmar"
+     },
+     {
+      "esperarTexto": "Ficha publicada",
+      "max": 30000,
+      "acelerar": "Publicando la ficha"
+     },
+     {
+      "esperar": 1200
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Lo que no se ve en un vídeo, como un truco o un error típico, va en una nota de voz: Carmen pulsa y habla."
+     },
+     {
+      "marca": "proceso",
+      "texto": "CidIA la transcribe y la ordena en una ficha."
+     },
+     {
+      "marca": "ficha",
+      "texto": "Carmen la revisa junto a lo que dijo, corrige lo que el modelo entendió mal"
+     },
+     {
+      "marca": "publica",
+      "texto": "y la publica. Ya forma parte del conocimiento de Producción."
+     }
+    ],
+    "duracion_estimada_s": 23,
+    "verificado": "Grabado el 10/10 con el micrófono falso: transcripción con errores reales («pondo», «Vada la queja Roger»), ficha propuesta, edición y «Ficha publicada».",
+    "notas": "La corrección se teclea rápido (6 ms por carácter) sobre el contenido que propone el modelo. Si el grabador no teclea los saltos de línea del texto, partir el «escribir» en trozos con {\"tecla\": \"Enter\"} entre medias. Si el modal no tiene la clase .modal ni role=dialog, quitar «dentro» (la pestaña «Editar» del modal es el botón más corto con ese texto)."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "3 · Capturar el saber del experto",
+   "escena": {
+    "id": "03e-entrevista-carmen",
+    "titulo": "Entrevista guiada · cambio de molde en la prensa 3",
+    "bases": "Bases: captura del conocimiento de operarios expertos (entrevista)",
+    "rol": "Empleada experta (carmen)",
+    "usuario": "carmen",
+    "ruta": "/app/captura",
+    "escala": 1.25,
+    "microfono": "{voces}/microfono/entrevista-molde.wav",
+    "esperar_inicio": "Elige cómo contarlo",
+    "acciones": [
+     {
+      "seleccionar": [
+       "select",
+       "IT-031"
+      ]
+     },
+     {
+      "clicTexto": "Empezar entrevista"
+     },
+     {
+      "esperarTexto": "Para empezar",
+      "max": 120000,
+      "acelerar": "El copiloto prepara la primera pregunta"
+     },
+     {
+      "marca": "pregunta"
+     },
+     {
+      "resaltar": ".cap-guion",
+      "ms": 2400,
+      "nota": "El guion de la entrevista: siete temas"
+     },
+     {
+      "clic": "button[aria-label='Responder por voz']"
+     },
+     {
+      "microfono": true
+     },
+     {
+      "esperar": 14300,
+      "acelerar": "Carmen responde por voz",
+      "nota": "lo que dura entrevista-molde.wav más medio segundo"
+     },
+     {
+      "clicTexto": "Parar y enviar"
+     },
+     {
+      "esperarTexto": "1 de 7 temas",
+      "max": 240000,
+      "acelerar": "Transcribe la respuesta y prepara la siguiente pregunta"
+     },
+     {
+      "marca": "siguiente"
+     },
+     {
+      "resaltarTexto": "1 de 7 temas",
+      "ms": 1600
+     },
+     {
+      "resaltarTexto": "Terminar y generar ficha",
+      "ms": 2000
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Y si no sabe por dónde empezar, el copiloto la entrevista."
+     },
+     {
+      "marca": "pregunta",
+      "texto": "Una pregunta cada vez, con un guion de siete temas, y Carmen responde hablando."
+     },
+     {
+      "marca": "siguiente",
+      "texto": "Al terminar, CidIA genera una ficha o un borrador de instrucción, que de nuevo revisa ella."
+     }
+    ],
+    "duracion_estimada_s": 22,
+    "verificado": "Grabado el 10/10: respuesta por voz transcrita y segunda pregunta del modelo «¿Cuánto dura el proceso de cambio de molde en la prensa 3?».",
+    "notas": "El botón de voz de la entrevista es de pulsar para empezar y pulsar para terminar (GrabadorVoz compacto, aria-label «Responder por voz»); al terminar envía la respuesta sola."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "04-tarjeta",
+   "capitulo": "4 · Documentos y búsqueda",
+   "etiqueta": "Capítulo 4",
+   "titulo": "El conocimiento, ordenado y con permisos",
+   "subtitulo": "Documentos, búsqueda híbrida y la consola «Probar búsqueda»",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "4 · Documentos y búsqueda",
+   "escena": {
+    "id": "04a-documentos-javier",
+    "titulo": "Documentos de Producción · Javier Martín",
+    "bases": "Bases: bases de conocimiento inteligentes · gestión centralizada del conocimiento",
+    "rol": "Jefe de equipo (javier)",
+    "usuario": "javier",
+    "ruta": "/app/documentos",
+    "escala": 1.25,
+    "esperar_inicio": "Biblioteca",
+    "acciones": [
+     {
+      "esperar": 700
+     },
+     {
+      "resaltar": "table thead",
+      "ms": 2400,
+      "nota": "Departamento, nivel mínimo, formación y público"
+     },
+     {
+      "resaltarTexto": "Manual de manejo de la prensa 3",
+      "cerca": "tr",
+      "ms": 2000,
+      "nota": "Nivel mínimo: Técnico"
+     },
+     {
+      "resaltarTexto": "Bienvenida y PRL",
+      "cerca": "tr",
+      "ms": 2000,
+      "nota": "Público: también sin iniciar sesión"
+     },
+     {
+      "marca": "subir"
+     },
+     {
+      "clicTexto": "Subir conocimiento"
+     },
+     {
+      "esperarTexto": "Nivel mínimo",
+      "max": 10000,
+      "acelerar": false
+     },
+     {
+      "esperar": 400
+     },
+     {
+      "resaltar": ".doc-subida > div:last-child",
+      "ms": 3200
+     },
+     {
+      "clicTexto": "Cancelar"
+     },
+     {
+      "esperar": 600
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Los documentos que ya existen también cuentan: PDF, Office, audios o imágenes, cada uno con su departamento, su nivel mínimo, si es formación y si es público."
+     },
+     {
+      "marca": "subir",
+      "texto": "Al subirlos, CidIA los indexa para buscar por significado y por palabras exactas en castellano."
+     }
+    ],
+    "duracion_estimada_s": 20,
+    "verificado": "Biblioteca y panel «Subir conocimiento» (Departamento, Nivel mínimo, Material de formación, Público) presentes; recorridos hoy con ana. Javier ve los documentos de Producción.",
+    "rotulo_s": 4.5
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "4 · Documentos y búsqueda",
+   "escena": {
+    "id": "04b-probar-busqueda-ana",
+    "titulo": "Probar búsqueda · Ana López, responsable de Oficina técnica (nivel 3)",
+    "bases": "Bases: bases de conocimiento inteligentes · proteger el conocimiento experto",
+    "rol": "Jefa de equipo y experta (ana)",
+    "usuario": "ana",
+    "ruta": "/app/documentos",
+    "escala": 1.25,
+    "esperar_inicio": "Biblioteca",
+    "acciones": [
+     {
+      "clicTexto": "Probar búsqueda"
+     },
+     {
+      "esperarSelector": "input[aria-label='Pregunta']",
+      "max": 10000
+     },
+     {
+      "escribir": [
+       "input[aria-label='Pregunta']",
+       "¿Quién aprueba compras de más de 12.000 €?"
+      ],
+      "ms_tecla": 45
+     },
+     {
+      "clic": ".doc-pregunta button[type=submit]"
+     },
+     {
+      "esperarTexto": "Alcance de la búsqueda",
+      "max": 30000
+     },
+     {
+      "marca": "resultados"
+     },
+     {
+      "resaltarTexto": "Costes y proveedores de utillaje",
+      "ms": 2000
+     },
+     {
+      "resaltarTexto": "Coincide por palabras",
+      "ms": 1600
+     },
+     {
+      "resaltarTexto": "Similitud",
+      "ms": 1600
+     },
+     {
+      "marca": "comoLuis"
+     },
+     {
+      "seleccionar": [
+       ".doc-busqueda select",
+       "Luis"
+      ]
+     },
+     {
+      "clic": ".doc-pregunta button[type=submit]"
+     },
+     {
+      "esperarSinTexto": "Costes y proveedores de utillaje",
+      "max": 30000
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "resaltarTexto": "Alcance de la búsqueda",
+      "ms": 2400
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Con Probar búsqueda, Ana comprueba qué encontraría el copiloto."
+     },
+     {
+      "marca": "resultados",
+      "texto": "Para ella sale el documento de costes de utillaje, con su puntuación por significado y por palabras, fusionadas en un solo orden."
+     },
+     {
+      "marca": "comoLuis",
+      "texto": "Ahora busca como Luis, técnico junior. Ese documento es de nivel 3 y para él no aparece: los permisos se aplican en el servidor antes de que el modelo vea nada."
+     }
+    ],
+    "duracion_estimada_s": 30,
+    "verificado": "Grabado el 10/10 con «¿Quién aprueba compras de más de 12.000 €?»: como Ana, Costes y proveedores de utillaje; como Luis, Bienvenida y PRL y el manual de iniciación."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "4 · Documentos y búsqueda",
+   "escena": {
+    "id": "04c-luis-sin-acceso",
+    "titulo": "Luis García · técnico junior, nivel 1",
+    "bases": "Bases: proteger el conocimiento experto · necesidades formativas",
+    "rol": "Empleado (luis)",
+    "usuario": "luis",
+    "ruta": "/app/copiloto",
+    "escala": 1.25,
+    "esperar_inicio": "Escribe tu pregunta",
+    "acciones": [
+     {
+      "escribir": [
+       "textarea[aria-label='Tu pregunta']",
+       "¿Quién aprueba compras de más de 12.000 €?"
+      ],
+      "ms_tecla": 45
+     },
+     {
+      "tecla": "Enter"
+     },
+     {
+      "esperarSelector": ".acciones-respuesta",
+      "max": 120000,
+      "acelerar": "El copiloto busca con los permisos de Luis"
+     },
+     {
+      "marca": "respuesta"
+     },
+     {
+      "resaltar": ".burbuja.asistente .globo",
+      "ms": 3200
+     },
+     {
+      "esperar": 600
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Luis se lo pregunta al copiloto."
+     },
+     {
+      "marca": "respuesta",
+      "texto": "No se cita ni se menciona el documento: no lo ha encontrado, y la pregunta queda como laguna."
+     }
+    ],
+    "duracion_estimada_s": 13,
+    "verificado": "Grabado el 10/10: «No se encuentra en la documentación» y laguna en Oficina técnica."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "4 · Documentos y búsqueda",
+   "escena": {
+    "id": "04d-ana-con-acceso",
+    "titulo": "La misma pregunta, con el nivel de Ana",
+    "bases": "Bases: acceso inmediato a contenidos · adaptado al perfil",
+    "rol": "Jefa de equipo (ana)",
+    "usuario": "ana",
+    "ruta": "/app/copiloto",
+    "escala": 1.25,
+    "esperar_inicio": "Escribe tu pregunta",
+    "acciones": [
+     {
+      "escribir": [
+       "textarea[aria-label='Tu pregunta']",
+       "¿Quién aprueba compras de más de 12.000 €?"
+      ],
+      "ms_tecla": 45
+     },
+     {
+      "tecla": "Enter"
+     },
+     {
+      "esperarSelector": ".acciones-respuesta",
+      "max": 120000,
+      "acelerar": "El copiloto redacta la respuesta en el servidor"
+     },
+     {
+      "marca": "respuesta"
+     },
+     {
+      "resaltar": ".burbuja.asistente .globo",
+      "ms": 3000
+     },
+     {
+      "hover": ".fuente.citada"
+     },
+     {
+      "esperar": 1200
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Ana sí lo ve:"
+     },
+     {
+      "marca": "respuesta",
+      "texto": "más de 12.000 € los aprueba la gerencia, con tres ofertas. Con la cita al documento y su versión."
+     }
+    ],
+    "duracion_estimada_s": 12,
+    "verificado": "Grabado el 10/10 tras los arreglos de consulta.py: «La persona que aprueba compras de más de 12.000 € es la gerencia, con tres ofertas y el cálculo de amortización [2]».",
+    "notas": "Si el modelo responde mal, Nueva conversación y repetir (P7)."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "05-tarjeta",
+   "capitulo": "5 · El copiloto",
+   "etiqueta": "Capítulo 5",
+   "titulo": "Un copiloto que cita, enseña y reconoce lo que no sabe",
+   "subtitulo": "Respuestas con fuentes, por voz, modo socrático y lagunas",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "5 · El copiloto",
+   "escena": {
+    "id": "05a-copiloto-voz-marta",
+    "titulo": "Marta Sanz · técnica de la línea 2 · pregunta por voz",
+    "bases": "Bases: copiloto inteligente · apoyo a la toma de decisiones · trazabilidad hasta versión y autor",
+    "rol": "Empleada (marta)",
+    "usuario": "marta",
+    "ruta": "/app/copiloto",
+    "escala": 1.25,
+    "microfono": "{voces}/microfono/prensa3.wav",
+    "esperar_inicio": "Escribe tu pregunta",
+    "acciones": [
+     {
+      "esperar": 600
+     },
+     {
+      "marca": "pregunta"
+     },
+     {
+      "hover": ".boton-microfono"
+     },
+     {
+      "esperarVoz": true
+     },
+     {
+      "mantenerMicro": [
+       ".boton-microfono",
+       "auto"
+      ]
+     },
+     {
+      "esperarSelector": ".burbuja.usuario",
+      "max": 60000,
+      "acelerar": "Transcribiendo la voz en el servidor"
+     },
+     {
+      "esperarSelector": ".acciones-respuesta",
+      "max": 150000,
+      "acelerar": "El copiloto prepara la respuesta en el servidor"
+     },
+     {
+      "marca": "respuesta"
+     },
+     {
+      "resaltar": ".burbuja.asistente .globo",
+      "ms": 2600
+     },
+     {
+      "clic": ".fuente.citada"
+     },
+     {
+      "esperarTexto": "Autoría",
+      "max": 10000,
+      "acelerar": false
+     },
+     {
+      "marca": "fuente"
+     },
+     {
+      "resaltarTexto": "Validado por",
+      "ms": 2800
+     },
+     {
+      "esperar": 600
+     }
+    ],
+    "narracion": [
+     {
+      "marca": "pregunta",
+      "texto": "Marta, de la línea 2, pregunta por voz qué hacer con la prensa 3 atascada."
+     },
+     {
+      "marca": "respuesta",
+      "texto": "La respuesta llega con sus fuentes numeradas."
+     },
+     {
+      "marca": "fuente",
+      "texto": "La citada es una solución que aportó Pedro, operario de prensas, y que validó Javier: limpiar el sensor S4. Cada dato se puede comprobar en su origen."
+     }
+    ],
+    "duracion_estimada_s": 25,
+    "verificado": "Grabado el 10/10: la pregunta por voz se oye en el vídeo y se transcribe tal cual; respuesta con la solución de la ficha de Pedro («limpiar el sensor S4 con aire a baja presión…») y el panel con autoría y validación.",
+    "notas": "La redacción del modelo pequeño salió torpe en la prueba: repetir la toma hasta que la respuesta mencione el S4 sin frases raras (P7).",
+    "oir_microfono": true,
+    "texto_microfono": "La prensa 3 se ha atascado al cambiar el molde. ¿Qué hago?"
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "5 · El copiloto",
+   "escena": {
+    "id": "05b-socratico-marta",
+    "titulo": "Modo socrático: un tutor, no una chuleta",
+    "bases": "Bases: tutorización inteligente · mejoras añadidas",
+    "rol": "Empleada (marta)",
+    "usuario": "marta",
+    "ruta": "/app/copiloto",
+    "escala": 1.25,
+    "esperar_inicio": "Escribe tu pregunta",
+    "acciones": [
+     {
+      "clic": ".copiloto .interruptor"
+     },
+     {
+      "esperar": 500
+     },
+     {
+      "resaltar": ".copiloto .interruptor",
+      "ms": 1400
+     },
+     {
+      "escribir": [
+       "textarea[aria-label='Tu pregunta']",
+       "¿Cómo se aprietan los tornillos de la brida B?"
+      ],
+      "ms_tecla": 45
+     },
+     {
+      "tecla": "Enter"
+     },
+     {
+      "esperarSelector": ".acciones-respuesta",
+      "max": 120000,
+      "acelerar": "El tutor prepara su pregunta"
+     },
+     {
+      "marca": "respuesta"
+     },
+     {
+      "resaltar": ".burbuja.asistente .globo",
+      "ms": 3600
+     },
+     {
+      "esperar": 500
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "En modo socrático no da la respuesta hecha:"
+     },
+     {
+      "marca": "respuesta",
+      "texto": "pregunta y da pistas para que Marta razone por qué se aprieta en cruz. Un tutor, no una chuleta."
+     }
+    ],
+    "duracion_estimada_s": 14,
+    "verificado": "Grabado el 10/10: pregunta de vuelta, pista y cita [1]."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "5 · El copiloto",
+   "escena": {
+    "id": "05c-laguna-marta",
+    "titulo": "Cuando no lo sabe, lo dice",
+    "bases": "Bases: necesidades formativas · garantizar la correcta ejecución",
+    "rol": "Empleada (marta)",
+    "usuario": "marta",
+    "ruta": "/app/copiloto",
+    "escala": 1.25,
+    "esperar_inicio": "Escribe tu pregunta",
+    "acciones": [
+     {
+      "escribir": [
+       "textarea[aria-label='Tu pregunta']",
+       "¿Qué presión lleva el cilindro de la prensa 2?"
+      ],
+      "ms_tecla": 45
+     },
+     {
+      "tecla": "Enter"
+     },
+     {
+      "esperarSelector": ".acciones-respuesta",
+      "max": 120000,
+      "acelerar": "El copiloto busca en la documentación"
+     },
+     {
+      "marca": "respuesta"
+     },
+     {
+      "resaltar": ".burbuja.asistente .globo",
+      "ms": 3200
+     },
+     {
+      "esperar": 500
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "¿Y si no está documentado?"
+     },
+     {
+      "marca": "respuesta",
+      "texto": "No se inventa la presión de la prensa 2: dice que no lo sabe y apunta la pregunta."
+     }
+    ],
+    "duracion_estimada_s": 12,
+    "verificado": "Grabado el 10/10: «No lo he encontrado…» y la laguna sube a 4 veces."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "5 · El copiloto",
+   "escena": {
+    "id": "05d-lagunas-javier",
+    "titulo": "Lagunas de conocimiento · Javier Martín",
+    "bases": "Bases: necesidades formativas · identificación de lagunas",
+    "rol": "Jefe de equipo (javier)",
+    "usuario": "javier",
+    "ruta": "/app/lagunas",
+    "escala": 1.25,
+    "esperar_inicio": "Lagunas de conocimiento",
+    "acciones": [
+     {
+      "esperar": 800
+     },
+     {
+      "resaltarTexto": "¿Qué presión lleva el cilindro de la prensa 2?",
+      "ms": 2200
+     },
+     {
+      "clicTexto": "Ver las"
+     },
+     {
+      "esperar": 1500
+     },
+     {
+      "marca": "pedir"
+     },
+     {
+      "resaltarTexto": "Pedir a alguien que la responda",
+      "ms": 1800
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Javier ve esas lagunas agrupadas por parecido y ordenadas por frecuencia: lo que su equipo pregunta y nadie ha documentado."
+     },
+     {
+      "marca": "pedir",
+      "texto": "Son necesidades formativas con datos, y la próxima captura."
+     }
+    ],
+    "duracion_estimada_s": 15,
+    "verificado": "Página de lagunas recorrida hoy: pestañas Abiertas, Resueltas y Descartadas, «Ver las 3 formas en que se ha preguntado», «Pedir a alguien que la responda» y «Descartar»."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "06-tarjeta",
+   "capitulo": "6 · Modo planta",
+   "etiqueta": "Capítulo 6",
+   "titulo": "En el puesto, paso a paso",
+   "subtitulo": "Modo planta: pasos críticos, pregunta por voz y foto del resultado",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "6 · Modo planta",
+   "escena": {
+    "id": "06a-planta-pasos-lucia",
+    "titulo": "Lucía Herrero · modo planta en la estación E2",
+    "bases": "Bases: asistencia guiada paso a paso · formación contextualizada en el puesto · garantizar la correcta ejecución",
+    "rol": "Empleada (lucia), recién incorporada, nivel I en IT-023",
+    "usuario": "lucia",
+    "ruta": "/app/planta",
+    "escala": 1.25,
+    "microfono": "{voces}/microfono/llave.wav",
+    "esperar_inicio": "¿Qué tarea vas a hacer?",
+    "acciones": [
+     {
+      "resaltar": ".pt-tarjeta:first-child",
+      "ms": 1600
+     },
+     {
+      "clicTexto": "Empezar",
+      "dentro": ".pt-tarjeta:first-child"
+     },
+     {
+      "esperarTexto": "Paso 1 de 7",
+      "max": 20000
+     },
+     {
+      "marca": "paso1"
+     },
+     {
+      "resaltarTexto": "Antes de empezar",
+      "ms": 2600
+     },
+     {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+     },
+     {
+      "esperar": 900
+     },
+     {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+     },
+     {
+      "esperarTexto": "PASO CRÍTICO",
+      "max": 10000
+     },
+     {
+      "marca": "paso3"
+     },
+     {
+      "esperarVoz": true
+     },
+     {
+      "mantenerMicro": [
+       "button[aria-label='Mantén pulsado para preguntar']",
+       "auto"
+      ]
+     },
+     {
+      "esperarJs": "(() => { const rs = document.querySelectorAll('.ej-respuesta'); const r = rs[rs.length - 1]; if (!r || r.querySelector('.girando')) return false; const t = r.innerText; if (t.length < 30) return false; if (window.__ultR === t) window.__nR = (window.__nR || 0) + 1; else { window.__ultR = t; window.__nR = 0 } return window.__nR >= 8 })()",
+      "max": 150000,
+      "acelerar": "Transcribe la voz y responde con la instrucción"
+     },
+     {
+      "marca": "respuesta"
+     },
+     {
+      "resaltar": ".ej-columna:last-child",
+      "ms": 3200
+     },
+     {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+     },
+     {
+      "esperarTexto": "Sin ella no se puede seguir",
+      "max": 5000
+     },
+     {
+      "marca": "sinmarcar"
+     },
+     {
+      "clic": ".ej-casilla"
+     },
+     {
+      "esperar": 700
+     },
+     {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+     },
+     {
+      "esperar": 900
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Lucía abre el modo planta en el portátil del puesto y elige la brida B."
+     },
+     {
+      "marca": "paso1",
+      "texto": "Un paso por pantalla, con letra grande. Antes de empezar, los EPI, las herramientas y los riesgos."
+     },
+     {
+      "marca": "paso3",
+      "texto": "El paso 3 es crítico. Con las manos ocupadas, pregunta por voz con qué llave aprieta."
+     },
+     {
+      "marca": "respuesta",
+      "texto": "La respuesta sale de la instrucción y cita el paso: llave dinamométrica de media pulgada, y en cruz."
+     },
+     {
+      "marca": "sinmarcar",
+      "texto": "Y sin confirmar el punto crítico no puede seguir. La confirmación queda registrada."
+     }
+    ],
+    "duracion_estimada_s": 35,
+    "verificado": "Grabado el 10/10 tras arreglar I1: «¿Con qué llave aprieto?» por voz (se oye en el vídeo), respuesta citando IT-023 v1 paso 3, aviso del paso crítico y casilla.",
+    "notas": "Resuelto el fallo I1 (consulta.py: en el modo planta la evidencia se comprueba con la pregunta y se quita el eco «, no lo sabes.»). La pregunta «¿Con qué llave aprieto?» da la respuesta extractiva citando IT-023 paso 3.",
+    "oir_microfono": true,
+    "texto_microfono": "¿Con qué llave aprieto?"
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "6 · Modo planta",
+   "escena": {
+    "id": "06b-planta-cierre-lucia",
+    "recortes": [
+     [
+      0,
+      1.9
+     ]
+    ],
+    "notas_montaje": "La toma empieza en la lista de tareas y pulsa «Continuar · paso 4 de 7»: tras el paso 4 de 06a se veía la lista y una pantalla de carga antes de volver al paso 4. Se recorta ese inicio y la escena entra directamente en el paso 4.",
+    "titulo": "Foto del resultado y registro de la ejecución",
+    "bases": "Bases: validación de tareas realizadas · evaluación continua",
+    "rol": "Empleada (lucia)",
+    "usuario": "lucia",
+    "ruta": "/app/planta",
+    "escala": 1.25,
+    "depende_de": "06a-planta-pasos-lucia",
+    "esperar_inicio": "¿Qué tarea vas a hacer?",
+    "acciones": [
+     {
+      "clicTexto": "Continuar",
+      "dentro": ".pt-tarjeta:first-child",
+      "nota": "La ejecución de 06a sigue en curso en el paso 4; si el botón dice «Empezar», también la reanuda."
+     },
+     {
+      "esperarTexto": "Paso 4 de 7",
+      "max": 20000
+     },
+     {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+     },
+     {
+      "esperar": 700
+     },
+     {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+     },
+     {
+      "esperar": 700
+     },
+     {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+     },
+     {
+      "esperar": 700
+     },
+     {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+     },
+     {
+      "esperarTexto": "Foto del resultado",
+      "max": 10000
+     },
+     {
+      "marca": "foto"
+     },
+     {
+      "subir": "{salida}/ficheros/foto-resultado.jpg",
+      "clicTexto": "Hacer foto"
+     },
+     {
+      "esperarTexto": "Comparando con la imagen del experto",
+      "max": 20000
+     },
+     {
+      "resaltarTexto": "Así debe quedar",
+      "ms": 2000
+     },
+     {
+      "marca": "fin"
+     },
+     {
+      "clicTexto": "Finalizar"
+     },
+     {
+      "esperarTexto": "Tarea completada",
+      "max": 20000
+     },
+     {
+      "resaltarTexto": "Consultas al copiloto",
+      "ms": 2200
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Termina los pasos que quedan."
+     },
+     {
+      "marca": "foto",
+      "texto": "Al final, una foto: el modelo con visión la compara con la del experto. Es orientativo; decide una persona."
+     },
+     {
+      "marca": "fin",
+      "texto": "Ejecución registrada, con su tiempo y sus consultas. La pregunta del paso crítico cuenta para su curva de autonomía."
+     }
+    ],
+    "duracion_estimada_s": 23,
+    "preparacion": [
+     "P4"
+    ],
+    "verificado": "Grabado el 10/10 con la foto del paso 6 (P4): «Comparando con la imagen del experto…» y «Tarea completada». El modelo de visión dio después «coincide» con confianza 1."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "6 · Modo planta",
+   "escena": {
+    "id": "06c-foto-javier",
+    "titulo": "Fotos por revisar · Javier Martín",
+    "bases": "Bases: validación de tareas realizadas · garantizar la correcta ejecución",
+    "rol": "Jefe de equipo (javier)",
+    "usuario": "javier",
+    "ruta": "/app/planta?vista=fotos",
+    "escala": 1.25,
+    "depende_de": "06b-planta-cierre-lucia (y al menos 2 minutos para que termine la comparación)",
+    "esperar_inicio": "Fotos del resultado por revisar",
+    "acciones": [
+     {
+      "esperar": 600
+     },
+     {
+      "clicTexto": "Todas",
+      "dentro": ".rv-filtros"
+     },
+     {
+      "esperar": 1200
+     },
+     {
+      "resaltarTexto": "Rechazada",
+      "cerca": ".rv-tarjeta",
+      "ms": 3600,
+      "nota": "El modelo vio diferencias: Javier la rechazó con un comentario"
+     },
+     {
+      "marca": "veredicto"
+     },
+     {
+      "resaltarTexto": "Sin revisar",
+      "cerca": ".rv-tarjeta",
+      "ms": 2000
+     },
+     {
+      "clicTexto": "El modelo cree que coincide",
+      "cerca": ".rv-tarjeta"
+     },
+     {
+      "esperarTexto": "Dar por buena",
+      "max": 20000,
+      "acelerar": false
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "resaltar": ".ej-comparar",
+      "ms": 2600
+     },
+     {
+      "clicTexto": "Dar por buena"
+     },
+     {
+      "esperarTexto": "dada por buena",
+      "max": 15000,
+      "acelerar": false
+     },
+     {
+      "esperar": 1200
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Cuando el modelo no puede confirmar el resultado, la foto le llega al jefe. Esta, de un intento anterior, era la del manómetro y no la del conjunto: Javier la rechazó con un comentario."
+     },
+     {
+      "marca": "veredicto",
+      "texto": "La de hoy coincide con la del experto; aun así, Javier la mira junto a la referencia y la da por buena. La IA ayuda a mirar; decide una persona."
+     }
+    ],
+    "duracion_estimada_s": 14,
+    "verificado": "Grabado el 10/10: como la foto coincidía no quedó pendiente; Javier abre «Todas», ve la de un intento anterior (el manómetro, rechazada con comentario) y da por buena la de hoy."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "07-tarjeta",
+   "capitulo": "7 · Formación",
+   "etiqueta": "Capítulo 7",
+   "titulo": "Formación a medida de cada puesto",
+   "subtitulo": "Itinerario, micro-lecciones, tutor socrático y formación cruzada",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "7 · Formación",
+   "escena": {
+    "id": "07a-itinerario-lucia",
+    "titulo": "El itinerario de Lucía",
+    "bases": "Bases: itinerarios de aprendizaje personalizados · adaptado al perfil",
+    "rol": "Empleada (lucia)",
+    "usuario": "lucia",
+    "ruta": "/app/formacion",
+    "escala": 1.25,
+    "esperar_inicio": "Tu itinerario",
+    "acciones": [
+     {
+      "esperar": 600
+     },
+     {
+      "resaltarTexto": "Montaje de la brida B",
+      "ms": 2400
+     },
+     {
+      "resaltarTexto": "Haz el cuestionario de evaluación",
+      "ms": 1800
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "En Formación, cada persona sigue su itinerario: las tareas de su puesto, con lo que le falta para dominarlas."
+     }
+    ],
+    "duracion_estimada_s": 11,
+    "verificado": "Itinerario de Lucía visto hoy: IT-023 nivel I con micro-lecciones, cuestionario pendiente y ejecuciones; IT-024 e IT-025 sin instrucción."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "7 · Formación",
+   "escena": {
+    "id": "07b-microleccion-tutor-lucia",
+    "titulo": "Micro-lecciones y tutor socrático de la tarea",
+    "bases": "Bases: micro-learning industrial · tutorización inteligente · documentación técnica convertida en formación",
+    "rol": "Empleada (lucia)",
+    "usuario": "lucia",
+    "ruta": "/app/formacion",
+    "escala": 1.25,
+    "esperar_inicio": "Tu itinerario",
+    "acciones": [
+     {
+      "clicTexto": "Montaje de la brida B",
+      "dentro": "main"
+     },
+     {
+      "esperarTexto": "MICRO-LECCIÓN 1 DE 3",
+      "max": 15000,
+      "acelerar": false
+     },
+     {
+      "esperar": 500
+     },
+     {
+      "resaltarTexto": "Por qué se aprieta en cruz",
+      "ms": 2000
+     },
+     {
+      "marca": "control"
+     },
+     {
+      "scroll": 380
+     },
+     {
+      "clicTexto": "En cruz: arriba, abajo, derecha, izquierda"
+     },
+     {
+      "esperarTexto": "Correcto",
+      "max": 8000,
+      "acelerar": false
+     },
+     {
+      "esperar": 900
+     },
+     {
+      "marca": "tutor"
+     },
+     {
+      "scroll": "textarea[aria-label='Mensaje para el tutor']"
+     },
+     {
+      "clicTexto": "¿Qué puede salir mal en el paso crítico?"
+     },
+     {
+      "esperarTexto": "Pista",
+      "max": 150000,
+      "acelerar": "El tutor prepara su respuesta"
+     },
+     {
+      "esperar": 2500
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Las micro-lecciones salen de los pasos de la instrucción publicada:"
+     },
+     {
+      "marca": "control",
+      "texto": "cortas, con su punto clave y una pregunta de control."
+     },
+     {
+      "marca": "tutor",
+      "texto": "Y el tutor socrático de la tarea le hace pensar en lo que puede salir mal en el paso crítico."
+     }
+    ],
+    "duracion_estimada_s": 22,
+    "verificado": "Página de la tarea vista hoy con Lucía: micro-lección 1 «Por qué se aprieta en cruz», punto clave «En cruz y en dos pasadas: 12 N·m y después 25 N·m», pregunta de control con la opción «En cruz: arriba, abajo, derecha, izquierda», cuestionario, instrucción y «Tutor socrático» con sus tres sugerencias. Tutor probado por la API (23 s, con «Pista»)."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "7 · Formación",
+   "escena": {
+    "id": "07c-formacion-cruzada-marta",
+    "titulo": "Formación cruzada · Marta se forma en Oficina técnica",
+    "bases": "Bases: incrementar la polivalencia · itinerarios personalizados",
+    "rol": "Empleada (marta)",
+    "usuario": "marta",
+    "ruta": "/app/formacion",
+    "escala": 1.25,
+    "esperar_inicio": "Tu itinerario",
+    "acciones": [
+     {
+      "resaltarTexto": "Formación activa en otro departamento",
+      "ms": 2600
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Marta se forma también en Oficina técnica: mientras dure, encuentra su material de formación. Así se gana polivalencia."
+     }
+    ],
+    "duracion_estimada_s": 10,
+    "verificado": "Visto hoy: «Formación activa en otro departamento · Oficina técnica · Diseño de utillajes, desde el 18 sept 2026 hasta el 14 nov 2026 · 3 tareas»."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "08-tarjeta",
+   "capitulo": "8 · Evaluación",
+   "etiqueta": "Capítulo 8",
+   "titulo": "Evaluar con objetividad",
+   "subtitulo": "Cuestionario aprobado por el experto y observación en el puesto",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "8 · Evaluación",
+   "escena": {
+    "id": "08a-cuestionario-lucia",
+    "titulo": "Cuestionario de la brida B · Lucía Herrero",
+    "bases": "Bases: validación (cuestionario) · seguimiento de hitos de aprendizaje",
+    "rol": "Empleada (lucia)",
+    "usuario": "lucia",
+    "ruta": "/app/evaluacion",
+    "escala": 1.25,
+    "esperar_inicio": "Volver a intentarlo",
+    "acciones": [
+     {
+      "clicTexto": "Volver a intentarlo"
+     },
+     {
+      "esperarTexto": "Para aprobar necesitas",
+      "max": 10000
+     },
+     {
+      "clicTexto": "Empezar"
+     },
+     {
+      "marca": "preguntas"
+     },
+     {
+      "eval": "(() => { const ok = [\"25 N·m\",\"Llave dinamométrica de 1/2\\\"\",\"1 arriba, 2 abajo, 3 derecha, 4 izquierda\",\"La cambio por una nueva\",\"Para ver a simple vista si un tornillo se ha aflojado\",\"Cuando el banco ha despresurizado\"]; let n = 0; document.querySelectorAll('.ev-opcion').forEach((b) => { b.removeAttribute('data-correcta'); const t = b.innerText.replace(/^[A-D]\\s*/, '').trim(); if (ok.includes(t)) { b.setAttribute('data-correcta', ''); n++ } }); return n })()"
+     },
+     {
+      "clic": ".ev-opcion[data-correcta]"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "clicTexto": "Siguiente"
+     },
+     {
+      "eval": "(() => { const ok = [\"25 N·m\",\"Llave dinamométrica de 1/2\\\"\",\"1 arriba, 2 abajo, 3 derecha, 4 izquierda\",\"La cambio por una nueva\",\"Para ver a simple vista si un tornillo se ha aflojado\",\"Cuando el banco ha despresurizado\"]; let n = 0; document.querySelectorAll('.ev-opcion').forEach((b) => { b.removeAttribute('data-correcta'); const t = b.innerText.replace(/^[A-D]\\s*/, '').trim(); if (ok.includes(t)) { b.setAttribute('data-correcta', ''); n++ } }); return n })()"
+     },
+     {
+      "clic": ".ev-opcion[data-correcta]"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "clicTexto": "Siguiente"
+     },
+     {
+      "eval": "(() => { const ok = [\"25 N·m\",\"Llave dinamométrica de 1/2\\\"\",\"1 arriba, 2 abajo, 3 derecha, 4 izquierda\",\"La cambio por una nueva\",\"Para ver a simple vista si un tornillo se ha aflojado\",\"Cuando el banco ha despresurizado\"]; let n = 0; document.querySelectorAll('.ev-opcion').forEach((b) => { b.removeAttribute('data-correcta'); const t = b.innerText.replace(/^[A-D]\\s*/, '').trim(); if (ok.includes(t)) { b.setAttribute('data-correcta', ''); n++ } }); return n })()"
+     },
+     {
+      "clic": ".ev-opcion[data-correcta]"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "clicTexto": "Siguiente"
+     },
+     {
+      "eval": "(() => { const ok = [\"25 N·m\",\"Llave dinamométrica de 1/2\\\"\",\"1 arriba, 2 abajo, 3 derecha, 4 izquierda\",\"La cambio por una nueva\",\"Para ver a simple vista si un tornillo se ha aflojado\",\"Cuando el banco ha despresurizado\"]; let n = 0; document.querySelectorAll('.ev-opcion').forEach((b) => { b.removeAttribute('data-correcta'); const t = b.innerText.replace(/^[A-D]\\s*/, '').trim(); if (ok.includes(t)) { b.setAttribute('data-correcta', ''); n++ } }); return n })()"
+     },
+     {
+      "clic": ".ev-opcion[data-correcta]"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "clicTexto": "Siguiente"
+     },
+     {
+      "eval": "(() => { const ok = [\"25 N·m\",\"Llave dinamométrica de 1/2\\\"\",\"1 arriba, 2 abajo, 3 derecha, 4 izquierda\",\"La cambio por una nueva\",\"Para ver a simple vista si un tornillo se ha aflojado\",\"Cuando el banco ha despresurizado\"]; let n = 0; document.querySelectorAll('.ev-opcion').forEach((b) => { b.removeAttribute('data-correcta'); const t = b.innerText.replace(/^[A-D]\\s*/, '').trim(); if (ok.includes(t)) { b.setAttribute('data-correcta', ''); n++ } }); return n })()"
+     },
+     {
+      "clic": ".ev-opcion[data-correcta]"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "clicTexto": "Siguiente"
+     },
+     {
+      "eval": "(() => { const ok = [\"25 N·m\",\"Llave dinamométrica de 1/2\\\"\",\"1 arriba, 2 abajo, 3 derecha, 4 izquierda\",\"La cambio por una nueva\",\"Para ver a simple vista si un tornillo se ha aflojado\",\"Cuando el banco ha despresurizado\"]; let n = 0; document.querySelectorAll('.ev-opcion').forEach((b) => { b.removeAttribute('data-correcta'); const t = b.innerText.replace(/^[A-D]\\s*/, '').trim(); if (ok.includes(t)) { b.setAttribute('data-correcta', ''); n++ } }); return n })()"
+     },
+     {
+      "clic": ".ev-opcion[data-correcta]"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "clicTexto": "Entregar"
+     },
+     {
+      "esperarTexto": "Cuestionario aprobado",
+      "max": 15000
+     },
+     {
+      "marca": "resultado"
+     },
+     {
+      "resaltarTexto": "Cuestionario aprobado",
+      "ms": 2000
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Lucía hace el cuestionario de la brida B."
+     },
+     {
+      "marca": "preguntas",
+      "texto": "Las preguntas salen de los pasos de la instrucción, sobre todo de los críticos, y cambian de orden en cada intento."
+     },
+     {
+      "marca": "resultado",
+      "texto": "Seis de seis: queda como evidencia, ligada a la versión 1, y Lucía sube al nivel L. Le falta la observación en el puesto."
+     }
+    ],
+    "duracion_estimada_s": 21,
+    "verificado": "Grabado el 10/10: 6 de 6, «Has subido al nivel L», falta la observación del supervisor.",
+    "notas": "Las respuestas correctas van en la propia escena: un eval marca con data-correcta la opción cuyo texto coincide (el orden de preguntas y opciones cambia en cada intento) y el clic lo da el cursor. Comprobado que en cada pregunta solo una opción coincide."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "8 · Evaluación",
+   "escena": {
+    "id": "08b-revisar-preguntas-nuria",
+    "titulo": "Revisar preguntas · Nuria Gil, experta de Mantenimiento",
+    "bases": "Bases: validación (cuestionario aprobado por el experto) · documentación técnica convertida en formación",
+    "rol": "Empleada experta (nuria)",
+    "usuario": "nuria",
+    "ruta": "/app/evaluacion",
+    "escala": 1.25,
+    "esperar_inicio": "Evaluación",
+    "acciones": [
+     {
+      "clicTexto": "Revisar preguntas"
+     },
+     {
+      "esperarTexto": "Calibración del sensor S4 de la prensa 3",
+      "max": 10000,
+      "acelerar": false
+     },
+     {
+      "marca": "propuestas"
+     },
+     {
+      "resaltarTexto": "Por revisar",
+      "ms": 1500
+     },
+     {
+      "resaltar": ".ev-editable.propuesta",
+      "ms": 3000,
+      "nota": "Propuesta de la IA: enunciado, opciones, paso y explicación"
+     },
+     {
+      "marca": "corrige"
+     },
+     {
+      "resaltar": ".ev-editable.propuesta .ev-opcion-editable.correcta",
+      "ms": 2200,
+      "nota": "La IA la marcó como correcta"
+     },
+     {
+      "clic": ".ev-editable.propuesta .ev-opcion-editable:first-child .ev-marca-correcta"
+     },
+     {
+      "esperar": 1000
+     },
+     {
+      "marca": "aprueba"
+     },
+     {
+      "clic": ".ev-editable.propuesta .boton.verde"
+     },
+     {
+      "esperar": 2000
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Pero ninguna pregunta entra sin el visto bueno de un experto."
+     },
+     {
+      "marca": "propuestas",
+      "texto": "Nuria, de Mantenimiento, revisa las que propone la IA para la calibración del sensor S4: enunciado, opciones, paso y explicación."
+     },
+     {
+      "marca": "corrige",
+      "texto": "Aquí la IA marcó mal la respuesta: la tuerca se aprieta con llave dinamométrica a 50 N·m. Nuria lo corrige"
+     },
+     {
+      "marca": "aprueba",
+      "texto": "y la aprueba."
+     }
+    ],
+    "duracion_estimada_s": 16,
+    "verificado": "Grabado el 10/10: la propuesta de la tuerca M18 llegaba con la respuesta correcta mal marcada; Nuria marca «Con llave dinamométrica a 50 N·m» y «Guardar y aprobar»."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "8 · Evaluación",
+   "escena": {
+    "id": "08c-observacion-javier",
+    "acelerar_tramos": [
+     {
+      "acciones": [
+       12,
+       12
+      ],
+      "factor": 2,
+      "etiqueta": "Javier escribe el comentario"
+     }
+    ],
+    "titulo": "Observación en el puesto · Javier observa a Pedro",
+    "bases": "Bases: validación (observación) · evidencias de competencia · certificación por puesto o tarea",
+    "rol": "Jefe de equipo (javier)",
+    "usuario": "javier",
+    "ruta": "/app/evaluacion?pestana=observar",
+    "escala": 1.25,
+    "esperar_inicio": "Sugerencias",
+    "acciones": [
+     {
+      "clicTexto": "Cambio de molde en la prensa 3 · en L desde el 22 sept 2026",
+      "nota": "la sugerencia de Pedro Ruiz"
+     },
+     {
+      "esperarTexto": "Pasos marcados",
+      "max": 15000,
+      "acelerar": false
+     },
+     {
+      "marca": "lista"
+     },
+     {
+      "resaltar": ".ev-paso.critico",
+      "ms": 2000,
+      "nota": "Los críticos, en rojo"
+     },
+     {
+      "clic": ".ev-boton-marca.bien:not(.activo)",
+      "pausa": 380
+     },
+     {
+      "clic": ".ev-boton-marca.bien:not(.activo)",
+      "pausa": 380
+     },
+     {
+      "clic": ".ev-boton-marca.bien:not(.activo)",
+      "pausa": 380
+     },
+     {
+      "clic": ".ev-boton-marca.bien:not(.activo)",
+      "pausa": 380
+     },
+     {
+      "clic": ".ev-boton-marca.bien:not(.activo)",
+      "pausa": 380
+     },
+     {
+      "clic": ".ev-boton-marca.bien:not(.activo)",
+      "pausa": 380
+     },
+     {
+      "clic": ".ev-boton-marca.bien:not(.activo)",
+      "pausa": 380
+     },
+     {
+      "clic": ".ev-boton-marca.bien:not(.activo)",
+      "pausa": 380
+     },
+     {
+      "escribir": [
+       ".ev-observacion > .tarjeta:last-child textarea",
+       "Consigna las cuatro energías y comprueba la energía cero antes de entrar. Cambio limpio y seguro."
+      ],
+      "ms_tecla": 30
+     },
+     {
+      "marca": "aprueba"
+     },
+     {
+      "clicTexto": "Aprobar"
+     },
+     {
+      "esperarTexto": "Observación aprobada",
+      "max": 20000,
+      "acelerar": false
+     },
+     {
+      "marca": "nivel"
+     },
+     {
+      "esperar": 1500
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "La otra mitad se evalúa en el puesto: Javier observa a Pedro mientras cambia el molde de la prensa 3."
+     },
+     {
+      "marca": "lista",
+      "texto": "Marca cada paso en una lista de comprobación. Si un crítico, en rojo, sale mal, no se puede aprobar."
+     },
+     {
+      "marca": "aprueba",
+      "texto": "Todo bien: comentario y aprobada."
+     },
+     {
+      "marca": "nivel",
+      "texto": "Con eso Pedro alcanza el nivel U: ya trabaja solo en esta tarea."
+     }
+    ],
+    "duracion_estimada_s": 28,
+    "verificado": "Grabado el 10/10: 8 pasos bien, comentario y «Pedro Ruiz sube al nivel U».",
+    "notas": "IT-031 tiene 8 pasos: ocho clics en el siguiente «Bien» sin marcar."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "09-tarjeta",
+   "capitulo": "9 · Progreso y certificación",
+   "etiqueta": "Capítulo 9",
+   "titulo": "El pasaporte de habilidades",
+   "subtitulo": "Niveles ILUO con evidencias, curva de autonomía, matriz del equipo y versiones nuevas",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "9 · Progreso y certificación",
+   "escena": {
+    "id": "09a-pasaporte-marta",
+    "titulo": "Mi progreso · Marta Sanz",
+    "bases": "Bases: pasaporte digital de habilidades · evaluación continua · seguimiento de progresos individuales",
+    "rol": "Empleada (marta)",
+    "usuario": "marta",
+    "ruta": "/app/progreso",
+    "escala": 1.25,
+    "esperar_inicio": "Mi progreso",
+    "acciones": [
+     {
+      "esperar": 800
+     },
+     {
+      "resaltar": ".pp-fila.activa",
+      "ms": 2600
+     },
+     {
+      "marca": "camino"
+     },
+     {
+      "resaltarTexto": "Camino al siguiente nivel",
+      "cerca": ".tarjeta",
+      "ms": 3400
+     },
+     {
+      "marca": "curva"
+     },
+     {
+      "resaltarTexto": "Curva de autonomía",
+      "cerca": ".tarjeta",
+      "ms": 6000
+     },
+     {
+      "marca": "evidencias"
+     },
+     {
+      "resaltarTexto": "Alcanzó el nivel U",
+      "cerca": ".tarjeta",
+      "ms": 2800
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "El pasaporte de habilidades muestra qué tareas domina cada persona, con qué nivel ILUO y hasta cuándo,"
+     },
+     {
+      "marca": "camino",
+      "texto": "y qué le falta para el siguiente."
+     },
+     {
+      "marca": "curva",
+      "texto": "Esta es la curva de autonomía de Marta en la brida B: de ocho consultas en su primera ejecución a cero en la última. Una medida objetiva."
+     },
+     {
+      "marca": "evidencias",
+      "texto": "Debajo, las evidencias con su fecha."
+     }
+    ],
+    "duracion_estimada_s": 25,
+    "verificado": "Visto hoy: U en Montaje de la brida B, «Válido hasta septiembre de 2027», camino I, L, U, O con lo cumplido, curva «De 8 consultas en la primera ejecución a 0 en la última» (ejecuciones 8, 6, 5, 3, 2, 1, 1, 0) y 12 evidencias."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "9 · Progreso y certificación",
+   "escena": {
+    "id": "09b-matriz-javier",
+    "titulo": "Matriz ILUO del equipo de Producción · Javier Martín",
+    "bases": "Bases: indicadores de desempeño · gestión de niveles · renovación y actualización",
+    "rol": "Jefe de equipo (javier)",
+    "usuario": "javier",
+    "ruta": "/app/equipo",
+    "escala": 1.25,
+    "esperar_inicio": "Matriz ILUO",
+    "acciones": [
+     {
+      "esperar": 800
+     },
+     {
+      "resaltarTexto": "niveles L o más",
+      "ms": 1600
+     },
+     {
+      "marca": "matriz"
+     },
+     {
+      "resaltar": ".mz-tabla",
+      "ms": 2400
+     },
+     {
+      "hover": "button.mz-celda[aria-label^='Pedro Ruiz · Cambio de molde en la prensa 3']"
+     },
+     {
+      "esperar": 900
+     },
+     {
+      "marca": "caducidades"
+     },
+     {
+      "scroll": 520
+     },
+     {
+      "resaltarTexto": "Caducidades próximas",
+      "ms": 2200
+     },
+     {
+      "marca": "formador"
+     },
+     {
+      "scroll": -520
+     },
+     {
+      "clic": "button.mz-celda[aria-label^='Marta Sanz · Montaje de la brida B']"
+     },
+     {
+      "esperarTexto": "Validar como formador",
+      "max": 10000
+     },
+     {
+      "clicTexto": "Validar como formador"
+     },
+     {
+      "esperarTexto": "Confirmar",
+      "max": 5000
+     },
+     {
+      "clicTexto": "Confirmar"
+     },
+     {
+      "esperar": 2000
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Javier ve los indicadores de su equipo"
+     },
+     {
+      "marca": "matriz",
+      "texto": "y la matriz ILUO, ya sin papeles: cada celda con sus evidencias. Pedro acaba de pasar a U."
+     },
+     {
+      "marca": "caducidades",
+      "texto": "Abajo, caducidades y reevaluaciones: su propio nivel en la prensa 3 caduca en menos de un mes."
+     },
+     {
+      "marca": "formador",
+      "texto": "Marta ya es autónoma en la brida B: Javier la valida como formadora y pasa al nivel O."
+     }
+    ],
+    "duracion_estimada_s": 30,
+    "depende_de": "08c-observacion-javier",
+    "verificado": "Grabado el 10/10: Lucía en L, Pedro en U, caducidad de Javier a 24 días y Marta validada como formadora (O).",
+    "notas": "Tras P1 los días hasta la caducidad cambian: comprobar que sigue siendo menos de un mes."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "9 · Progreso y certificación",
+   "escena": {
+    "id": "03c-publicar-carmen",
+    "titulo": "Una versión nueva de IT-023 · Carmen Díaz publica la versión 2",
+    "bases": "Bases: documentación técnica convertida en formación · renovación y actualización",
+    "rol": "Empleada experta (carmen)",
+    "usuario": "carmen",
+    "ruta": "/app/instrucciones",
+    "escala": 1.25,
+    "depende_de": "03b-borrador-carmen",
+    "esperar_inicio": "Instrucciones de trabajo",
+    "acciones": [
+     {
+      "clicTexto": "Borradores"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "clic": "table tbody tr",
+      "punto": [
+       0.2,
+       0.5
+      ]
+     },
+     {
+      "esperarTexto": "Publicar versión 2",
+      "max": 15000,
+      "acelerar": false
+     },
+     {
+      "clicTexto": "Publicar versión 2"
+     },
+     {
+      "esperarTexto": "Al publicarla",
+      "max": 10000,
+      "acelerar": false
+     },
+     {
+      "marca": "dialogo"
+     },
+     {
+      "resaltar": ".ins-lista-confirmar",
+      "ms": 3800
+     },
+     {
+      "clicTexto": "Confirmar"
+     },
+     {
+      "esperarTexto": "Versión 2 publicada",
+      "max": 60000,
+      "acelerar": "Publicando e indexando la instrucción"
+     },
+     {
+      "resaltarTexto": "deberán reevaluarse",
+      "ms": 2200
+     },
+     {
+      "marca": "publicada"
+     },
+     {
+      "clicTexto": "Historial"
+     },
+     {
+      "esperar": 1800
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Y cuando cambia el procedimiento, Carmen publica una versión nueva."
+     },
+     {
+      "marca": "dialogo",
+      "texto": "CidIA avisa: la versión 1 queda obsoleta, la nueva se indexa, se preparan micro-lecciones y preguntas, y quien tenía nivel en esta tarea tendrá que reevaluarse."
+     },
+     {
+      "marca": "publicada",
+      "texto": "La documentación técnica se convierte en formación, con su historial de versiones."
+     }
+    ],
+    "duracion_estimada_s": 22,
+    "preparacion": [
+     "Grabar la última (ver orden_grabacion)"
+    ],
+    "verificado": "Grabado el 10/10 al final (una sola toma: publicar no se repite sin otro borrador). Aviso «Versión 2 publicada. 3 personas deberán reevaluarse» e historial v2 publicada y v1 obsoleta. En el montaje va en el capítulo 9, después de la matriz.",
+    "notas": "El texto del enlace del borrador en la tabla puede ser «IT-023 v2» o el título: ajustar el clicTexto. Si se prefiere, abrir directamente desde Captura con «Revisar borrador».",
+    "recortes": [
+     [
+      17.3,
+      26.9
+     ]
+    ],
+    "notas_montaje": "Toma única (publicar no se puede repetir): se recortan 9,6 s quietos tras el aviso de publicación."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "10-tarjeta",
+   "capitulo": "10 · Aportaciones",
+   "etiqueta": "Capítulo 10",
+   "titulo": "El conocimiento que nace en la planta",
+   "subtitulo": "Una nota de voz, la validación del jefe y la cita en el copiloto",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "10 · Aportaciones",
+   "escena": {
+    "id": "10a-aportar-voz-pedro",
+    "titulo": "Pedro Ruiz, operario de prensas · aporta por voz",
+    "bases": "Bases: captura del conocimiento de operarios expertos · atraer a nuevas generaciones",
+    "rol": "Empleado (pedro)",
+    "usuario": "pedro",
+    "ruta": "/app/aportaciones",
+    "escala": 1.25,
+    "microfono": "{voces}/microfono/purga.wav",
+    "esperar_inicio": "Preguntas pendientes en tu departamento",
+    "acciones": [
+     {
+      "resaltarTexto": "Preguntas pendientes en tu departamento",
+      "ms": 1800
+     },
+     {
+      "marca": "responde"
+     },
+     {
+      "clicTexto": "Yo sé la respuesta",
+      "dentro": ".apo-pregunta:nth-child(2)",
+      "nota": "La tarjeta de «¿Cómo se purga el circuito de refrigeración?»: comprobar que es la segunda tras P1"
+     },
+     {
+      "esperarTexto": "Respondes a una pregunta pendiente",
+      "max": 5000,
+      "acelerar": false
+     },
+     {
+      "clicTexto": "Nota de voz",
+      "dentro": ".apo-conmutador"
+     },
+     {
+      "esperar": 600
+     },
+     {
+      "marca": "graba"
+     },
+     {
+      "mantenerMicro": [
+       "button[aria-label='Mantén pulsado para grabar una nota de voz']",
+       "auto"
+      ],
+      "acelerar": "Pedro graba la nota de voz"
+     },
+     {
+      "esperarTexto": "Volver a grabar",
+      "max": 5000,
+      "acelerar": false
+     },
+     {
+      "seleccionar": [
+       ".apo-formulario select",
+       "IT-031"
+      ]
+     },
+     {
+      "clicTexto": "Enviar aportación"
+     },
+     {
+      "esperarTexto": "Ordenándose",
+      "max": 10000,
+      "acelerar": false
+     },
+     {
+      "esperarSinTexto": "Ordenándose",
+      "max": 400000,
+      "acelerar": "El servidor transcribe la nota y la ordena"
+     },
+     {
+      "marca": "ordenada"
+     },
+     {
+      "resaltarTexto": "SOLUCIÓN",
+      "ms": 2200
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Pedro ve las preguntas que el copiloto todavía no sabe responder."
+     },
+     {
+      "marca": "responde",
+      "texto": "Sabe cómo se purga el circuito de refrigeración:"
+     },
+     {
+      "marca": "graba",
+      "texto": "lo cuenta en una nota de voz, sin teclear."
+     },
+     {
+      "marca": "ordenada",
+      "texto": "CidIA la transcribe, la ordena en problema, causa y solución, y se la manda a su jefe."
+     }
+    ],
+    "duracion_estimada_s": 24,
+    "verificado": "Grabado el 10/10 con la voz em_santa (Pedro): nota de 18 s transcrita y ordenada en problema, causa y solución.",
+    "notas": "En la prueba hice clic en otra laguna por error (había lagunas de prueba): tras P1 en Producción solo quedan la de la prensa 2 (primera) y la de la purga (segunda)."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "10 · Aportaciones",
+   "escena": {
+    "id": "10b-validar-javier",
+    "acelerar_tramos": [
+     {
+      "acciones": [
+       5,
+       8
+      ],
+      "factor": 3,
+      "etiqueta": "Javier corrige el título, el problema, la causa y la solución"
+     }
+    ],
+    "notas_montaje": "Son unos 21 s de tecleo sin narración.",
+    "titulo": "Validar aportaciones · Javier Martín",
+    "bases": "Bases: mejoras añadidas (aportaciones validadas) · trazabilidad hasta versión y autor",
+    "rol": "Jefe de equipo (javier)",
+    "usuario": "javier",
+    "ruta": "/app/validar",
+    "escala": 1.25,
+    "depende_de": "10a-aportar-voz-pedro",
+    "esperar_inicio": "Aportaciones pendientes",
+    "acciones": [
+     {
+      "resaltar": ".apo-revision",
+      "ms": 1800,
+      "nota": "La de Pedro, la más reciente"
+     },
+     {
+      "clicTexto": "Ver la transcripción",
+      "dentro": ".apo-revision"
+     },
+     {
+      "esperar": 1500
+     },
+     {
+      "marca": "edita"
+     },
+     {
+      "clicTexto": "Editar",
+      "dentro": ".apo-revision"
+     },
+     {
+      "escribir": [
+       ".apo-revision input.apo-titulo-edicion",
+       "Purga del circuito de refrigeración del molde (prensa 3)"
+      ],
+      "limpiar": true,
+      "ms_tecla": 35
+     },
+     {
+      "escribir": [
+       ".apo-revision .apo-ficha .apo-bloque:nth-child(1) textarea",
+       "Tras cambiar el molde queda aire en las mangueras y la pieza sale mal enfriada."
+      ],
+      "limpiar": true,
+      "ms_tecla": 25
+     },
+     {
+      "escribir": [
+       ".apo-revision .apo-ficha .apo-bloque:nth-child(2) textarea",
+       "Aire acumulado al desconectar y volver a conectar las mangueras del molde."
+      ],
+      "limpiar": true,
+      "ms_tecla": 25
+     },
+     {
+      "escribir": [
+       ".apo-revision .apo-ficha .apo-bloque:nth-child(3) textarea",
+       "Para purgar el circuito de refrigeración: con la prensa parada y el molde frío, abre la válvula de purga de la parte alta del molde hasta que el agua salga sin burbujas, unos 30 segundos. Después ciérrala y comprueba que el depósito está por encima de la marca de mínimo."
+      ],
+      "limpiar": true,
+      "ms_tecla": 12
+     },
+     {
+      "marca": "valida"
+     },
+     {
+      "clicTexto": "Guardar y validar",
+      "dentro": ".apo-revision"
+     },
+     {
+      "esperar": 2500
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Javier la revisa con la transcripción delante."
+     },
+     {
+      "marca": "edita",
+      "texto": "El modelo ha mezclado la causa y la solución; lo corrige en un momento"
+     },
+     {
+      "marca": "valida",
+      "texto": "y la valida. Queda publicada con Pedro como autor y Javier como validador, y la laguna se cierra."
+     }
+    ],
+    "duracion_estimada_s": 21,
+    "verificado": "Grabado el 10/10: edición de título y bloques y «Publicada. El copiloto ya puede responderlo citando a Pedro Ruiz».",
+    "notas": "Los selectores de edición salen de Validar.tsx (input.apo-titulo-edicion y un textarea por bloque en .apo-ficha); comprobarlos en un ensayo."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "10 · Aportaciones",
+   "escena": {
+    "id": "10c-cita-marta",
+    "titulo": "Lo que aprende la planta vuelve a la planta",
+    "bases": "Bases: acceso inmediato a contenidos · trazabilidad hasta versión y autor",
+    "rol": "Empleada (marta)",
+    "usuario": "marta",
+    "ruta": "/app/copiloto",
+    "escala": 1.25,
+    "depende_de": "10b-validar-javier",
+    "esperar_inicio": "Escribe tu pregunta",
+    "acciones": [
+     {
+      "escribir": [
+       "textarea[aria-label='Tu pregunta']",
+       "¿Cómo se purga el circuito de refrigeración?"
+      ],
+      "ms_tecla": 45
+     },
+     {
+      "tecla": "Enter"
+     },
+     {
+      "esperarSelector": ".acciones-respuesta",
+      "max": 150000,
+      "acelerar": "El copiloto busca en la documentación"
+     },
+     {
+      "marca": "respuesta"
+     },
+     {
+      "resaltar": ".burbuja.asistente .globo",
+      "ms": 2400
+     },
+     {
+      "clic": ".fuente.citada"
+     },
+     {
+      "esperarTexto": "Autoría",
+      "max": 10000,
+      "acelerar": false
+     },
+     {
+      "resaltarTexto": "Validado por",
+      "ms": 2600
+     },
+     {
+      "esperar": 500
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Al momento, Marta pregunta lo mismo"
+     },
+     {
+      "marca": "respuesta",
+      "texto": "y el copiloto ya responde, citando a Pedro y a Javier. Lo que aprende la planta vuelve a la planta."
+     }
+    ],
+    "duracion_estimada_s": 13,
+    "verificado": "Grabado el 10/10: respuesta con la solución de la purga y fuente «Purga del circuito de refrigeración del molde (prensa 3)» con autoría y validación."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "11-tarjeta",
+   "capitulo": "11 · Espacio de trabajo",
+   "etiqueta": "Capítulo 11",
+   "titulo": "El espacio de trabajo del agente",
+   "subtitulo": "Una carpeta privada en el servidor y una consola aislada, sin red",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "11 · Espacio de trabajo",
+   "escena": {
+    "id": "11a-espacio-javier",
+    "titulo": "Espacio de trabajo · Javier Martín",
+    "bases": "Bases: base tecnológica e IA relevante · mejoras añadidas (agente en un espacio aislado)",
+    "rol": "Jefe de equipo (javier)",
+    "usuario": "javier",
+    "ruta": "/app/espacio",
+    "escala": 1.25,
+    "esperar_inicio": "Espacio de trabajo",
+    "acciones": [
+     {
+      "resaltarTexto": "Privada",
+      "ms": 1600
+     },
+     {
+      "subir": "{salida}/ficheros/paradas-prensa3.csv",
+      "clicTexto": "Subir"
+     },
+     {
+      "esperarTexto": "paradas-prensa3.csv",
+      "max": 15000,
+      "acelerar": false
+     },
+     {
+      "marca": "consola"
+     },
+     {
+      "resaltarTexto": "Aislada · sin red",
+      "ms": 1600
+     },
+     {
+      "escribir": [
+       ".consola-entrada input",
+       "python3 informe_paradas.py"
+      ],
+      "ms_tecla": 55
+     },
+     {
+      "clicTexto": "Ejecutar"
+     },
+     {
+      "esperarTexto": "Guardados paradas-prensa3.png",
+      "max": 60000,
+      "acelerar": "Ejecutando en un contenedor aislado del servidor"
+     },
+     {
+      "marca": "resultado"
+     },
+     {
+      "clicTexto": "paradas-prensa3.png"
+     },
+     {
+      "esperar": 2200
+     },
+     {
+      "marca": "agente"
+     },
+     {
+      "scroll": ".consola-entrada input"
+     },
+     {
+      "clic": ".consola-entrada input"
+     },
+     {
+      "esperar": 300
+     },
+     {
+      "escribir": [
+       ".consola-entrada input",
+       "python3 -c \"import socket; socket.create_connection(('example.com', 80), 3)\""
+      ],
+      "ms_tecla": 25
+     },
+     {
+      "clicTexto": "Ejecutar"
+     },
+     {
+      "esperarTexto": "Traceback",
+      "max": 30000,
+      "acelerar": false
+     },
+     {
+      "resaltar": ".consola-salida, .consola pre, pre",
+      "ms": 2400,
+      "nota": "Sin red: la conexión falla"
+     },
+     {
+      "esperar": 1200
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Cada persona tiene además un espacio de trabajo privado en el servidor."
+     },
+     {
+      "marca": "consola",
+      "texto": "La consola ejecuta las órdenes en un contenedor aislado y sin red. Javier sube el registro de paradas de la prensa 3 y lanza un análisis:"
+     },
+     {
+      "marca": "resultado",
+      "texto": "gráfico y tabla en Excel en unos segundos."
+     },
+     {
+      "marca": "agente",
+      "texto": "La app de escritorio ofrece este mismo espacio a su agente, por MCP y con los permisos de cada persona. Y desde aquí no se sale a Internet: la conexión falla."
+     }
+    ],
+    "duracion_estimada_s": 33,
+    "preparacion": [
+     "P5"
+    ],
+    "verificado": "Grabado el 10/10: análisis en 3,6 s (gráfico y Excel) y la conexión a example.com falla con Traceback (sin red).",
+    "notas": "Limpiar después la carpeta de Javier (los tres ficheros) si se repite la toma. El texto exacto del error de red puede variar: esperar «Error» o el código de salida distinto de 0 que muestra la consola."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "11 · Espacio de trabajo",
+   "opcional": true,
+   "escena": {
+    "id": "11b-agente-app",
+    "titulo": "El agente de la app usa el espacio por MCP",
+    "bases": "Bases: integración (MCP y API compatible con OpenAI)",
+    "rol": "Jefe de equipo (javier) en la app de escritorio",
+    "contexto": "app",
+    "conectar": {
+     "puerto": 9333,
+     "objetivo": "dsh-app://app/"
+    },
+    "usuario": null,
+    "ruta": null,
+    "escala": 1,
+    "acciones": [
+     {
+      "clicTexto": "Nueva conversación"
+     },
+     {
+      "escribir": [
+       "textarea, [contenteditable=true]",
+       "Usa la herramienta mcp__cidia__espacio_listar y dime qué ficheros hay en mi carpeta de trabajo."
+      ],
+      "ms_tecla": 35
+     },
+     {
+      "tecla": "Enter"
+     },
+     {
+      "esperarTexto": "paradas-prensa3",
+      "max": 180000,
+      "acelerar": "El agente llama a la herramienta del servidor"
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Desde la app, el agente usa esas mismas herramientas del servidor, siempre con los permisos de la persona."
+     }
+    ],
+    "duracion_estimada_s": 10,
+    "verificado": "Probado el 10/10 en la app con Lucía: con qwen3:0.6b el agente no llama a las herramientas MCP ni siquiera nombrándolas y responde sin fuentes (inventa). Se deja fuera del vídeo; la frase de 11a dice solo lo que hay (el espacio se ofrece al agente por MCP).",
+    "notas": "Solo si sale bien en un ensayo. Si no, se queda fuera y basta la frase final de 11a."
+   },
+   "omitir": true
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "12-tarjeta",
+   "capitulo": "12 · Administración",
+   "etiqueta": "Capítulo 12",
+   "titulo": "La administración, dentro de la misma app",
+   "subtitulo": "Organización, empleados, modelos permitidos, registro xAPI y sistema",
+   "duracion_estimada_s": 3.5
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "12 · Administración",
+   "escena": {
+    "id": "12a-organizacion-admin",
+    "titulo": "Organización · departamentos, puestos, tareas, niveles y reglas ILUO",
+    "bases": "Bases: adaptación a cada empresa (20 %) · gestión de niveles",
+    "rol": "Administración (admin)",
+    "usuario": "admin",
+    "ruta": "/app/admin/organizacion",
+    "escala": 1.25,
+    "esperar_inicio": "Departamentos y tareas",
+    "acciones": [
+     {
+      "esperar": 600
+     },
+     {
+      "clicTexto": "IT-023"
+     },
+     {
+      "esperarTexto": "Criticidad",
+      "max": 8000
+     },
+     {
+      "resaltarTexto": "Criticidad",
+      "ms": 1800
+     },
+     {
+      "resaltarTexto": "Riesgos PRL",
+      "ms": 1600
+     },
+     {
+      "marca": "niveles"
+     },
+     {
+      "clicTexto": "Niveles"
+     },
+     {
+      "esperarTexto": "Niveles de responsabilidad",
+      "max": 8000
+     },
+     {
+      "resaltarTexto": "Cómo funcionan los niveles",
+      "ms": 1800
+     },
+     {
+      "marca": "reglas"
+     },
+     {
+      "clicTexto": "Empresa y reglas ILUO"
+     },
+     {
+      "esperarTexto": "Reglas ILUO",
+      "max": 8000
+     },
+     {
+      "scroll": 420
+     },
+     {
+      "resaltarTexto": "Así quedan los niveles",
+      "ms": 2600
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "La administración define la organización: departamentos, puestos y tareas, cada una con su nivel, su criticidad y sus riesgos de prevención."
+     },
+     {
+      "marca": "niveles",
+      "texto": "Los niveles deciden qué documentos encuentra cada persona."
+     },
+     {
+      "marca": "reglas",
+      "texto": "Y aquí se ajustan las reglas de cada nivel ILUO: ejecuciones, nota del cuestionario y caducidad. Cada empresa lo adapta a su forma de trabajar."
+     }
+    ],
+    "duracion_estimada_s": 27,
+    "verificado": "Visto hoy: árbol con 4 departamentos, 9 puestos y 23 tareas; ficha de IT-023 (nombre, código, puesto, nivel mínimo, criticidad, descripción, riesgos PRL, tarea activa); pestaña Niveles (Operario, Técnico, Responsable, Dirección y «Cómo funcionan los niveles»); pestaña «Empresa y reglas ILUO» (ejecuciones para L, umbral 80 %, validez en meses y «Así quedan los niveles»)."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "12 · Administración",
+   "escena": {
+    "id": "12b-empleados-admin",
+    "titulo": "Empleados · cuentas, roles, formaciones e identidad",
+    "bases": "Bases: integración con los sistemas existentes · incrementar la polivalencia",
+    "rol": "Administración (admin)",
+    "usuario": "admin",
+    "ruta": "/app/admin/empleados",
+    "escala": 1.25,
+    "esperar_inicio": "Nueva persona",
+    "acciones": [
+     {
+      "esperar": 600
+     },
+     {
+      "resaltar": "table",
+      "ms": 1800
+     },
+     {
+      "clicTexto": "Marta Sanz"
+     },
+     {
+      "esperarTexto": "Datos y acceso",
+      "max": 8000
+     },
+     {
+      "clicTexto": "Formaciones"
+     },
+     {
+      "esperar": 1200
+     },
+     {
+      "ms": 2200,
+      "resaltarTexto": "Diseño de utillajes",
+      "dentro": ".modal",
+      "cerca": "li, .tarjeta, div[class*=formacion], div[class*=fila]",
+      "nota": "Formación en otro departamento"
+     },
+     {
+      "tecla": "Escape"
+     },
+     {
+      "marca": "identidad"
+     },
+     {
+      "clicTexto": "Nueva persona"
+     },
+     {
+      "esperarTexto": "Origen de la identidad",
+      "max": 8000
+     },
+     {
+      "resaltarTexto": "Origen de la identidad",
+      "ms": 2400,
+      "dentro": ".modal",
+      "nota": "Cuenta de CidIA, directorio LDAP o inicio de sesión único"
+     },
+     {
+      "tecla": "Escape"
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "En Empleados, cuentas, roles, niveles y formaciones en otros departamentos, como la de Marta."
+     },
+     {
+      "marca": "identidad",
+      "texto": "Las cuentas pueden ser de CidIA o venir del directorio de la empresa: el módulo de identidad está preparado."
+     }
+    ],
+    "duracion_estimada_s": 19,
+    "preparacion": [
+     "P2"
+    ],
+    "verificado": "Visto hoy: tabla con filtros, ficha de Marta (pestañas «Datos y acceso» y «Formaciones 1», rol, departamento, puesto, nivel, experto, «Restablecer contraseña»), «Nueva persona» con «Origen de la identidad: Cuenta de CidIA, Directorio de la empresa (LDAP), Inicio de sesión único (OIDC)» y «CidIA genera una contraseña inicial que verás una sola vez».",
+    "notas": "No crear la cuenta en la escena: se cierra el panel."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "12 · Administración",
+   "escena": {
+    "id": "12c-modelos-admin",
+    "titulo": "Modelos permitidos · solo locales",
+    "bases": "Bases: bajo coste (15 %) · proteger el conocimiento experto",
+    "rol": "Administración (admin)",
+    "usuario": "admin",
+    "ruta": "/app/admin/modelos",
+    "escala": 1.25,
+    "esperar_inicio": "Modelos permitidos",
+    "acciones": [
+     {
+      "esperar": 600
+     },
+     {
+      "resaltarTexto": "CHAT Y COPILOTO",
+      "ms": 1600
+     },
+     {
+      "resaltarTexto": "VISIÓN",
+      "ms": 1400
+     },
+     {
+      "marca": "nube"
+     },
+     {
+      "scroll": 380
+     },
+     {
+      "resaltarTexto": "EN LA NUBE",
+      "ms": 2600
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "En Modelos se decide qué IA se usa para el chat, la visión y la búsqueda. Todos se ejecutan en el servidor de la empresa."
+     },
+     {
+      "marca": "nube",
+      "texto": "Los servicios en la nube están bloqueados y nadie puede poner sus claves: sin nube, sin pago por consulta."
+     }
+    ],
+    "duracion_estimada_s": 20,
+    "verificado": "Grabado el 10/10. La fila «DeepSeek» de los proveedores en la nube (bloqueado) se oculta en la grabación por la regla de no mostrar esa marca; quedan Gemini, OpenAI y OpenRouter.",
+    "notas": "La interfaz lista «DeepSeek» entre los proveedores en la nube bloqueados: conviene quitarlo o renombrarlo en el producto (regla del equipo: ningún rastro de esa marca).",
+    "antes_js": "(() => { let n = 0; document.querySelectorAll('table.adm-tabla-modelos tr').forEach((tr) => { if (/^s*DeepSeek/.test(tr.innerText)) { tr.style.display = 'none'; n++ } }); return n })()"
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "12 · Administración",
+   "escena": {
+    "id": "12d-registro-admin",
+    "titulo": "Registro de actividad en xAPI y auditoría",
+    "bases": "Bases: registro de actividades · auditoría y trazabilidad · integración",
+    "rol": "Administración (admin)",
+    "usuario": "admin",
+    "ruta": "/app/admin/registro",
+    "escala": 1.25,
+    "esperar_inicio": "Actividad (xAPI)",
+    "acciones": [
+     {
+      "esperar": 600
+     },
+     {
+      "resaltar": "main",
+      "ms": 1600
+     },
+     {
+      "seleccionar": [
+       "select",
+       "alcanzó el nivel"
+      ]
+     },
+     {
+      "esperar": 1500
+     },
+     {
+      "clicTexto": "Ver sentencia"
+     },
+     {
+      "esperarSelector": "pre.adm-json",
+      "max": 5000
+     },
+     {
+      "resaltar": "pre.adm-json",
+      "ms": 2200,
+      "nota": "La sentencia xAPI completa"
+     },
+     {
+      "clicTexto": "Ocultar"
+     },
+     {
+      "resaltarTexto": "Exportar JSON",
+      "ms": 1400
+     },
+     {
+      "marca": "auditoria"
+     },
+     {
+      "clicTexto": "Auditoría"
+     },
+     {
+      "esperar": 1800
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Toda la actividad queda en xAPI, el estándar de la formación: quién preguntó, quién completó una tarea, quién alcanzó un nivel. Se filtra y se exporta."
+     },
+     {
+      "marca": "auditoria",
+      "texto": "Y cada cambio de administración queda en la auditoría."
+     }
+    ],
+    "duracion_estimada_s": 20,
+    "verificado": "Visto hoy: pestañas «Actividad (xAPI)» y «Auditoría», filtros de persona, acción (incluye «alcanzó el nivel»), objeto y fechas, «Exportar JSON», «Ver sentencia» y paginación (569 sentencias, 15 páginas). «Ver sentencia» despliega la sentencia en línea (pre.adm-json) y el botón pasa a «Ocultar» (comprobado: no abre un diálogo)."
+   }
+  },
+  {
+   "tipo": "escena",
+   "capitulo": "12 · Administración",
+   "escena": {
+    "id": "12e-sistema-admin",
+    "titulo": "Sistema · estado real del servidor",
+    "bases": "Bases: aplicable en entornos industriales reales · escalabilidad",
+    "rol": "Administración (admin)",
+    "usuario": "admin",
+    "ruta": "/app/admin/sistema",
+    "escala": 1.25,
+    "esperar_inicio": "Todo funciona",
+    "acciones": [
+     {
+      "resaltarTexto": "Todo funciona",
+      "ms": 1600
+     },
+     {
+      "scroll": 380
+     },
+     {
+      "esperar": 1500
+     }
+    ],
+    "narracion": [
+     {
+      "texto": "Y el estado del servidor, comprobado al momento."
+     }
+    ],
+    "duracion_estimada_s": 7,
+    "verificado": "Visto hoy: «Todo funciona», CidIA 0.1.0, motor propio PostgreSQL + pgvector, servicios con su latencia, documentos por estado y trabajos recientes."
+   }
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "13a-cobertura",
+   "capitulo": "13 · Cómo cubre las bases",
+   "etiqueta": "Criterio de las bases · 40 %",
+   "titulo": "Cobertura funcional",
+   "subtitulo": "El ciclo completo funciona: capturar, estructurar, formar, acompañar, evaluar y certificar. 27 de los 30 puntos del alcance se demuestran y 3 aparecen simplificados.",
+   "duracion_estimada_s": 13,
+   "narracion": [
+    {
+     "texto": "Así cubre CidIA las bases. Cobertura funcional, el cuarenta por ciento: el ciclo completo funciona de verdad, con veintisiete de los treinta puntos del alcance demostrados y tres simplificados."
+    }
+   ]
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "13b-adaptacion",
+   "capitulo": "13 · Cómo cubre las bases",
+   "etiqueta": "Criterio de las bases · 20 %",
+   "titulo": "Adaptación a cada empresa",
+   "subtitulo": "Departamentos, puestos, niveles y reglas ILUO configurables. Tres configuraciones de servidor: del PC de una pyme a un servidor con GPU para varias plantas.",
+   "duracion_estimada_s": 11,
+   "narracion": [
+    {
+     "texto": "Adaptación a cada empresa: organización, niveles y reglas configurables, y tres configuraciones de servidor, del PC de una pyme a un servidor con GPU."
+    }
+   ]
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "13c-coste",
+   "capitulo": "13 · Cómo cubre las bases",
+   "etiqueta": "Criterio de las bases · 15 %",
+   "titulo": "Bajo coste",
+   "subtitulo": "Todo en local y sobre software libre. Sin pago por consulta ni por usuario: el único desembolso relevante es el hardware.",
+   "duracion_estimada_s": 7,
+   "narracion": [
+    {
+     "texto": "Bajo coste: todo en local y libre, sin pago por consulta ni por usuario."
+    }
+   ]
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "13d-mejoras",
+   "capitulo": "13 · Cómo cubre las bases",
+   "etiqueta": "Criterio de las bases · 15 %",
+   "titulo": "Mejoras añadidas",
+   "subtitulo": "Tutor socrático, aportaciones desde la planta validadas por el jefe, lagunas de conocimiento y espacio de trabajo aislado para el agente.",
+   "duracion_estimada_s": 9,
+   "narracion": [
+    {
+     "texto": "Mejoras añadidas: el tutor socrático, las aportaciones validadas, las lagunas y el espacio de trabajo del agente."
+    }
+   ]
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "13e-innovacion",
+   "capitulo": "13 · Cómo cubre las bases",
+   "etiqueta": "Criterio de las bases · 10 %",
+   "titulo": "Grado de innovación",
+   "subtitulo": "La combinación: el ciclo completo con IA en local, progreso basado en evidencias y un conocimiento que crece desde la propia planta.",
+   "duracion_estimada_s": 11,
+   "narracion": [
+    {
+     "texto": "Y la innovación está en la combinación: el ciclo completo, en local, con evidencias y con un saber que crece desde la planta."
+    }
+   ]
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "13f-implantacion",
+   "capitulo": "13 · Cómo cubre las bases",
+   "etiqueta": "Implantación sencilla y licencias libres",
+   "titulo": "Un instalador para el servidor y otro para los puestos",
+   "subtitulo": "instalar-servidor.sh deja cualquier Ubuntu listo · CidIA-Setup.exe en cada portátil · Ejemplo: 1 servidor y 5 puestos, unos 6.200 € con IVA en hardware · Software libre con licencias que permiten el uso comercial",
+   "duracion_estimada_s": 19,
+   "narracion": [
+    {
+     "texto": "Se implanta con un instalador para el servidor y otro para los portátiles. Para una pyme, un servidor y cinco puestos cuestan unos seis mil doscientos euros en hardware, sin cuotas. Y todo el software es libre, con licencias que permiten el uso comercial."
+    }
+   ]
+  },
+  {
+   "tipo": "tarjeta",
+   "id": "13g-final",
+   "capitulo": "13 · Cómo cubre las bases",
+   "etiqueta": "Rodrigo Pascual · Lydia Blanco · Gadea Lucas · Universidad de Burgos",
+   "titulo": "CidIA",
+   "subtitulo": "El conocimiento se queda",
+   "tam_titulo": 120,
+   "duracion_estimada_s": 8,
+   "narracion": [
+    {
+     "texto": "CidIA: el conocimiento de la planta, capturado, enseñado y medido, sin salir de la empresa."
+    }
+   ]
+  }
+ ],
+ "fecha": "2026-10-10",
+ "incidencias": [
+  {
+   "id": "I1",
+   "estado": "resuelta",
+   "que": "Modo planta: el copiloto respondía «, no lo sabes.» a cualquier pregunta del paso.",
+   "solucion": "servicios/consulta.py: con tarea en curso la evidencia se comprueba con la pregunta (no con el nombre de la tarea y el título del paso) y el eco de la regla («, no lo sabes.») ya no llega a la persona. Pruebas nuevas en tests/test_consulta.py; desplegado en Oracle."
+  },
+  {
+   "id": "I2",
+   "estado": "mejorada",
+   "que": "Preguntas razonables que el modelo pequeño no responde.",
+   "solucion": "Se eligen preguntas que funcionan («¿Con qué llave aprieto?», «¿Quién aprueba compras de más de 12.000 €?») y consulta.py prefiere ahora la frase que repite las palabras y cifras de la pregunta, da la «Solución» de una ficha en vez de su «Problema» y quita el «La respuesta está en el fragmento [n].» del reintento. Sigue sin casar «aprieta» con «apretar»."
+  },
+  {
+   "id": "I3",
+   "estado": "sin cambios",
+   "que": "qwen3:1.7b descargado y sin registrar."
+  },
+  {
+   "id": "I4",
+   "estado": "resuelta en el guion",
+   "que": "Si la foto coincide con la referencia no pasa a «Fotos por revisar».",
+   "solucion": "06c enseña «Todas» y da por buena la de hoy."
+  },
+  {
+   "id": "I5",
+   "estado": "resuelta en la grabación",
+   "que": "Conversaciones de pruebas en «Espacios» de la app.",
+   "solucion": "Se ocultan con «ocultar_css» mientras se graba (no se borran)."
+  },
+  {
+   "id": "I6",
+   "estado": "sin cambios",
+   "que": "«Faltan -2 ejecuciones completadas» en un requisito cumplido (no se ve en pantalla)."
+  },
+  {
+   "id": "I7",
+   "estado": "resuelta",
+   "que": "Datos de prueba acumulados.",
+   "solucion": "Semilla de nuevo antes de grabar (dos veces: antes y después de la primera captura)."
+  },
+  {
+   "id": "I8",
+   "estado": "abierta",
+   "que": "Administración › Modelos muestra «DeepSeek» como proveedor en la nube bloqueado.",
+   "solucion": "Oculto en la grabación; conviene quitarlo del producto."
+  },
+  {
+   "id": "I9",
+   "estado": "abierta",
+   "que": "El agente de la app no usa las herramientas MCP con qwen3:0.6b.",
+   "solucion": "11b fuera del vídeo; probar con un modelo mayor (perfil del MSI)."
+  },
+  {
+   "id": "I10",
+   "estado": "resuelta",
+   "que": "Revisión del montaje (fotogramas cada 3 s, transcripción con Whisper y lectura de los subtítulos): entre 06a y 06b se volvía a la lista de tareas y salía una pantalla de carga; tres tecleos largos sin narración (10b, 21 s; 03d, 5 s; 08c, 7 s); subtítulos de menos de un segundo, desordenados alrededor de la voz del micrófono y uno solapado al final.",
+   "solucion": "Recorte del inicio de 06b, «acelerar_tramos» con rótulo en los tecleos y subtítulos ordenados, sin solapes y con los trozos cortos unidos (montaje.py). El vídeo pasa de 15:42 a 15:20."
+  }
+ ],
+ "comprobaciones_previas": [
+  {
+   "escena": "02a",
+   "usuario": "invitado",
+   "modo": "normal",
+   "pregunta": "¿Cuál es el teléfono de emergencias?",
+   "debe_contener": [
+    "200"
+   ],
+   "hoy": "bien (extractiva, cita Bienvenida y PRL, 6 s)"
+  },
+  {
+   "escena": "02a",
+   "usuario": "invitado",
+   "modo": "normal",
+   "pregunta": "¿A cuánto se aprietan los tornillos de la brida B?",
+   "debe_contener": [
+    "No lo he encontrado"
+   ],
+   "hoy": "bien (no tiene acceso)"
+  },
+  {
+   "escena": "04c",
+   "usuario": "luis",
+   "modo": "normal",
+   "pregunta": "¿Quién aprueba compras de más de 12.000 €?",
+   "debe_contener": [
+    "No lo he encontrado"
+   ],
+   "hoy": "bien el 10/10 con la pregunta corta"
+  },
+  {
+   "escena": "04d",
+   "usuario": "ana",
+   "modo": "normal",
+   "pregunta": "¿Quién aprueba compras de más de 12.000 €?",
+   "debe_contener": [
+    "gerencia"
+   ],
+   "hoy": "bien el 10/10 con la pregunta corta"
+  },
+  {
+   "escena": "05a",
+   "usuario": "marta",
+   "modo": "normal",
+   "pregunta": "La prensa 3 se ha atascado al cambiar el molde, ¿qué hago?",
+   "debe_contener": [
+    "S4"
+   ],
+   "citada": "Atasco en la prensa 3 al cambiar de molde: limpiar el sensor S4",
+   "hoy": "bien el 10/10: da la «Solución» de la ficha de Pedro"
+  },
+  {
+   "escena": "05b",
+   "usuario": "marta",
+   "modo": "socratico",
+   "pregunta": "¿Cómo se aprietan los tornillos de la brida B?",
+   "debe_contener": [
+    "?"
+   ],
+   "hoy": "bien (pregunta de vuelta, pista y cita, 15 s)"
+  },
+  {
+   "escena": "05c",
+   "usuario": "marta",
+   "modo": "normal",
+   "pregunta": "¿Qué presión lleva el cilindro de la prensa 2?",
+   "debe_contener": [
+    "No lo he encontrado"
+   ],
+   "hoy": "bien (laguna)"
+  },
+  {
+   "escena": "06a",
+   "usuario": "lucia",
+   "modo": "planta",
+   "contexto": {
+    "tarea_id": 1,
+    "paso_id": 3
+   },
+   "pregunta": "¿Con qué llave aprieto?",
+   "debe_contener": [
+    "dinamométrica"
+   ],
+   "hoy": "bien tras arreglar I1 (respuesta extractiva con IT-023 v1 paso 3)"
+  },
+  {
+   "escena": "07b",
+   "usuario": "lucia",
+   "modo": "socratico",
+   "contexto": {
+    "tarea_id": 1
+   },
+   "pregunta": "¿Qué puede salir mal en el paso crítico?",
+   "debe_contener": [
+    "Pista"
+   ],
+   "hoy": "bien (23 s)"
+  },
+  {
+   "escena": "10c",
+   "usuario": "marta",
+   "modo": "normal",
+   "pregunta": "¿Cómo se purga el circuito de refrigeración?",
+   "debe_contener": [
+    "válvula de purga"
+   ],
+   "hoy": "responde y cita la aportación de Pedro (7 s). En la prueba, con un «problema» que repetía las palabras de la pregunta, la frase citada fue la del problema: con el texto de 10b (el problema no nombra la purga) debe citar la solución."
+  }
+ ]
+}

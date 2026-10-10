@@ -1,0 +1,65 @@
+{
+  "id": "copiloto-voz-lucia",
+  "titulo": "Copiloto por voz · Lucía Herrero, operaria recién incorporada",
+  "bases": "Bases: asistencia en el puesto con IA local, manos libres",
+  "usuario": "lucia",
+  "ruta": "/app/copiloto",
+  "microfono": "{voces}/microfono/llave-brida.wav",
+  "esperar_inicio": "Escribe tu pregunta",
+  "acciones": [
+    {
+      "marca": "pregunta"
+    },
+    {
+      "esperar": 500
+    },
+    {
+      "mantenerMicro": [
+        ".boton-microfono",
+        "auto"
+      ]
+    },
+    {
+      "esperarSelector": ".burbuja.usuario",
+      "max": 45000,
+      "acelerar": "Transcribiendo la voz en el servidor"
+    },
+    {
+      "marca": "respuesta"
+    },
+    {
+      "esperarSelector": ".fuentes-titulo",
+      "max": 120000,
+      "acelerar": "El copiloto prepara la respuesta en el servidor"
+    },
+    {
+      "esperar": 600
+    },
+    {
+      "marca": "fuentes"
+    },
+    {
+      "resaltar": ".fuentes",
+      "ms": 2200,
+      "nota": "Cada respuesta dice de qué documento sale"
+    },
+    {
+      "esperar": 800
+    }
+  ],
+  "duracion_minima_ms": 6000,
+  "narracion": [
+    {
+      "marca": "pregunta",
+      "texto": "Lucía acaba de incorporarse y tiene las manos ocupadas. Mantiene pulsado el micrófono y pregunta en voz alta."
+    },
+    {
+      "marca": "respuesta",
+      "texto": "La voz se transcribe en el servidor de la empresa. Aquí el copiloto no encuentra una respuesta segura, y no se la inventa: lo dice y apunta la pregunta para que alguien que lo sepa la responda."
+    },
+    {
+      "marca": "fuentes",
+      "texto": "Y enseña qué documentos ha revisado."
+    }
+  ]
+}

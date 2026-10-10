@@ -1,0 +1,27 @@
+{
+  "titulo": "CidIA · vídeo de prueba de las herramientas",
+  "piezas": [
+    {
+      "tipo": "tarjeta",
+      "id": "portada",
+      "capitulo": "Presentación",
+      "etiqueta": "V Desafío industrial · POLO positivo",
+      "titulo": "CidIA",
+      "subtitulo": "El conocimiento de la planta, capturado, enseñado y medido sin salir de la empresa",
+      "tam_titulo": 120,
+      "narracion": [
+        { "texto": "Esto es CidIA, un copiloto de inteligencia artificial que funciona dentro de la empresa." }
+      ]
+    },
+    { "escena": "inicio-javier.json", "capitulo": "El inicio del jefe de equipo" },
+    {
+      "tipo": "tarjeta",
+      "id": "cap-voz",
+      "capitulo": "Preguntar con las manos ocupadas",
+      "etiqueta": "Capítulo 2 · Empleado",
+      "titulo": "Preguntar con las manos ocupadas",
+      "subtitulo": "El copiloto por voz en el puesto de trabajo"
+    },
+    { "escena": "copiloto-voz-lucia.json", "capitulo": "Copiloto por voz" }
+  ]
+}

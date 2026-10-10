@@ -1251,3 +1251,92 @@ def test_evidencia_y_frases_sin_markdown():
     # La pregunta de una FAQ no es una respuesta.
     assert not evidencia([fuente], ["Pregunta: ¿Por qué se atasca la prensa 3 al cambiar el molde?"],
                          "¿Por qué se atasca la prensa 3 al cambiar el molde?")
+
+
+# --------------------------------------------------------------------------- modo planta con modelos pequeños
+
+
+@pytest.mark.parametrize("trozos, esperado", [
+    (["SIN_RESPALDO, no lo sabes."], ""),
+    (["SIN_RESPALDO", ", no lo", " sabes. Avisa a tu responsable", " antes de seguir."],
+     "Avisa a tu responsable antes de seguir."),
+    (["SIN_RESPALDO y di que no lo sabes."], ""),
+    (["SIN_RESPALDO No lo s", "é. Avisa a tu responsable."], "No lo sé. Avisa a tu responsable."),
+])
+def test_filtro_quita_el_eco_de_la_regla_del_modo_planta(trozos, esperado):
+    """qwen3:0.6b escribe a veces «SIN_RESPALDO, no lo sabes.» (repite la regla 5 del modo planta): eso no
+    llega a la persona; si no queda nada, se mostrará el «no lo he encontrado» de siempre."""
+    f = FiltroMarca()
+    salida = "".join(f.alimentar(t) for t in trozos) + f.terminar()
+    assert salida == esperado and f.vista
+
+
+def test_modo_planta_comprueba_la_evidencia_con_la_pregunta(cliente, bd, planta, docs, ia, ejecucion):
+    """En el modo planta la búsqueda lleva la tarea y el paso, pero la evidencia se comprueba con la pregunta:
+    con el nombre de la tarea y el título del paso añadidos ninguna frase reunía la mitad de las palabras y
+    la respuesta «SIN_RESPALDO, no lo sabes.» del modelo pequeño se quedaba tal cual (visto en Oracle)."""
+    ej, ins = ejecucion
+    ia.respuesta = "SIN_RESPALDO, no lo sabes."
+    ctx = {"tarea_id": ej.tarea_id, "paso_id": ins.pasos[0].id, "ejecucion_id": ej.id}
+    d = cliente.post("/api/consulta/simple", headers=cab(cliente, "pedro"),
+                     json={"pregunta": "¿Qué llave uso para apretar?", "modo": "planta", "contexto": ctx}).json()
+    assert "llave dinamométrica" in d["respuesta"] and "no lo sabes" not in d["respuesta"]
+    assert d["con_respaldo"] is True and d["laguna_id"] is None and d["citadas"]
+    # Sin nada que responda, el eco tampoco llega: se dice que no se ha encontrado.
+    d = cliente.post("/api/consulta/simple", headers=cab(cliente, "pedro"),
+                     json={"pregunta": "¿Qué presión lleva el depósito hidráulico del elevador 7?", "modo": "planta",
+                           "contexto": ctx}).json()
+    assert d["respuesta"].startswith("No lo he encontrado") and d["con_respaldo"] is False
+
+
+def test_evidencia_prefiere_la_frase_que_repite_la_pregunta():
+    """«¿Quién aprueba compras de más de 12.000 €?»: las tres frases de la lista dicen «aprueba», pero responde la
+    que repite «más de 12.000», no la primera de la lista (visto en Oracle: la respuesta extractiva daba la de
+    «Hasta 3.000 €»)."""
+    from cidia.servicios.consulta import evidencia
+
+    texto = ("## Aprobación de compras de utillaje\n\n"
+             "- Hasta **3.000 €**: aprueba la responsable de Oficina técnica.\n"
+             "- De **3.000 a 12.000 €**: aprueba la dirección técnica, con dos ofertas comparadas.\n"
+             "- Más de **12.000 €**: aprueba la gerencia, con tres ofertas y el cálculo de amortización.\n")
+    fuente = {"n": 1, "documento_id": 1, "titulo": "Costes y proveedores de utillaje", "similitud": 0.6}
+    ev = evidencia([fuente], [texto], "¿Quién aprueba compras de más de 12.000 €?")
+    assert ev and ev[0].texto.startswith("Más de 12.000 €: aprueba la gerencia")
+
+
+def test_reintento_sin_el_eco_del_fragmento(cliente, guia, monkeypatch):
+    """El reintento de qwen3:0.6b empieza a veces con «La respuesta está en el fragmento [1].»: se quita y la cita
+    queda detrás de lo que respalda."""
+    from cidia.ia import llm
+
+    respuestas: list[str] = []
+
+    def chat(mensajes, *a, **k):
+        respuestas.append(mensajes[-1]["content"])
+        return ("SIN_RESPALDO" if len(respuestas) % 2 else
+                "La respuesta está en el fragmento [1]. Producción tiene tres puestos: Prensas, Montaje línea 2 y Soldadura.")
+
+    monkeypatch.setattr(llm, "chat", chat)
+    d = cliente.post("/api/consulta/simple", json={"pregunta": _PREGUNTA_PUESTOS}, headers=cab(cliente, "marta")).json()
+    assert d["respuesta"] == "Producción tiene tres puestos: Prensas, Montaje línea 2 y Soldadura [1]."
+    assert d["con_respaldo"] is True and d["laguna_id"] is None
+
+
+def test_extractiva_de_una_ficha_da_la_solucion():
+    """«La prensa 3 se ha atascado al cambiar el molde. ¿Qué hago?» se parece sobre todo al «Problema» de la
+    ficha, que solo repite la pregunta: la respuesta extractiva da su «Solución»."""
+    from cidia.servicios.consulta import Preparada, evidencia, respuesta_extractiva
+
+    texto = ("Pregunta: ¿Por qué se atasca la prensa 3 después de cambiar el molde?\n"
+             "Problema: La prensa 3 se atasca o se queda parada con la alarma A12 justo después de cambiar de molde.\n"
+             "Causa: El sensor S4 de presencia de pieza queda sucio tras el cambio.\n"
+             "Solución: Con la prensa en modo manual, limpiar el sensor S4 con aire a baja presión y reiniciar el ciclo.\n")
+    fuentes = [{"n": 1, "documento_id": 7, "titulo": "Atasco en la prensa 3 al cambiar de molde", "version": 1, "similitud": 0.7}]
+    pregunta = "La prensa 3 se ha atascado al cambiar el molde. ¿Qué hago?"
+    ev = evidencia(fuentes, [texto], pregunta)
+    assert ev and ev[0].texto.startswith("Problema:")
+    prep = Preparada(pregunta=pregunta, modo="normal", mensajes=[], fuentes=fuentes, con_contexto=True, modelo="m",
+                     temperatura=0.2, max_tokens=None, evidencia=ev, textos_evidencia={1: texto}, pregunta_terminos=pregunta)
+    r = respuesta_extractiva(prep)
+    assert r.startswith("Según «Atasco en la prensa 3 al cambiar de molde» (v1): Solución: Con la prensa en modo manual")
+    assert "Problema" not in r and r.rstrip().endswith("[1].")

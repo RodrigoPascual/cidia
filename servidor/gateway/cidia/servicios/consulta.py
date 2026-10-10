@@ -69,6 +69,15 @@ _RE_CITA = re.compile(r"\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]")
 _RE_PENSAMIENTO = re.compile(r"<think>.*?</think>\s*", re.S | re.I)
 _RE_ETIQUETA_PENSAMIENTO = re.compile(r"</?think>\s*", re.I)
 _ETIQUETAS_PENSAMIENTO = ("<think>", "</think>")
+# Eco de la regla del modo planta («empieza con SIN_RESPALDO, di que no lo sabes…»): qwen3:0.6b escribe
+# a veces «SIN_RESPALDO, no lo sabes.». Eso no es una respuesta: se quita (y, si no queda nada, se muestra
+# el «no lo he encontrado» de siempre).
+_RE_ECO_REGLA = re.compile(r"(?:y\s+)?(?:di\s+)?(?:que\s+)?no lo sabes\b[^.!\n]*[.!\n]?\s*", re.I)
+_ECOS_REGLA = ("no lo sabes", "y di que no lo sabes", "di que no lo sabes", "que no lo sabes")
+# «La respuesta está en el fragmento [2].» / «El dato aparece en el fragmento 2:» al principio de la respuesta.
+_RE_ECO_FRAGMENTO = re.compile(
+    r"^\s*(?:la respuesta|el dato|la informaci[oó]n)\s+(?:est[aá]|se encuentra|aparece|viene)\s+en\s+el\s+fragmento\s*"
+    r"\[?(\d{1,2})\]?\s*(?:del contexto\s*)?[.:,]\s*", re.I)
 # El modelo dice que la documentación no responde (con o sin la marca SIN_RESPALDO).
 _RE_NIEGA = re.compile(
     r"\bno (?:lo |la |los |las |se )?(?:encuentr|he encontrado|hemos encontrado|aparece|figura|consta|indica|"
@@ -335,6 +344,7 @@ class Frase:
     texto: str
     en_frase: int  # palabras de la pregunta que están en la propia frase (las demás, en el título o el apartado)
     similitud: float
+    literales: int = 0  # palabras y cifras de la pregunta que la frase repite tal cual («más de 12.000»)
 
 
 def respaldo_claro(encontrados: list[Encontrado], pregunta: str) -> bool:
@@ -366,6 +376,11 @@ def _tiene_numero(texto_normal: str, contado: str | None) -> bool:
     return bool(re.search(rf"(?:\d+(?:[.,]\d+)*|\b(?:{_NUMEROS}))\s+(?:[a-z]+\s+)?{re.escape(contado)}", texto_normal))
 
 
+def _literales(texto: str) -> frozenset[str]:
+    """Palabras (sin tildes, también las cortas como «de» o «más») y cifras de un texto, tal cual."""
+    return frozenset(re.findall(r"\d+(?:[.,]\d+)*|[a-z]+", _normal(texto)))
+
+
 def evidencia(fuentes: list[dict[str, Any]], textos: list[str], pregunta: str,
               empresa: str | None = None) -> list[Frase]:
     """Frases de los fragmentos que responden claramente a la pregunta, de la mejor a la peor.
@@ -386,6 +401,7 @@ def evidencia(fuentes: list[dict[str, Any]], textos: list[str], pregunta: str,
         return []
     pide_numero, contado = _pide_numero(pregunta)
     nombres = {r[0] for r in referencias}
+    literales = _literales(pregunta)
     frases: list[Frase] = []
     for f, texto in zip(fuentes, textos):
         cabeza = f"{f.get('titulo') or ''} {f.get('codigo') or ''}"
@@ -417,8 +433,11 @@ def evidencia(fuentes: list[dict[str, Any]], textos: list[str], pregunta: str,
             if pide_numero and not _tiene_numero(normal, contado):
                 continue
             frases.append(Frase(f["n"], f.get("documento_id"), i, frase, len(propias),
-                                float(f.get("similitud") or 0.0)))
-    frases.sort(key=lambda x: (-x.en_frase, -x.similitud, x.n, x.posicion))
+                                float(f.get("similitud") or 0.0), len(literales & _literales(frase))))
+    # A igualdad de palabras con contenido, va antes la frase que repite más palabras y cifras de la pregunta:
+    # en «Hasta 3.000 € … / De 3.000 a 12.000 € … / Más de 12.000 € …», a «¿quién aprueba compras de más de
+    # 12.000 €?» responde la tercera, no la primera de la lista.
+    frases.sort(key=lambda x: (-x.en_frase, -x.literales, -x.similitud, x.n, x.posicion))
     return frases
 
 
@@ -439,10 +458,21 @@ def _contexto_directo(fuentes: list[dict[str, Any]], textos: list[str], frases: 
     return "\n\n".join(bloques)
 
 
+_RE_PROBLEMA = re.compile(r"^\s*(?:problema|pregunta|s[ií]ntoma)\s*:", re.I)
+_RE_SOLUCION = re.compile(r"^\s*soluci[oó]n\s*:", re.I)
+
+
 def respuesta_extractiva(prep: Preparada) -> str:
     """Respuesta compuesta con las 1-3 frases que mejor responden, del mismo documento, sin Markdown,
     precedidas de «Según «título» (vN):» y con su cita."""
     mejor = prep.evidencia[0]
+    # En una ficha «Problema / Causa / Solución» (aportaciones y notas de voz), la frase que más se parece
+    # a la pregunta suele ser el problema, que solo la repite: la respuesta es la solución de esa ficha.
+    if _RE_PROBLEMA.match(mejor.texto) and mejor.n in prep.textos_evidencia:
+        unidades_ficha = unidades(prep.textos_evidencia[mejor.n])
+        solucion = next(((i, f) for i, (_, f) in enumerate(unidades_ficha) if _RE_SOLUCION.match(f)), None)
+        if solucion:
+            mejor = Frase(mejor.n, mejor.documento_id, solucion[0], solucion[1], mejor.en_frase, mejor.similitud)
     otras: list[Frase] = []
     vistas = {_normal(mejor.texto)}
     completa = len(_raices(prep.pregunta_terminos) - _raices(prep.empresa or ""))
@@ -635,11 +665,16 @@ def _consulta_busqueda(pregunta: str, tarea: dict[str, Any] | None, historial: l
                        persona: dict[str, Any] | None = None) -> tuple[str, str]:
     """Texto que se busca: la pregunta, con la tarea y el paso, el puesto de quien pregunta («mi tarea»)
     o la pregunta anterior si ayudan. Devuelve (texto de la búsqueda, texto con el que se comprueba la
-    coincidencia de palabras: sin la lista de tareas del puesto, que diluiría la pregunta)."""
+    coincidencia de palabras: sin la lista de tareas del puesto, que diluiría la pregunta).
+
+    Con una tarea en curso (modo planta), la coincidencia se comprueba solo con la pregunta: el nombre de la
+    tarea y el título del paso ya están en el título y en el texto del fragmento, y añadidos a la pregunta
+    impedían que ninguna frase reuniera la mitad de sus palabras (sin evidencia, la respuesta de un modelo
+    pequeño que dice SIN_RESPALDO no se rehacía)."""
     if tarea:
         paso = tarea.get("paso") or {}
         texto = " ".join(x for x in (tarea["nombre"], paso.get("titulo") or "", pregunta) if x)
-        return texto, texto
+        return texto, pregunta
     if persona and _RE_MI_PUESTO.search(pregunta):
         tareas = "; ".join(persona["tareas"])
         return f"{pregunta} {persona['puesto']}. {tareas}", f"{pregunta} {persona['puesto']}"
@@ -817,6 +852,16 @@ class FiltroMarca:
         if _RE_MARCA.search(t):
             self.vista = True
             t = _RE_MARCA.sub("", t)
+        if self.vista and not self.emitido:
+            # Tras la marca, el eco de la regla («, no lo sabes.») no llega a la persona. Mientras pueda
+            # serlo (un trozo corto como «, no lo»), se espera al siguiente.
+            s = t.lstrip(" \t\n,;:.-–")
+            m = _RE_ECO_REGLA.match(s)
+            if m and (final or re.search(r"[.!\n]\s*$", m.group(0))):
+                t = s[m.end():]
+            elif not final and not en_pensamiento and (m or any(e.startswith(s.lower()) for e in _ECOS_REGLA)):
+                self.pendiente = t
+                return ""
         retener = 0
         if not final and not en_pensamiento:
             # Un posible comienzo de la marca («SIN_RES», «**») o de una etiqueta («</thi») al final
@@ -830,7 +875,7 @@ class FiltroMarca:
                 retener += 1
         salida, self.pendiente = t[: len(t) - retener], t[len(t) - retener:] + en_pensamiento
         if not self.emitido:
-            salida = salida.lstrip(" \t\n:.-–")
+            salida = salida.lstrip(" \t\n:.,;-–")
             self.emitido = bool(salida)
         return salida
 
@@ -883,6 +928,15 @@ def _sin_eco(prep: Preparada, texto: str) -> str:
             if resto and not citadas(resto, len(prep.fuentes)):
                 resto = re.sub(r"\s*([.!?]?)\s*$", rf" [{n}]\1", resto, count=1)
             texto = resto
+    # «La respuesta está en el fragmento [2]. La gerencia…»: el modelo repite el prompt del reintento. Se
+    # quita esa frase y la cita pasa al final de lo que respalda.
+    m = _RE_ECO_FRAGMENTO.match(texto)
+    if m and texto[m.end():].strip():
+        resto = texto[m.end():].strip()
+        resto = resto[0].upper() + resto[1:]
+        if not citadas(resto, len(prep.fuentes)):
+            resto = re.sub(r"\s*([.!?]?)\s*$", rf" [{m.group(1)}]\1", resto, count=1)
+        texto = resto
     # «[1] La P3 se engrasa…»: la cita va detrás de lo que respalda.
     m = re.match(r"\s*(\[\d{1,2}\])\s*(\S.*)$", texto, re.S)
     if m and not _RE_CITA.search(m.group(2)):

@@ -1,0 +1,27 @@
+{
+  "id": "inicio-javier",
+  "titulo": "Inicio · Javier Martín, jefe de Producción",
+  "bases": "Bases: acompañamiento en el puesto y gestión del conocimiento por equipos",
+  "usuario": "javier",
+  "ruta": "/app/",
+  "esperar_inicio": "Tu equipo",
+  "acciones": [
+    { "marca": "portada" },
+    { "esperar": 700 },
+    { "resaltar": ".ini-portada", "ms": 2200, "nota": "Lo de hoy: saludo, fecha y lo que tiene pendiente" },
+    { "hoverTexto": "por validar", "pausa": 900 },
+    { "marca": "equipo" },
+    { "scroll": 520, "en": ".ini-portada" },
+    { "resaltarTexto": "Tu equipo", "ms": 1800 },
+    { "marca": "lagunas" },
+    { "clic": ".ini-item[href$='/lagunas']" },
+    { "esperarTexto": "veces", "max": 15000 },
+    { "esperar": 1500 }
+  ],
+  "duracion_minima_ms": 9000,
+  "narracion": [
+    { "marca": "portada", "texto": "Así empieza el día de Javier, jefe de Producción. CidIA le saluda y le resume lo que tiene pendiente: aportaciones de su equipo por validar y preguntas que nadie ha documentado." },
+    { "marca": "equipo", "texto": "Más abajo ve a su equipo de un vistazo." },
+    { "marca": "lagunas", "texto": "Con un clic llega a las lagunas: las preguntas que la planta repite y que todavía no tienen respuesta." }
+  ]
+}

@@ -74,6 +74,21 @@ pandas, NumPy, contourpy y lxml (BSD-3-Clause); Matplotlib (licencia de Matplotl
 | Qwen3 0.6B, Qwen3.5 0.8B | Apache-2.0 | Solo pruebas en el servidor ARM |
 | Whisper (faster-whisper base, small, large-v3-turbo) | MIT | Transcripción |
 
+## Herramientas de vídeo (`herramientas/video/`, no se distribuyen)
+
+Sirven solo para producir el vídeo de demostración; se descargan en `herramientas/video/.herramientas/` (fuera de git) y ninguna va dentro de CidIA. Detalle y comparación de voces en [`herramientas/video/README.md`](herramientas/video/README.md).
+
+| Componente | Licencia | Uso |
+|---|---|---|
+| Kokoro-82M (hexgrad), voces em_alex y ef_dora | Apache-2.0 | Voz del vídeo, sintetizada en local |
+| kokoro-onnx 0.6.1, ONNX Runtime | MIT | Ejecutar Kokoro |
+| phonemizer 3.4, espeak-ng (en espeakng-loader, MIT) | GPL-3.0 | Texto a fonemas; se usan como programas aparte, el audio generado no queda sujeto a la GPL |
+| NumPy, soundfile (libsndfile LGPL-2.1), Pillow | BSD-3-Clause / MIT-CMU | Audio, tarjetas y rótulos |
+| Fira Sans en TTF (google/fonts) | SIL Open Font License 1.1 | Tipografía del vídeo |
+| FFmpeg LGPL de BtbN con OpenH264 (BSD-2-Clause) y libass (ISC) | LGPL-3.0 | Grabación, montaje y codificación |
+| Microsoft Edge sin cabeza (o Chromium) | Licencia de Microsoft / BSD | Dibuja la interfaz para grabarla |
+| Piper 2023.11.14-2 y voz es_ES-carlfm-x_low | MIT / dominio público | Solo para comparar voces (las demás voces es_ES de Piper derivan de datos de licencia de investigación o NC y no se usan) |
+
 ## Descartados por licencia
 
 ParadeDB (AGPL-3.0), speaches (incluye piper-tts y phonemizer, GPL-3.0), ruedas binarias de PyAV (incluyen x264/x265, GPL), ffmpeg de Debian/Ubuntu (GPL), psycopg (LGPL dentro del proceso), Redis 7.4 o posterior, Llama y Gemma (condiciones de uso propias), Open WebUI, Dify y FastGPT (cláusulas de marca o de uso), Zitadel y Permify (AGPL), Docker Desktop (propietario).
