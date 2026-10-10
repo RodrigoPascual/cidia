@@ -191,6 +191,13 @@
   content: ''; position: absolute; top: 100%; right: 22px; border: 6px solid transparent; border-top-color: var(--tinta);
 }
 .voz-onda { width: 8px; height: 8px; border-radius: 50%; background: #ff8f7d; animation: latido 1.2s ease-out infinite; }
+/* Sin micrófono (http desde otro equipo): el botón sigue a la vista y explica por qué no graba. */
+.boton-microfono.no-disponible { color: var(--pizarra-2); border-style: dashed; touch-action: auto; }
+.boton-microfono.no-disponible:hover { border-color: var(--pizarra-2); color: var(--pizarra); }
+.voz-globo.voz-globo-aviso {
+  white-space: normal; width: min(340px, calc(100vw - 48px)); display: block; line-height: 1.45; padding: 10px 13px;
+}
+.voz-globo.voz-globo-aviso strong { display: block; margin-bottom: 2px; color: var(--acento); }
 
 /* ----------------------------------------------------------- panel de la fuente */
 

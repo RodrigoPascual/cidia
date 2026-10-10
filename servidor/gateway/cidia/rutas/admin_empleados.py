@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from cidia.db import obtener_bd
 from cidia.modelos import Departamento, Formacion, Nivel, Puesto, Sesion, Tarea, Usuario
@@ -154,6 +154,8 @@ def listar(
         patron = f"%{texto.strip().lower()}%"
         q = q.where(or_(func.lower(Usuario.nombre).like(patron), func.lower(Usuario.usuario).like(patron),
                         func.lower(func.coalesce(Usuario.email, "")).like(patron)))
+    # Departamento, nivel y puesto en tres consultas en total (no tres por persona).
+    q = q.options(selectinload(Usuario.departamento), selectinload(Usuario.nivel), selectinload(Usuario.puesto))
     filas = bd.scalars(q.order_by(Usuario.activo.desc(), Usuario.nombre).limit(2000)).all()
     activas = _activas_por_usuario(bd, [u.id for u in filas])
     return {
@@ -255,7 +257,8 @@ def crear(datos: DatosEmpleado, actor: Actor = Depends(requiere_admin), bd: Sess
     """Alta de una cuenta. Si es local, la contraseña inicial se devuelve solo en esta respuesta."""
     limpio = _validar_empleado(bd, datos.model_dump(exclude_unset=True), None)
     contrasena = generar_contrasena() if limpio["origen_identidad"] == "local" else None
-    u = Usuario(**limpio, hash_contrasena=hash_contrasena(contrasena) if contrasena else None)
+    u = Usuario(**limpio, hash_contrasena=hash_contrasena(contrasena) if contrasena else None,
+                debe_cambiar_contrasena=bool(contrasena))  # la inicial se cambia en el primer acceso
     bd.add(u)
     bd.flush()
     bd.refresh(u)
@@ -328,6 +331,7 @@ def restablecer_contrasena(usuario_id: int, actor: Actor = Depends(requiere_admi
                                  f"{ORIGENES.get(u.origen_identidad, 'el directorio de la empresa').lower()}, no en CidIA.")
     temporal = generar_contrasena()
     u.hash_contrasena = hash_contrasena(temporal)
+    u.debe_cambiar_contrasena = True  # la temporal se cambia en el siguiente acceso
     _revocar_sesiones(bd, u.id, salvo=actor.sesion.id if u.id == actor.id else None)
     auditar(bd, actor, "restablecer_contrasena", "usuario", u.id,
             {"resumen": f"Restableció la contraseña de {u.nombre}"})

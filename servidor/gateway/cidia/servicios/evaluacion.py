@@ -20,9 +20,11 @@ import re
 import unicodedata
 from typing import Any
 
+from collections import defaultdict
+
 from fastapi import HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 
 from cidia import trabajos
 from cidia.config import ajustes
@@ -587,6 +589,10 @@ def siguiente_paso(fila: NivelIluo, ev: iluo.Evidencias) -> str | None:
         return None
     for r in ev.requisitos():
         if r["nivel"] <= max(fila.nivel + 1, 1) and not r["cumplido"]:
+            if r["nivel"] <= fila.nivel and ev.nivel < fila.nivel and not fila.requiere_reevaluacion:
+                # Nivel puesto a mano (ajuste o matriz en papel): para subir cuentan también las
+                # evidencias de los niveles que ya tiene, y sin esta aclaración el texto confunde.
+                return f"{r['falta']} El nivel actual se asignó a mano y aún no tiene evidencias en CidIA."
             return r["falta"]
     for r in ev.requisitos():
         if not r["cumplido"]:
@@ -752,19 +758,35 @@ def _cuestionarios_de(bd: Session, actor: Actor) -> list[dict[str, Any]]:
 
     assert actor.usuario is not None
     cfg = iluo.configuracion(bd)
+    tareas = progreso.tareas_de(bd, actor.usuario)
+    # Una consulta por tipo de dato para todas las tareas (esto se calcula también para el
+    # contador del menú en cada cambio de pantalla).
+    vigentes = iluo.instrucciones_vigentes(bd, [t.id for t in tareas])
+    ins_ids = [i.id for i in vigentes.values()]
+    aprobadas: dict[int, int] = {}
+    por_instruccion: defaultdict[int, list[IntentoEval]] = defaultdict(list)
+    filas: dict[int, NivelIluo] = {}
+    if ins_ids:
+        aprobadas = {i: n for i, n in bd.execute(
+            select(PreguntaEval.instruccion_id, func.count(PreguntaEval.id))
+            .where(PreguntaEval.instruccion_id.in_(ins_ids), PreguntaEval.estado == "aprobada")
+            .group_by(PreguntaEval.instruccion_id))}
+        for it in bd.scalars(select(IntentoEval).where(IntentoEval.usuario_id == actor.id,
+                                                       IntentoEval.instruccion_id.in_(ins_ids))
+                             .order_by(IntentoEval.creado.desc())):
+            por_instruccion[it.instruccion_id].append(it)
+        filas = {f.tarea_id: f for f in bd.scalars(select(NivelIluo).where(
+            NivelIluo.usuario_id == actor.id, NivelIluo.tarea_id.in_(list(vigentes))))}
     salida = []
-    for tarea in progreso.tareas_de(bd, actor.usuario):
-        ins = iluo.instruccion_vigente(bd, tarea.id)
+    for tarea in tareas:
+        ins = vigentes.get(tarea.id)
         if ins is None:
             continue
-        n = bd.scalar(select(func.count(PreguntaEval.id)).where(PreguntaEval.instruccion_id == ins.id,
-                                                                PreguntaEval.estado == "aprobada")) or 0
+        n = aprobadas.get(ins.id, 0)
         if not n:
             continue
-        intentos = bd.scalars(select(IntentoEval).where(IntentoEval.usuario_id == actor.id,
-                                                        IntentoEval.instruccion_id == ins.id)
-                              .order_by(IntentoEval.creado.desc())).all()
-        fila = iluo.fila_de(bd, actor.id, tarea.id)
+        intentos = por_instruccion.get(ins.id, [])
+        fila = filas.get(tarea.id)
         # Solo cuenta un aprobado dentro de la ventana de validez (el mismo criterio que el nivel ILUO).
         desde = iluo.inicio_ventana(fila, cfg)
         aprobado = any(i.aprobado and i.creado >= desde for i in intentos)
@@ -787,16 +809,28 @@ def _cuestionarios_de(bd: Session, actor: Actor) -> list[dict[str, Any]]:
 
 def _preguntas_por_revisar(bd: Session, actor: Actor) -> list[dict[str, Any]]:
     q = (select(Instruccion).join(Tarea, Tarea.id == Instruccion.tarea_id).join(Puesto, Puesto.id == Tarea.puesto_id)
+         .options(contains_eager(Instruccion.tarea))
          .where(Instruccion.estado != "obsoleta").order_by(Tarea.nombre, Instruccion.version.desc()))
     if not actor.es_admin:
         q = q.where(Puesto.departamento_id == actor.departamento_id)
+    instrucciones = list(bd.scalars(q).unique().all())
+    ids = [i.id for i in instrucciones]
+    cuentas: defaultdict[int, dict[str, int]] = defaultdict(dict)
+    en_curso: set[int] = set()
+    if ids:
+        for iid, estado, n in bd.execute(select(PreguntaEval.instruccion_id, PreguntaEval.estado, func.count())
+                                         .where(PreguntaEval.instruccion_id.in_(ids))
+                                         .group_by(PreguntaEval.instruccion_id, PreguntaEval.estado)):
+            cuentas[iid][estado] = n
+        en_curso = set(bd.scalars(select(Trabajo.entidad_id).where(
+            Trabajo.tipo == TIPO_TRABAJO, Trabajo.entidad == "instruccion", Trabajo.entidad_id.in_(ids),
+            Trabajo.estado.in_(["pendiente", "en_curso"]))))
     salida = []
-    for ins in bd.scalars(q).all():
-        cuentas = dict(bd.execute(select(PreguntaEval.estado, func.count()).where(PreguntaEval.instruccion_id == ins.id)
-                                  .group_by(PreguntaEval.estado)).all())
-        salida.append({**instruccion_dict(ins), "propuestas": cuentas.get("propuesta", 0),
-                       "aprobadas": cuentas.get("aprobada", 0), "descartadas": cuentas.get("descartada", 0),
-                       "generando": generando(bd, ins.id)})
+    for ins in instrucciones:
+        c = cuentas.get(ins.id, {})
+        salida.append({**instruccion_dict(ins), "propuestas": c.get("propuesta", 0),
+                       "aprobadas": c.get("aprobada", 0), "descartadas": c.get("descartada", 0),
+                       "generando": ins.id in en_curso})
     salida.sort(key=lambda i: (-i["propuestas"], i["estado"] != "publicada", i["tarea"] or ""))
     return salida
 

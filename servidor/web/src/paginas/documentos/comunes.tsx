@@ -59,7 +59,8 @@ export function EstadoEtiqueta({ estado, mensaje, interrumpido }: {
   }
   if (estado === 'procesando') return <Etiqueta tono="amarilla" icono={<Loader2 className="girando" />}>Procesando</Etiqueta>
   if (estado === 'error') return <Etiqueta tono="roja" icono={<AlertTriangle />} title={mensaje ?? undefined}>Con error</Etiqueta>
-  if (estado === 'borrador') return <Etiqueta>Borrador</Etiqueta>
+  if (estado === 'borrador') return <Etiqueta title="Ficha sin publicar: el copiloto todavía no la encuentra.">Borrador</Etiqueta>
+  if (estado === 'obsoleto') return <Etiqueta tono="oscura" title={mensaje ?? 'Sustituido por una versión posterior.'}>Sustituido</Etiqueta>
   return <Etiqueta tono="verde" icono={<CheckCircle2 />}>Listo</Etiqueta>
 }
 

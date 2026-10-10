@@ -632,6 +632,128 @@ def test_borrador_por_segmentos_sin_escenas():
     assert len(vacio["pasos"]) == 1
 
 
+# Transcripción real (faster-whisper base) del vídeo de demostración datos-demo/video/brida-b-sintetico.mp4,
+# con sus errores de reconocimiento, y los cambios de plano que detecta video.escenas en él.
+SEGMENTOS_BRIDA = [
+    {"inicio": 0, "fin": 4, "texto": "Montaje de la brida B en la estación 2 de la línea A2."},
+    {"inicio": 4.8, "fin": 11, "texto": "Paso 1. Preparo la brida B, una junta nueva y 4 tornillos E-10 con su arandela."},
+    {"inicio": 11.8, "fin": 18, "texto": "Paso 2. Limpio el asiento y centro la junta. La junta nunca se reutiliza."},
+    {"inicio": 19, "fin": 27, "texto": "Paso 3 y es crítico. Aprieto los 4 tornillos en cruza 25 Newton metro con la "
+                                       "llave dinamométrica de media pulgada."},
+    {"inicio": 27, "fin": 35, "texto": "Primero a 12 y luego a 25. Paso 4. Marco cada tornillo con el rotulador amarillo."},
+    {"inicio": 36, "fin": 42, "texto": "Paso 5. Prueba de estanqueidad, tapacerrada, 3 bar durante un minuto."},
+    {"inicio": 43, "fin": 48, "texto": "Paso 6. Reviso las marcas, la junta y que no hayar de babas."},
+    {"inicio": 49, "fin": 55, "texto": "Paso 7. Registro el número de serie, pegó la etiqueta verde y al carro de salida."},
+    {"inicio": 55, "fin": 58, "texto": "Brida B montada."},
+]
+ESCENAS_BRIDA = [{"t": t, "puntuacion": 5.0} for t in (4.64, 11.68, 18.76, 30.76, 36.2, 43.16, 49.08, 55.92)]
+# Lo que propuso de verdad el modelo diminuto (qwen3:0.6b) con ese vídeo: se queda en el paso 4, no
+# marca el crítico y rellena el resumen, los riesgos y los EPIs con tiempos y relleno.
+PROPUESTA_DIMINUTA = {
+    "titulo": "Montaje de la brida B",
+    "resumen": "El montaje de la brida B se completa en 58.5 segundos, con pasos clave en 4.6 y 55.9 segundos. "
+               "El paso crítico es el 3 y 4, donde se aprieta los tornillos.",
+    "riesgos": ["riesgo_mínimo"], "epis": ["4.6", "55.9"],
+    "herramientas": ["dinamométrica de media pulgada", "rotulador amarillo"],
+    "pasos": [
+        {"titulo": "Preparo la brida B", "texto": "Coloca la brida B en la estación 2.", "t_inicio": 0, "t_fin": 4},
+        {"titulo": "Limpio el asiento", "texto": "Limpia el asiento.", "t_inicio": 4.8, "t_fin": 11},
+        {"titulo": "Aprieto los tornillos", "texto": "Aprieta los 4 tornillos.", "t_inicio": 11.8, "t_fin": 18},
+        {"titulo": "Marco cada tornillo", "texto": "Marca cada tornillo.", "t_inicio": 19, "t_fin": 27},
+    ],
+}
+
+
+def test_pasos_nombrados_en_voz_alta_mandan(monkeypatch, bd):
+    """El experto dice «Paso 1…», «Paso 2…»: salen sus siete pasos, con lo que dice en cada uno, el
+    paso 3 marcado como crítico porque lo dice y los tiempos en los cambios de plano, aunque el
+    modelo se quede en el cuarto. Del modelo solo se toma lo que sirve (título y herramientas)."""
+    from cidia.ia import llm
+
+    monkeypatch.setattr(llm, "chat_json", lambda *a, **k: PROPUESTA_DIMINUTA)
+    trans = {"texto": " ".join(s["texto"] for s in SEGMENTOS_BRIDA), "segmentos": SEGMENTOS_BRIDA}
+    p, origen = captura.proponer_pasos(bd, trans, ESCENAS_BRIDA, 58.51, "Montaje de la brida B")
+    assert origen == "pasos_narrados"
+    pasos = p["pasos"]
+    assert [x["titulo"] for x in pasos] == [
+        "Preparo la brida B", "Limpio el asiento y centro la junta", "Aprieto los 4 tornillos",
+        "Marco cada tornillo con el rotulador amarillo", "Prueba de estanqueidad", "Reviso las marcas",
+        "Registro el número de serie"]
+    assert pasos[0]["texto"] == "Preparo la brida B, una junta nueva y 4 tornillos E-10 con su arandela."
+    assert pasos[2]["texto"].startswith("Aprieto los 4 tornillos en cruza 25") and "crítico" not in pasos[2]["texto"]
+    assert pasos[2]["texto"].endswith("Primero a 12 y luego a 25.")  # lo que dice hasta el paso siguiente
+    assert [x["es_critico"] for x in pasos] == [False, False, True, False, False, False, False]
+    assert [x["t_inicio"] for x in pasos] == [4.64, 11.68, 18.76, 30.76, 36.2, 43.16, 49.08]
+    assert pasos[-1]["t_fin"] == 58.51 and all(x["t_fin"] == y["t_inicio"] for x, y in zip(pasos, pasos[1:]))
+    # Datos generales: los del modelo que sirven; el resumen de relleno se cambia por la presentación.
+    assert p["titulo"] == "Montaje de la brida B" and p["herramientas"] == "dinamométrica de media pulgada\nrotulador amarillo"
+    assert p["epis"] == "" and p["riesgos"] == ""
+    assert p["resumen"] == "Montaje de la brida B en la estación 2 de la línea A2."
+
+
+def test_pasos_narrados_solo_con_una_secuencia_creciente():
+    seg = [{"inicio": 0, "fin": 10, "texto": "Paso el trapo dos veces. Luego paso 2 veces más."},
+           {"inicio": 10, "fin": 20, "texto": "Primer paso: coloca la pieza. Segundo paso, de seguridad: baja la "
+                                              "pantalla. Tercer paso, que es crítico: aprieta los tornillos."}]
+    r = captura.pasos_narrados(seg, 20.0)
+    assert r and [x["titulo"] for x in r["pasos"]] == ["Coloca la pieza", "Baja la pantalla", "Aprieta los tornillos"]
+    assert [(x["es_critico"], x["es_seguridad"]) for x in r["pasos"]] == [(False, False), (False, True), (True, False)]
+    assert r["intro"].startswith("Paso el trapo") and r["pasos"][0]["t_inicio"] == pytest.approx(10.0)
+    # Menos de tres marcas, o desordenadas: no hay pasos narrados.
+    assert captura.pasos_narrados([{"inicio": 0, "fin": 5, "texto": "Paso 1. Coloca. Paso 2. Aprieta."}], 5) is None
+    assert captura.pasos_narrados([{"inicio": 0, "fin": 5, "texto": "Paso 3. A. Paso 1. B. Paso 7. C. Paso 2. D."}], 5) is None
+
+
+def test_propuesta_corta_se_completa_hasta_el_final(monkeypatch, bd):
+    """Sin pasos nombrados, si el modelo se queda a mitad del vídeo lo que falta llega por el plan B."""
+    from cidia.ia import llm
+
+    segmentos = [{"inicio": i * 10.0, "fin": i * 10.0 + 9, "texto": f"Explicación número {i} de la tarea con detalle."}
+                 for i in range(6)]
+    monkeypatch.setattr(llm, "chat_json", lambda *a, **k: {"pasos": [
+        {"titulo": "Uno", "texto": "Haz lo primero.", "t_inicio": 0, "t_fin": 10},
+        {"titulo": "Dos", "texto": "Haz lo segundo.", "t_inicio": 10, "t_fin": 20}]})
+    escenas = [{"t": 20.0}, {"t": 40.0}]
+    p, origen = captura.proponer_pasos(bd, {"texto": "x", "segmentos": segmentos}, escenas, 60.0, "Tarea")
+    assert origen == "modelo" and [x["titulo"] for x in p["pasos"]][:2] == ["Uno", "Dos"]
+    extra = p["pasos"][2:]
+    assert [(x["t_inicio"], x["t_fin"]) for x in extra] == [(20.0, 40.0), (40.0, 60.0)]
+    assert extra[0]["texto"].startswith("Explicación número 2") and "número 5" in extra[1]["texto"]
+    # Si ya llega casi al final, no se toca.
+    monkeypatch.setattr(llm, "chat_json", lambda *a, **k: {"pasos": [{"titulo": "Todo", "t_inicio": 0, "t_fin": 55}]})
+    p, _ = captura.proponer_pasos(bd, {"texto": "x", "segmentos": segmentos}, escenas, 60.0, "Tarea")
+    assert len(p["pasos"]) == 1
+
+
+def test_relleno_del_modelo_en_listas_y_resumen():
+    assert captura._lista(["4.6", "55.9", "0:05", "12 s", "riesgo_mínimo", "Guantes", "mínimo"]) == "Guantes"
+    assert captura._resumen_limpio("Sirve para montar la brida. Se completa en 58.5 segundos. "
+                                   "El paso crítico es el 3.") == "Sirve para montar la brida."
+    assert captura.titulo_de("Aprieto los 4 tornillos en cruz a 25 N·m con la llave de media pulgada.") == "Aprieto los 4 tornillos"
+    assert captura.titulo_de("Registro el número de serie, pego la etiqueta verde y lo dejo en el carro.") == "Registro el número de serie"
+    assert captura.titulo_de("Limpio el asiento y centro la junta.") == "Limpio el asiento y centro la junta"
+
+
+def test_vision_no_puede_borrar_lo_que_dijo_el_experto():
+    original = "Aprieto los 4 tornillos en cruz a 25 N·m con la llave dinamométrica."
+    assert captura._texto_mejorado("Aprieta los 4 tornillos en cruz a 25 N·m con la llave dinamométrica de 1/2\".",
+                                   original)
+    assert captura._texto_mejorado("Coloca la pieza gris sobre la mesa del puesto de trabajo.", original) is None
+    assert captura._texto_mejorado("Aprieta los tornillos en cruz con la llave dinamométrica.", original) is None  # sin el par
+
+
+def test_cambios_de_plano_suaves_y_movimiento():
+    """Un cambio suave pero aislado (plano fijo, diapositiva) cuenta; el movimiento continuo no."""
+    fijo = [(i / 25, 0.02) for i in range(250)]
+    fijo[100] = (4.0, 3.4)  # cambio suave, rodeado de fotogramas quietos
+    fijo[200] = (8.0, 30.0)  # corte claro
+    assert [e["t"] for e in video.cambios_de_plano(fijo)] == [4.0, 8.0]
+    movimiento = [(i / 25, 3.0 + (i % 5) * 0.5) for i in range(250)]  # cámara en mano: todo puntúa parecido
+    assert video.cambios_de_plano(movimiento) == []
+    assert video.cambios_de_plano([(1.0, 12.0), (2.5, 15.0), (5.0, 11.0)]) == [
+        {"t": 1.0, "puntuacion": 12.0}, {"t": 5.0, "puntuacion": 11.0}]  # separación mínima de 2 s
+
+
 @pytest.mark.ia_real
 def test_pasos_con_el_modelo_real(app, bd):
     """Con el modelo real (diminuto) la propuesta debe ser siempre utilizable (o caer al plan B)."""

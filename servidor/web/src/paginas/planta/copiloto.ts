@@ -76,6 +76,35 @@ export async function consumirRespuesta(
   return r
 }
 
+/**
+ * Prepara las citas del texto para mostrarlas: «[1, 2]» pasa a «[1][2]» (cada número es pulsable) y
+ * se quitan las que no corresponden a ninguna fuente de la respuesta (los modelos pequeños a veces
+ * citan fragmentos que no existen).
+ */
+export function limpiarCitas(texto: string, numeros: (number | undefined)[]): string {
+  const validos = new Set(numeros.filter((n): n is number => typeof n === 'number'))
+  return texto
+    .replace(/\[(\d{1,2}(?:\s*,\s*\d{1,2})+)\]/g, (_, grupo: string) => grupo.split(',').map((n) => `[${n.trim()}]`).join(''))
+    .replace(/ ?\[(\d{1,2})\]/g, (cita: string, n: string) => (validos.has(Number(n)) ? cita : ''))
+}
+
+/**
+ * Por qué no se puede grabar aquí (o null si se puede). Los navegadores solo dejan usar el micrófono
+ * en un contexto seguro: https, el propio equipo (localhost) o la app de escritorio. Desde otro
+ * equipo por http://servidor/app/ no existe `navigator.mediaDevices`.
+ */
+export function motivoSinMicrofono(): string | null {
+  if (typeof window === 'undefined') return null
+  if (!window.isSecureContext) {
+    return 'Por seguridad, el navegador solo deja usar el micrófono en la app de escritorio de CidIA o en una '
+      + 'dirección segura (https). Desde aquí, escribe tu pregunta.'
+  }
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    return 'Este navegador no permite grabar audio. Escribe tu pregunta o usa la app de escritorio de CidIA.'
+  }
+  return null
+}
+
 /** Transcribe una nota de voz en el servidor. Devuelve el texto (vacío si no se ha entendido nada). */
 export async function transcribir(audio: Blob): Promise<string> {
   const fd = new FormData()
@@ -95,6 +124,7 @@ export function etiquetaFuente(f: Fuente): string {
   if (codigo) partes.push(version ? `${codigo} v${version}` : codigo)
   else if (f.titulo) partes.push(f.titulo)
   if (paso) partes.push(`paso ${paso}`)
+  else if (paso === 0 && codigo) partes.push('datos generales') // cabecera de la instrucción
   return partes.join(' · ') || 'Fuente'
 }
 

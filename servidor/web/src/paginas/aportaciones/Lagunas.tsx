@@ -4,16 +4,17 @@
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Ban, Building2, CheckCircle2, Copy, HelpCircle, Inbox, MessageSquare, RotateCcw, Share2, Wrench } from 'lucide-react'
+import { Ban, Building2, CheckCircle2, Copy, HelpCircle, Inbox, Mail, MessageSquare, RotateCcw, Share2, Wrench } from 'lucide-react'
 import { BASE_APP, EMBEBIDA, ErrorApi, fecha, get, hace, post } from '../../api'
 import { useSesion } from '../../sesion'
 import {
-  Area, Boton, Cabecera, ErrorCarga, Esqueleto, Etiqueta, Modal, Pestanas, Selector, Tarjeta, Vacio,
+  Area, Boton, Cabecera, Campo, ErrorCarga, Esqueleto, Etiqueta, Modal, Pestanas, Selector, Tarjeta, Vacio,
   useAvisarError, useAvisos, useConfirmar, useDatos,
 } from '../../ui'
 import { Plegable } from './comun'
 import { copiarTexto, nombreTarea, veces, type EstadoLaguna, type Laguna, type RespuestaLagunas } from './tipos'
 import './aportaciones.css'
+import './jefe.css'
 
 type Orden = 'frecuencia' | 'reciente'
 
@@ -51,17 +52,6 @@ export default function Lagunas() {
     } finally {
       setOcupada(null)
     }
-  }
-
-  function textoParaCompartir(l: Laguna): string {
-    const dep = l.departamento?.nombre ?? perfil?.departamento?.nombre
-    const enlace = EMBEBIDA ? '' : `\n${window.location.origin}${BASE_APP}/aportaciones?laguna=${l.id}`
-    return [
-      `Hola. En CidIA hay una pregunta que el copiloto todavía no sabe responder${dep ? ` en ${dep}` : ''}:`,
-      `«${l.pregunta}»`,
-      `Se ha preguntado ${veces(l.frecuencia)}${l.tarea ? ` (tarea ${nombreTarea(l.tarea)})` : ''}.`,
-      `Si sabes la respuesta, entra en CidIA › Aportaciones › Preguntas pendientes y pulsa «Yo sé la respuesta». ¡Gracias!${enlace}`,
-    ].join('\n')
   }
 
   async function copiar() {
@@ -126,7 +116,9 @@ export default function Lagunas() {
               Cuando valides una aportación que responde a una laguna, aparecerá aquí.
             </Vacio>
           ) : (
-            <Vacio icono={<Ban />} titulo="No hay lagunas descartadas" />
+            <Vacio icono={<Ban />} titulo="No hay lagunas descartadas">
+              Las preguntas que descartes porque no proceden quedarán aquí. Podrás reabrirlas cuando quieras.
+            </Vacio>
           )}
         </Tarjeta>
       ) : (
@@ -178,7 +170,7 @@ export default function Lagunas() {
                 {l.estado === 'abierta' ? (
                   <>
                     <Boton variante="primario" tamano="pequeno" icono={<Share2 />} disabled={ocupada === l.id}
-                      onClick={() => setCompartir({ laguna: l, texto: textoParaCompartir(l) })}>
+                      onClick={() => setCompartir({ laguna: l, texto: textoParaCompartir(l, null, perfil?.departamento?.nombre) })}>
                       Pedir a alguien que la responda
                     </Boton>
                     <Boton variante="fantasma" tamano="pequeno" icono={<Ban />} cargando={ocupada === l.id}
@@ -197,17 +189,94 @@ export default function Lagunas() {
         </div>
       )}
 
-      <Modal abierto={!!compartir} titulo="Pedir a alguien que la responda" onCerrar={() => setCompartir(null)}
-        pie={<>
-          <Boton onClick={() => setCompartir(null)}>Cancelar</Boton>
-          <Boton variante="primario" icono={<Copy />} onClick={copiar}>Copiar texto</Boton>
-        </>}>
-        <p className="apagado">
-          Copia este mensaje y compártelo con quien creas que lo sabe, o en el canal de tu equipo. Puedes retocarlo antes.
-        </p>
-        <Area value={compartir?.texto ?? ''} rows={7} onChange={(e) => compartir && setCompartir({ ...compartir, texto: e.target.value })} />
-      </Modal>
+      {compartir && (
+        <PedirRespuesta laguna={compartir.laguna} texto={compartir.texto} miId={perfil?.id ?? null}
+          departamentoPropio={perfil?.departamento?.nombre}
+          onTexto={(texto) => setCompartir({ ...compartir, texto })} onCopiar={copiar} onCerrar={() => setCompartir(null)} />
+      )}
       {dialogo}
     </>
+  )
+}
+
+/** Mensaje para pedir la respuesta; si se elige a alguien, el saludo lleva su nombre. */
+function textoParaCompartir(l: Laguna, nombre: string | null, departamentoPropio?: string | null): string {
+  const dep = l.departamento?.nombre ?? departamentoPropio
+  const enlace = EMBEBIDA ? '' : `\n${window.location.origin}${BASE_APP}/aportaciones?laguna=${l.id}`
+  return [
+    `Hola${nombre ? `, ${nombre.split(' ')[0]}` : ''}. En CidIA hay una pregunta que el copiloto todavía no sabe responder${dep ? ` en ${dep}` : ''}:`,
+    `«${l.pregunta}»`,
+    `Se ha preguntado ${veces(l.frecuencia)}${l.tarea ? ` (tarea ${nombreTarea(l.tarea)})` : ''}.`,
+    `Si sabes la respuesta, entra en CidIA › Aportaciones › Preguntas pendientes y pulsa «Yo sé la respuesta». ¡Gracias!${enlace}`,
+  ].join('\n')
+}
+
+interface Persona { id: number; nombre: string; email: string | null; es_experto: boolean; nivel: { nombre: string } | null; puesto: { nombre: string } | null }
+
+function PedirRespuesta({ laguna, texto, miId, departamentoPropio, onTexto, onCopiar, onCerrar }: {
+  laguna: Laguna; texto: string; miId: number | null; departamentoPropio?: string | null
+  onTexto: (t: string) => void; onCopiar: () => void; onCerrar: () => void
+}) {
+  const depId = laguna.departamento?.id
+  // Las personas del departamento de la laguna (la administración ve todas; un jefe, la suya).
+  const equipo = useDatos((s) => depId
+    ? get<{ empleados: Persona[] }>(`/api/admin/empleados?departamento_id=${depId}&activo=true`, s).catch(() => ({ empleados: [] }))
+    : Promise.resolve({ empleados: [] as Persona[] }), [depId])
+  const [quien, setQuien] = useState('')
+  const personas = (equipo.datos?.empleados ?? [])
+    .filter((p) => p.id !== miId)
+    .sort((a, b) => Number(b.es_experto) - Number(a.es_experto) || a.nombre.localeCompare(b.nombre, 'es'))
+  const elegida = personas.find((p) => String(p.id) === quien) ?? null
+
+  const elegir = (id: string) => {
+    setQuien(id)
+    const p = personas.find((x) => String(x.id) === id) ?? null
+    onTexto(textoParaCompartir(laguna, p?.nombre ?? null, departamentoPropio))
+  }
+  const correo = elegida?.email
+    ? `mailto:${encodeURIComponent(elegida.email)}?subject=${encodeURIComponent('Pregunta pendiente en CidIA')}&body=${encodeURIComponent(texto)}`
+    : null
+
+  return (
+    <Modal abierto titulo="Pedir a alguien que la responda" onCerrar={onCerrar}
+      pie={<>
+        <Boton onClick={onCerrar}>Cancelar</Boton>
+        {correo && (
+          <a className="boton secundario" href={correo} target="_blank" rel="noreferrer" onClick={() => setTimeout(onCerrar, 300)}>
+            <Mail /> Escribir correo
+          </a>
+        )}
+        <Boton variante="primario" icono={<Copy />} onClick={onCopiar}>Copiar texto</Boton>
+      </>}>
+      <p className="apagado">
+        Elige a quien creas que lo sabe (las personas expertas aparecen primero) o compártelo en el canal de tu equipo.
+        Puedes retocar el mensaje antes de enviarlo.
+      </p>
+      {personas.length > 0 && (
+        <div className="apo-pedir-a">
+          <Campo etiqueta="¿A quién se lo pides?">
+            <select className="selector" value={quien} onChange={(e) => elegir(e.target.value)}>
+              <option value="">A cualquiera del equipo</option>
+              {[{ titulo: 'Personas expertas', lista: personas.filter((p) => p.es_experto) },
+                { titulo: 'Resto del equipo', lista: personas.filter((p) => !p.es_experto) }]
+                .filter((g) => g.lista.length)
+                .map((g) => (
+                  <optgroup key={g.titulo} label={g.titulo}>
+                    {g.lista.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}{p.puesto ? ` · ${p.puesto.nombre}` : p.nivel ? ` · ${p.nivel.nombre}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+            </select>
+          </Campo>
+        </div>
+      )}
+      <Area value={texto} rows={7} aria-label="Mensaje" onChange={(e) => onTexto(e.target.value)} />
+      {elegida && !elegida.email && (
+        <div className="diminuto apagado mt-1">{elegida.nombre} no tiene correo en CidIA: copia el texto y envíaselo por el canal habitual.</div>
+      )}
+    </Modal>
   )
 }

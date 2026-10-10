@@ -97,19 +97,21 @@ export default function ProbarBusqueda({ opciones, onAbrir }: { opciones: Opcion
   const [k, setK] = useState(String(Math.min(20, opciones.fragmentos_por_consulta || 6)))
   const [buscando, setBuscando] = useState(false)
   const [resultado, setResultado] = useState<RespuestaBusqueda | null>(null)
+  const [comoOtro, setComoOtro] = useState(false) // la última búsqueda se hizo como otra persona
   // Las cantidades habituales más la que usa el copiloto en este servidor (máximo 20, como el servidor).
   const cantidades = useMemo(
     () => Array.from(new Set([3, 6, 10, 20, Math.min(20, opciones.fragmentos_por_consulta || 6)])).sort((a, b) => a - b),
     [opciones.fragmentos_por_consulta],
   )
 
+  // La administración puede buscar como cualquiera (o como invitado); un jefe, como su equipo.
   const personas = useMemo(() => [
     { valor: '', texto: 'Yo mismo' },
-    { valor: 'invitado', texto: 'Invitado sin sesión' },
+    ...(opciones.es_admin ? [{ valor: 'invitado', texto: 'Invitado sin sesión' }] : []),
     ...(opciones.personas ?? []).map((p) => ({
       valor: String(p.id), texto: `${p.nombre}${p.departamento ? ` · ${p.departamento}` : ''}${p.nivel ? ` · ${p.nivel}` : ''}`,
     })),
-  ], [opciones.personas])
+  ], [opciones.personas, opciones.es_admin])
 
   async function buscar(pregunta = consulta) {
     const q = pregunta.trim()
@@ -121,6 +123,7 @@ export default function ProbarBusqueda({ opciones, onAbrir }: { opciones: Opcion
       if (como === 'invitado') cuerpo.como_invitado = true
       else if (como) cuerpo.como_usuario_id = Number(como)
       setResultado(await post<RespuestaBusqueda>('/api/documentos/probar-busqueda', cuerpo))
+      setComoOtro(!!como)
     } catch (e) {
       avisarError(e)
     } finally {
@@ -146,9 +149,10 @@ export default function ProbarBusqueda({ opciones, onAbrir }: { opciones: Opcion
               </Boton>
             </div>
             <div className="fila envolver mt-2" style={{ gap: 12, alignItems: 'flex-end' }}>
-              {opciones.es_admin && (
+              {(opciones.es_admin || !!opciones.personas?.length) && (
                 <div style={{ flex: '1 1 260px' }}>
-                  <Campo etiqueta="Buscar como">
+                  <Campo etiqueta="Buscar como" ayuda={opciones.es_admin ? undefined
+                    : 'Comprueba qué encontraría cada persona de tu equipo con su nivel y su formación.'}>
                     <Selector value={como} onChange={(e) => setComo(e.target.value)} opciones={personas} />
                   </Campo>
                 </div>
@@ -228,6 +232,9 @@ export default function ProbarBusqueda({ opciones, onAbrir }: { opciones: Opcion
                 </div>
               ))}
             </div>
+            {!opciones.es_admin && comoOtro && (
+              <p className="pequeno apagado mt-1">Solo se muestran los documentos que tú también puedes ver.</p>
+            )}
             {resultado.ambitos && (
               <>
                 <div className="separador" />

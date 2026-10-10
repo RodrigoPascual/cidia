@@ -15,6 +15,7 @@ import {
 import { AreaAuto, EditorEtiquetas, Plegable, useSondeo } from './comun'
 import { mmss, nombreTarea, veces, type Aportacion, type Opciones, type RespuestaLagunas, type RespuestaPendientes } from './tipos'
 import './aportaciones.css'
+import './jefe.css'
 
 export default function Validar() {
   const { perfil } = useSesion()
@@ -50,19 +51,20 @@ export default function Validar() {
   }
 
   const departamento = perfil?.rol === 'admin' ? 'Toda la planta' : perfil?.departamento?.nombre
+  const procesando = lista.length - pendientes
   return (
     <>
       <Cabecera
         antetitulo={<><Inbox size={14} /> Mi equipo</>}
         titulo={<>Aportaciones pendientes{departamento ? <span className="apagado apo-titulo-dep"> · {departamento}</span> : null}</>}
         subtitulo="Lo que ha resuelto tu equipo. Al validarlo se publica como pregunta frecuente y el copiloto lo citará con su autor y contigo como validador."
-        acciones={bandeja.datos && pendientes > 0 && <Etiqueta tono="amarilla">{pendientes} por revisar</Etiqueta>}
       />
 
       {bandeja.datos && (
-        <div className="rejilla c3 mb-3">
-          <Dato icono={<Inbox />} valor={bandeja.datos.resumen.pendientes + bandeja.datos.resumen.procesando} etiqueta="Por revisar" />
-          <Dato icono={<CheckCircle2 />} tono="verde" valor={bandeja.datos.resumen.validadas_30d} etiqueta="Validadas en los últimos 30 días" />
+        <div className="rejilla c3 mb-3 apo-resumen">
+          <Dato icono={<Inbox />} valor={pendientes}
+            etiqueta={procesando > 0 ? `Por revisar · ${procesando} más ordenándose` : 'Por revisar'} />
+          <Dato icono={<CheckCircle2 />} tono="verde" valor={bandeja.datos.resumen.validadas_30d} etiqueta="Validadas en 30 días" />
           <Link to="/lagunas" className="apo-dato-enlace">
             <Dato icono={<HelpCircle />} tono="alerta" valor={lagunas.datos?.contadores.abierta ?? '·'} etiqueta="Lagunas abiertas" />
           </Link>
@@ -169,9 +171,14 @@ function TarjetaRevision({ ap, opciones, saliendo, esAdmin, onCambio, onRevisada
           <Avatar nombre={ap.autor?.nombre} />
           <div className="crece">
             <div className="negrita">{ap.autor?.nombre}</div>
-            <div className="diminuto apagado">CidIA está ordenando su aportación… · {hace(ap.creada)}</div>
+            <div className="diminuto apagado">
+              CidIA está ordenando su {ap.via === 'voz' ? 'nota de voz' : 'aportación'} en problema, causa y solución · {hace(ap.creada)}
+            </div>
           </div>
         </div>
+        {ap.laguna && (
+          <div className="apo-respondia mt-2"><HelpCircle /> Responde a una pregunta pendiente: «{ap.laguna.pregunta}»</div>
+        )}
         <div className="mt-2 columna"><Esqueleto alto={18} ancho="55%" /><Esqueleto alto={60} /></div>
       </Tarjeta>
     )
@@ -307,7 +314,8 @@ function TarjetaRevision({ ap, opciones, saliendo, esAdmin, onCambio, onRevisada
       )}
 
       {editando ? (
-        <Entrada className="apo-titulo-edicion" value={b.titulo} maxLength={300} autoFocus={foco === 'titulo'}
+        <Entrada className="entrada apo-titulo-edicion" value={b.titulo} maxLength={300} autoFocus={foco === 'titulo'}
+          aria-label="Título de la pregunta frecuente"
           onChange={(e) => setB({ ...b, titulo: e.target.value })} placeholder="Título de la pregunta frecuente" />
       ) : (
         <h3 className="apo-revision-titulo editable" {...editable('titulo')}>
@@ -323,18 +331,20 @@ function TarjetaRevision({ ap, opciones, saliendo, esAdmin, onCambio, onRevisada
 
       {editando ? (
         <div className="apo-edicion-etiquetas">
-          <label className="etiqueta-campo"><Layers size={14} /> Nivel mínimo
+          <label className="etiqueta-campo">
+            <span className="apo-campo-titulo"><Layers size={14} /> Nivel mínimo para encontrarla</span>
             <Selector value={b.nivel_minimo} onChange={(e) => setB({ ...b, nivel_minimo: Number(e.target.value) })}
               opciones={(niveles.length ? niveles : [1, 2, 3, 4].map((n) => ({ orden: n, nombre: `Nivel ${n}` })))
                 .map((n) => ({ valor: n.orden, texto: `${n.orden} · ${n.nombre}` }))} />
           </label>
-          <label className="etiqueta-campo"><Wrench size={14} /> Tarea
+          <label className="etiqueta-campo">
+            <span className="apo-campo-titulo"><Wrench size={14} /> Tarea</span>
             <Selector value={b.tarea_id ?? ''} vacio="Ninguna en concreto"
               onChange={(e) => setB({ ...b, tarea_id: e.target.value ? Number(e.target.value) : null })}
               opciones={tareas.map((t) => ({ valor: t.id, texto: nombreTarea(t) }))} />
           </label>
           <div className="apo-edicion-libres">
-            <span className="etiqueta-campo"><Tag size={14} /> Palabras clave</span>
+            <span className="etiqueta-campo apo-campo-titulo"><Tag size={14} /> Palabras clave</span>
             <EditorEtiquetas valor={b.etiquetas} onCambio={(v) => setB({ ...b, etiquetas: v })} />
           </div>
         </div>

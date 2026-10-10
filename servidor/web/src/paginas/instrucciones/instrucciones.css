@@ -172,9 +172,10 @@
 .ins-bloque { border-radius: var(--radio); padding: 12px; border: 1px solid var(--linea-suave); background: #fbfbfc; }
 .ins-bloque-titulo { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 14px; margin-bottom: 8px; }
 .ins-bloque-titulo svg { width: 17px; height: 17px; }
-.ins-bloque.alerta .ins-bloque-titulo svg { color: var(--alerta); }
-.ins-bloque.aviso .ins-bloque-titulo svg { color: var(--aviso); }
-.ins-bloque.info .ins-bloque-titulo svg { color: var(--info); }
+/* Tonos con prefijo: «.aviso» y «.alerta» ya son clases globales (componente Aviso). */
+.ins-bloque.tono-alerta .ins-bloque-titulo svg { color: var(--alerta); }
+.ins-bloque.tono-aviso .ins-bloque-titulo svg { color: var(--aviso); }
+.ins-bloque.tono-info .ins-bloque-titulo svg { color: var(--info); }
 .ins-bloque .area { min-height: 90px; font-size: 14px; }
 .ins-bloque ul { margin: 0; padding-left: 18px; font-size: 14px; }
 .ins-bloque li { margin: 2px 0; }
@@ -213,3 +214,18 @@
 .ins-dif-antes { background: var(--alerta-suave); color: #8f2c1c; text-decoration: line-through; text-decoration-color: rgba(143, 44, 28, 0.5); }
 .ins-dif-despues { background: var(--verde-suave); color: #14634f; }
 .ins-dif-imagen { width: 120px; height: 68px; object-fit: cover; border-radius: 8px; background: var(--tinta); }
+
+/* lo que dijo el experto en el tramo del paso (transcripción de la captura) */
+.ins-panel-ancla { min-width: 0; scroll-margin-top: 12px; }
+.ins-dicho {
+  margin: -4px 0 14px; border: 1px solid var(--linea-suave); border-radius: var(--radio); background: #fbfbfc;
+  padding: 8px 12px;
+}
+.ins-dicho summary {
+  cursor: pointer; display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--pizarra);
+  list-style: none;
+}
+.ins-dicho summary::-webkit-details-marker { display: none; }
+.ins-dicho summary svg { width: 14px; height: 14px; color: var(--acento-oscuro); flex-shrink: 0; }
+.ins-dicho[open] summary { margin-bottom: 6px; }
+.ins-dicho p { margin: 0 0 6px; font-size: 14px; color: var(--tinta-2); font-style: italic; }

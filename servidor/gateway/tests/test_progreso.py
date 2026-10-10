@@ -13,8 +13,9 @@ from ayudas_evaluacion import (
     preguntas_basicas,
 )
 from fabrica import cab
-from sqlalchemy import select
+from sqlalchemy import event, select
 
+from cidia.db import motor_bd
 from cidia.modelos import Auditoria, NivelIluo, SentenciaXapi, ahora
 from cidia.servicios import iluo
 
@@ -37,7 +38,9 @@ def test_mi_progreso_pasaporte(cliente, bd, planta):
     r = cliente.get("/api/progreso/yo", headers=cab(cliente, "luis"))
     assert r.status_code == 200, r.text
     datos = r.json()
-    assert datos["persona"]["nombre"] == "Luis García" and "departamento" not in datos["persona"]
+    assert datos["persona"]["nombre"] == "Luis García"
+    # La cabecera del pasaporte dice el departamento, como en la maqueta del plan.
+    assert datos["persona"]["departamento"] == planta.deps["ot"].nombre
     t = _fila(datos, tarea.id)
     assert t["letra"] == "L" and t["nombre_nivel"] == "Ejecuta con apoyo"
     assert t["siguiente"]["letra"] == "U"
@@ -227,3 +230,63 @@ def test_ajuste_manual_por_api(cliente, bd, planta):
     # El recálculo automático no se lo quita (nunca baja salvo caducidad).
     assert cliente.get("/api/progreso/yo", headers=cab(cliente, "luis")).status_code == 200
     assert nivel_guardado(bd, luis, tarea).nivel == 3
+
+
+def test_itinerario_respeta_el_nivel_de_la_tarea(cliente, bd, planta):
+    """Una tarea de su puesto que exige más nivel no entra en su pasaporte (igual que en el modo planta)."""
+    normal = nueva_tarea(bd, planta, "ot")
+    alta = nueva_tarea(bd, planta, "ot")
+    alta.nivel_minimo = 3
+    bd.commit()
+    ids = {t["tarea"]["id"] for t in cliente.get("/api/progreso/yo", headers=cab(cliente, "luis")).json()["tareas"]}
+    assert normal.id in ids and alta.id not in ids  # Luis es de nivel 1
+    ids = {t["tarea"]["id"] for t in cliente.get("/api/progreso/yo", headers=cab(cliente, "ana")).json()["tareas"]}
+    assert alta.id in ids  # Ana es de nivel 3
+
+
+def test_pasaporte_sin_reescrituras_y_con_pocas_consultas(cliente, bd, planta):
+    """Ver el pasaporte otra vez no reescribe los niveles y no hace una tanda de consultas por tarea."""
+    luis = planta.personas["luis"]
+    for _ in range(4):
+        t = nueva_tarea(bd, planta, "ot")
+        hasta_l(bd, luis, t, nueva_instruccion(bd, t))
+    h = cab(cliente, "luis")
+    primera = cliente.get("/api/progreso/yo", headers=h)  # primera visita: guarda los niveles nuevos
+    assert primera.status_code == 200
+    n_tareas = len(primera.json()["tareas"])
+    assert n_tareas >= 5
+
+    def guardadas() -> dict:
+        bd.expire_all()
+        return {f.tarea_id: f.evidencias.get("actualizado")
+                for f in bd.scalars(select(NivelIluo).where(NivelIluo.usuario_id == luis.id))}
+
+    antes = guardadas()
+    consultas: list[str] = []
+
+    def apuntar(conn, cursor, sentencia, *args):  # noqa: ANN001
+        consultas.append(sentencia)
+
+    event.listen(motor_bd(), "before_cursor_execute", apuntar)
+    try:
+        r = cliente.get("/api/progreso/yo", headers=h)
+    finally:
+        event.remove(motor_bd(), "before_cursor_execute", apuntar)
+    assert r.status_code == 200
+    assert guardadas() == antes
+    assert not [c for c in consultas if c.lstrip().lower().startswith("update iluo")]
+    # Antes eran unas veinte consultas por tarea; ahora un número fijo (más la sesión).
+    assert len(consultas) <= 40, (n_tareas, len(consultas))
+
+
+def test_siguiente_paso_con_nivel_puesto_a_mano(cliente, bd, planta):
+    """Si el nivel se puso a mano y no hay evidencias, el siguiente paso lo explica."""
+    luis = planta.personas["luis"]
+    tarea = nueva_tarea(bd, planta, "ot")
+    nueva_instruccion(bd, tarea)
+    assert cliente.put(f"/api/progreso/iluo/{luis.id}/{tarea.id}", headers=cab(cliente, "ana"),
+                       json={"nivel": 2, "motivo": "Viene de la matriz en papel"}).status_code == 200
+    t = _fila(cliente.get("/api/progreso/yo", headers=cab(cliente, "luis")).json(), tarea.id)
+    assert t["letra"] == "L" and t["siguiente"]["letra"] == "U"
+    assert t["siguiente"]["texto"].startswith("Falta empezar la formación")
+    assert "se asignó a mano" in t["siguiente"]["texto"]

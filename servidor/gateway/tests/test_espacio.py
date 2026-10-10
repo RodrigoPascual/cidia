@@ -529,7 +529,8 @@ def test_ejecutar_sin_ejecutor(cliente, planta, monkeypatch):
     h = cab(cliente, "pedro")
     r = cliente.post("/api/espacio/ejecutar", json={"orden": "ls"}, headers=h)
     assert r.status_code == 503
-    assert r.json()["detail"] == "El espacio de trabajo no está disponible en este servidor."
+    assert r.json()["detail"] == espacio.NO_DISPONIBLE
+    assert "ejecutar órdenes" in espacio.NO_DISPONIBLE and "ficheros" in espacio.NO_DISPONIBLE
     assert cliente.get("/api/espacio/ejecutor", headers=h).json()["disponible"] is False
 
 

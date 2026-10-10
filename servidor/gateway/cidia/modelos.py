@@ -22,6 +22,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -121,6 +122,8 @@ class Usuario(Base):
     es_experto: Mapped[bool] = mapped_column(Boolean, default=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     memoria_activa: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Contraseña inicial o temporal (alta o restablecimiento): hay que cambiarla al entrar.
+    debe_cambiar_contrasena: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     origen_identidad: Mapped[str] = mapped_column(String(20), default="local")  # local | ldap | oidc
     id_externo: Mapped[str | None] = mapped_column(String(200))
     creado: Mapped[datetime] = mapped_column(Fecha, default=ahora)

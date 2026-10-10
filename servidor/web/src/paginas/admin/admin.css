@@ -117,10 +117,19 @@
 .adm-regla h4 { margin: 0 0 4px; font-size: 15px; }
 .adm-regla p { color: var(--pizarra); font-size: 13.5px; margin: 0; }
 .adm-regla .valor-regla { display: flex; align-items: center; gap: 10px; }
-.adm-regla .valor-regla .entrada { text-align: center; font-weight: 700; font-size: 17px; }
+.adm-regla .valor-regla .entrada { text-align: center; font-weight: 700; font-size: 17px; width: 110px; flex-shrink: 0; }
 .adm-regla .unidad { color: var(--pizarra); font-size: 13.5px; white-space: nowrap; }
 .adm-deslizador { width: 100%; accent-color: var(--verde); }
 .adm-porcentaje { font-weight: 700; font-size: 20px; min-width: 56px; text-align: right; }
+
+/* Barra para guardar las reglas: se queda pegada abajo y no tapa el contenido. */
+.adm-barra-guardar {
+  position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--blanco); border: 1px solid var(--linea-suave); border-radius: var(--radio-g);
+  padding: 10px 14px; box-shadow: var(--sombra-1);
+}
+.adm-barra-guardar.con-cambios { border-color: #f0dc95; box-shadow: var(--sombra-2); }
+.adm-barra-guardar.con-cambios .apagado { color: var(--acento-oscuro); font-weight: 600; }
 
 .adm-escala-iluo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 900px) { .adm-escala-iluo { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

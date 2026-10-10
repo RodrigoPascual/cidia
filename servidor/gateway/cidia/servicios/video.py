@@ -153,29 +153,57 @@ def extraer_audio(ruta: str | Path, destino: str | Path) -> Path:
     return destino
 
 
+PICO_MINIMO = 2.5  # puntuación mínima de un cambio suave pero aislado (diapositivas, planos fijos)
+PICO_RELACION = 4.0  # ... que además ha de ser 4 veces mayor que cualquier otra a su alrededor
+PICO_VENTANA = 0.5  # segundos a cada lado con los que se compara
+
+
 def escenas(ruta: str | Path, umbral: float = 10.0, separacion_minima: float = 2.0) -> list[dict[str, float]]:
     """Cambios de escena [{t, puntuacion}] con el filtro scdet.
 
-    `umbral` es la puntuación mínima (0-100) para considerar un cambio de plano; 10 es el valor
-    por defecto de ffmpeg. Se analiza a 320 px de ancho para que sea rápido. Los cambios a menos
-    de `separacion_minima` segundos del anterior se descartan (movimientos bruscos de cámara)."""
-    filtro = f"scale=320:-2,scdet=threshold={umbral:g}:sc_pass=1,metadata=print:file=-"
+    `umbral` es la puntuación (0-100) a partir de la cual siempre hay cambio de plano; 10 es el
+    valor por defecto de ffmpeg. Además cuenta un cambio más suave (desde PICO_MINIMO) si es un pico
+    aislado: en un plano fijo que cambia de golpe (una pieza nueva sobre la mesa, una diapositiva)
+    los fotogramas de alrededor puntúan casi 0, mientras que el movimiento de una cámara en mano da
+    puntuaciones parecidas seguidas y no cuenta. Se analiza a 320 px de ancho para que sea rápido.
+    Los cambios a menos de `separacion_minima` segundos del anterior se descartan."""
+    filtro = f"scale=320:-2,scdet=threshold={umbral:g},metadata=print:file=-"
     r = _ejecutar([_ffmpeg(), "-hide_banner", "-nostats", *_entrada(ruta), "-an", "-sn", "-dn",
                    "-vf", filtro, "-f", "null", "-"], 1800)
-    salida: list[dict[str, float]] = []
-    puntuacion: float | None = None
+    marcos: list[tuple[float, float]] = []  # (segundo, puntuación) de cada fotograma
+    t_actual: float | None = None
     for linea in r.stdout.splitlines():
         linea = linea.strip()
-        if linea.startswith("lavfi.scd.score="):
-            puntuacion = _numero(linea.split("=", 1)[1])
-        elif linea.startswith("lavfi.scd.time="):
-            t = _numero(linea.split("=", 1)[1])
-            if t is None:
+        if linea.startswith("frame:") and "pts_time:" in linea:
+            t_actual = _numero(linea.split("pts_time:", 1)[1].split()[0])
+        elif linea.startswith("lavfi.scd.score=") and t_actual is not None:
+            marcos.append((t_actual, _numero(linea.split("=", 1)[1]) or 0.0))
+            t_actual = None
+    return cambios_de_plano(marcos, umbral, separacion_minima)
+
+
+def cambios_de_plano(marcos: list[tuple[float, float]], umbral: float = 10.0,
+                     separacion_minima: float = 2.0) -> list[dict[str, float]]:
+    """Elige los cambios de plano entre las puntuaciones por fotograma (ver `escenas`)."""
+    salida: list[dict[str, float]] = []
+    izquierda = 0
+    for i, (t, p) in enumerate(marcos):
+        if p < PICO_MINIMO:
+            continue
+        if p < umbral:
+            while marcos[izquierda][0] < t - PICO_VENTANA:
+                izquierda += 1
+            alrededor = 0.0
+            for j in range(izquierda, len(marcos)):
+                if marcos[j][0] > t + PICO_VENTANA:
+                    break
+                if j != i:
+                    alrededor = max(alrededor, marcos[j][1])
+            if p < PICO_RELACION * alrededor:
                 continue
-            if salida and t - salida[-1]["t"] < separacion_minima:
-                continue
-            salida.append({"t": round(t, 3), "puntuacion": round(puntuacion or 0.0, 2)})
-            puntuacion = None
+        if salida and t - salida[-1]["t"] < separacion_minima:
+            continue
+        salida.append({"t": round(t, 3), "puntuacion": round(p, 2)})
     return salida
 
 

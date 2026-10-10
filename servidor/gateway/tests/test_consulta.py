@@ -850,3 +850,99 @@ def test_consulta_real_con_cita(cliente, planta, docs):
     texto = "".join(d["texto"] for e, d in eventos if e == "token")
     assert texto.strip() and "SIN_RESPALDO" not in texto
     assert any(f["titulo"] == "Atasco en la prensa 3" for f in eventos[0][1]["fuentes"])
+
+
+# --------------------------------------------------------------------------- modelos pequeños (qwen3:0.6b)
+
+
+@pytest.mark.parametrize("trozos, esperado", [
+    (["<think>", "\n\nRazono un poco\n", "</think>", "\n\nUsa guantes [1]."], "Usa guantes [1]."),
+    (["<think>\n\n</think>\n\nUsa guantes [1]."], "Usa guantes [1]."),
+    (["</think>\n\nUsa guantes [1]."], "Usa guantes [1]."),  # solo el cierre (la apertura iba en la plantilla)
+    (["Usa guantes", " [1].</thi", "nk> Y gafas."], "Usa guantes [1].Y gafas."),
+    (["Usa guantes [1]. ", "<think>me lo pienso", " y no lo cierro"], "Usa guantes [1]."),
+    (["SIN_RESPALDO <think>no sé</think> No lo encuentro."], "No lo encuentro."),
+])
+def test_filtro_quita_restos_de_razonamiento(trozos, esperado):
+    f = FiltroMarca()
+    salida = "".join(f.alimentar(t) for t in trozos) + f.terminar()
+    assert salida.strip() == esperado
+    assert "think" not in salida
+
+
+def test_respaldada_segun_lo_que_hace_el_modelo():
+    from cidia.servicios.consulta import respaldada
+
+    # Marca y, aun así, responde citando: vale lo que hace.
+    assert respaldada("El sensor S4 se ensucia tras el cambio [1]. Límpialo con aire [2].", True, 3)
+    # Marca y cita, pero dice que no lo encuentra: sin respaldo.
+    assert not respaldada("No encuentro el dato exacto; solo habla del sensor [1].", True, 3)
+    assert not respaldada("No lo encuentro en la documentación.", True, 3)
+    assert not respaldada("Respuesta [7].", True, 3)  # cita que no existe
+    # Sin marca: una negativa sin citas no es respaldo; una respuesta normal sí.
+    assert not respaldada("No he encontrado información sobre eso en la documentación.", False, 2)
+    assert respaldada("Aprieta en cruz a 25 N·m.", False, 2)
+    assert respaldada("No uses nunca el atornillador de impacto [1].", False, 2)
+    assert not respaldada("Lo que sea [1].", False, 0)  # sin fuentes nunca
+
+
+def test_marca_y_respuesta_citada_cuenta_como_respaldo(cliente, bd, planta, docs, ia):
+    """qwen3:0.6b escribe a menudo SIN_RESPALDO y a continuación responde con el fragmento citado: no
+    es una laguna ni se avisa de que no hay documentación."""
+    ia.respuesta = "SIN_RESPALDO\nPara la máquina y limpia el sensor S4 con aire [1]."
+    d = cliente.post("/api/consulta/simple", json={"pregunta": "¿Qué hago si se atasca la prensa 3?"},
+                     headers=cab(cliente, "pedro")).json()
+    assert d["con_respaldo"] is True and d["laguna_id"] is None and d["citadas"] == [1]
+    assert d["aviso_sin_respaldo"] is False and d["respuesta"].startswith("Para la máquina")
+
+
+def test_negativa_sin_marca_es_laguna(cliente, bd, planta, docs, ia):
+    ia.respuesta = "No he encontrado información sobre eso en la documentación disponible."
+    d = cliente.post("/api/consulta/simple", json={"pregunta": "¿Cada cuántos ciclos se limpia el sensor S4 de la prensa 3?"},
+                     headers=cab(cliente, "pedro")).json()
+    assert d["fuentes"] and d["con_respaldo"] is False and d["laguna_id"] and d["aviso_sin_respaldo"] is True
+
+
+def test_respuesta_vacia_del_modelo_no_es_laguna(cliente, bd, planta, docs, ia):
+    ia.respuesta = "<think>solo pienso</think>"
+    d = cliente.post("/api/consulta/simple", json={"pregunta": "¿Qué hago si se atasca la prensa 3?"},
+                     headers=cab(cliente, "pedro")).json()
+    assert d["respuesta"].startswith("No he podido generar") and "think" not in d["respuesta"]
+    assert d["con_respaldo"] is False and d["laguna_id"] is None  # había documentación: falló el modelo
+
+
+def test_puesto_en_el_prompt_solo_si_habla_de_si(cliente, planta, docs, ia):
+    h = cab(cliente, "pedro")
+    cliente.post("/api/consulta/simple", json={"pregunta": "¿Qué hago si se atasca la prensa 3?"}, headers=h)
+    assert "Quién pregunta" not in _ultimo_sistema(ia)
+    cliente.post("/api/consulta/simple", json={"pregunta": "¿Qué EPI necesito en mi puesto?"}, headers=h)
+    assert "Quién pregunta" in _ultimo_sistema(ia)
+
+
+def test_fuente_de_instruccion_lleva_su_tarea(cliente, bd, planta, ia):
+    """La interfaz enlaza la fuente de una instrucción con la tarea (formación o modo planta): el
+    editor de instrucciones solo lo abren expertos, jefes y administración."""
+    tarea = planta.tareas["prod"]
+    ins = Instruccion(tarea_id=tarea.id, codigo="IT-023", version=1, estado="publicada", titulo="Montaje de la brida B")
+    bd.add(ins)
+    bd.flush()
+    doc = documentos.crear_desde_texto(
+        bd, "IT-023 · Montaje de la brida B (v1)", "Paso 0", tipo="instruccion", departamento_id=planta.deps["prod"].id,
+        origen="instruccion", origen_id=ins.id, en_segundo_plano=False,
+        partes=[("Paso 3. Apretar los 4 tornillos de la brida B en cruz a 25 N·m con la llave dinamométrica.",
+                 {"paso": 3, "paso_id": 0, "instruccion_id": ins.id, "codigo": "IT-023"})],
+    )
+    bd.commit()
+    try:
+        ia.respuesta = "Aprieta en cruz a 25 N·m [1]."
+        h = cab(cliente, "pedro")
+        d = cliente.post("/api/consulta/simple", headers=h,
+                         json={"pregunta": "¿A cuántos N·m se aprietan los tornillos de la brida B?"}).json()
+        instr = [f for f in d["fuentes"] if f.get("origen") == "instruccion"]
+        assert instr and all(f["tarea_id"] == tarea.id for f in instr)
+        guardada = cliente.get("/api/consulta/historial?por_pagina=1", headers=h).json()["elementos"][0]
+        assert [f["tarea_id"] for f in guardada["fuentes"] if f.get("origen") == "instruccion"] == [tarea.id] * len(instr)
+    finally:
+        documentos.borrar(bd, bd.get(type(doc), doc.id))
+        bd.execute(delete(Instruccion).where(Instruccion.id == ins.id))
+        bd.commit()

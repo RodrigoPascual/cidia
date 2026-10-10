@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { BookMarked, ExternalLink, Loader2 } from 'lucide-react'
 import { urlServidor } from '../../api'
 import { Aviso, Modal, TextoFormato } from '../../ui'
-import { etiquetaFuente, type Fuente, type Respuesta } from './copiloto'
+import { etiquetaFuente, limpiarCitas, type Fuente, type Respuesta } from './copiloto'
 
 export function RespuestaCopiloto({ respuesta, pensando = 'Buscando en la documentación…' }: {
   respuesta: Respuesta
@@ -13,12 +13,13 @@ export function RespuestaCopiloto({ respuesta, pensando = 'Buscando en la docume
   const [abierta, setAbierta] = useState<Fuente | null>(null)
   const fuentes = respuesta.fuentes ?? []
   const abrirCita = (n: number) => setAbierta(fuentes.find((f, i) => (f.n ?? i + 1) === n) ?? null)
+  const texto = limpiarCitas(respuesta.texto, fuentes.map((f, i) => f.n ?? i + 1))
   return (
     <>
       {!respuesta.texto && !respuesta.terminado && (
         <div className="fila apagado pequeno"><Loader2 className="girando" size={16} /> {pensando}</div>
       )}
-      {respuesta.texto && <TextoFormato texto={respuesta.texto} onCita={abrirCita} />}
+      {texto && <TextoFormato texto={texto} onCita={abrirCita} />}
       {respuesta.error && <div className="mt-1"><Aviso tono="alerta">{respuesta.error}</Aviso></div>}
       {respuesta.terminado && !respuesta.texto && !respuesta.error && (
         <div className="apagado pequeno">

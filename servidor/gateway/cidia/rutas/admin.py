@@ -11,6 +11,7 @@ también los demás routers de administración (`admin_*.py`).
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, TypeVar
 
@@ -20,6 +21,7 @@ from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
 from cidia.arranque import CONFIG_ILUO_POR_DEFECTO
+from cidia.conocimiento import motor
 from cidia.db import obtener_bd
 from cidia.modelos import (
     Aportacion,
@@ -36,7 +38,10 @@ from cidia.modelos import (
     Usuario,
 )
 from cidia.seguridad import Actor, requiere_admin
+from cidia.servicios import documentos
 from cidia.xapi import auditar
+
+log = logging.getLogger("cidia.admin")
 
 router = APIRouter(prefix="/api/admin", tags=["administración"])
 
@@ -357,8 +362,32 @@ def ordenar_niveles(datos: OrdenNiveles, actor: Actor = Depends(requiere_admin),
             "traduccion": {str(k): v for k, v in traduccion.items()},
         })
     bd.commit()
+    if traduccion:
+        _reetiquetar_niveles(bd, sorted(set(traduccion.values())))
     por_nivel = _conteo(bd, Usuario.nivel_id)
     return [nivel_dict(todos[i], por_nivel.get(i, 0)) for i in datos.ids]
+
+
+def _reetiquetar_niveles(bd: Session, niveles: list[int]) -> int:
+    """Con un motor externo (WeKnora), los documentos llevan la etiqueta de su nivel (n1, n2...):
+    tras reordenar, los que han cambiado de número se reetiquetan o, si no se puede, se reindexan.
+    El motor propio filtra por SQL y no necesita nada. Devuelve cuántos documentos se han tocado."""
+    m = motor()
+    if not m.externo or not niveles:
+        return 0
+    docs = bd.scalars(select(Documento).where(Documento.nivel_minimo.in_(niveles), Documento.motor_id.is_not(None),
+                                              Documento.estado == "listo")).all()
+    for d in docs:
+        try:
+            listo = m.reetiquetar(bd, d)
+        except Exception:  # noqa: BLE001  (el motor no responde: se reindexa en segundo plano)
+            log.exception("No se ha podido reetiquetar el documento %s tras reordenar los niveles", d.id)
+            bd.rollback()
+            listo = False
+        if not listo:
+            documentos.reindexar(bd, d)
+    bd.commit()
+    return len(docs)
 
 
 @router.put("/niveles/{nivel_id}")

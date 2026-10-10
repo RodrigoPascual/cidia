@@ -1,13 +1,13 @@
 // Componentes de interfaz de CidIA. Úsalos en todas las páginas para mantener el estilo.
 
 import {
-  createContext, useCallback, useContext, useEffect, useRef, useState,
-  type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes,
-  type TextareaHTMLAttributes,
+  Children, cloneElement, createContext, forwardRef, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState,
+  type ButtonHTMLAttributes, type InputHTMLAttributes, type KeyboardEvent as EventoTeclado, type ReactElement,
+  type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes,
 } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AlertTriangle, CheckCircle2, Info, Loader2, UploadCloud, X, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Info, Loader2, UploadCloud, WifiOff, X, XCircle } from 'lucide-react'
 import { ErrorApi } from '../api'
 
 // ------------------------------------------------------------------ marca
@@ -26,19 +26,23 @@ export function LogoCidia({ tamano = 34 }: { tamano?: number }) {
 
 type VarianteBoton = 'primario' | 'secundario' | 'verde' | 'oscuro' | 'peligro' | 'fantasma'
 
-export function Boton({
-  variante = 'secundario', tamano, icono, cargando, bloque, children, className = '', ...resto
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
+type PropsBoton = ButtonHTMLAttributes<HTMLButtonElement> & {
   variante?: VarianteBoton; tamano?: 'pequeno' | 'grande' | 'enorme'; icono?: ReactNode; cargando?: boolean; bloque?: boolean
-}) {
-  const clases = ['boton', variante, tamano ?? '', bloque ? 'bloque' : '', !children ? 'icono' : '', className].join(' ')
+}
+
+export const Boton = forwardRef<HTMLButtonElement, PropsBoton>(function Boton({
+  variante = 'secundario', tamano, icono, cargando, bloque, children, className = '', ...resto
+}, ref) {
+  const clases = ['boton', variante, tamano ?? '', bloque ? 'bloque' : '', !children ? 'icono' : '', className].filter(Boolean).join(' ')
+  // Un botón solo con icono necesita nombre accesible: si no trae aria-label, usa su title.
+  const nombre = !children && !resto['aria-label'] && typeof resto.title === 'string' ? resto.title : undefined
   return (
-    <button className={clases} disabled={cargando || resto.disabled} {...resto}>
+    <button ref={ref} className={clases} aria-label={nombre} aria-busy={cargando || undefined} {...resto} disabled={cargando || resto.disabled}>
       {cargando ? <Loader2 className="girando" /> : icono}
       {children}
     </button>
   )
-}
+})
 
 // ------------------------------------------------------------------ estructura
 
@@ -62,7 +66,13 @@ export function Tarjeta({ titulo, icono, acciones, pie, children, relleno = true
   relleno?: boolean; className?: string; onClick?: () => void
 }) {
   return (
-    <div className={`tarjeta ${onClick ? 'interactiva' : ''} ${className}`} onClick={onClick}>
+    <div className={`tarjeta ${onClick ? 'interactiva' : ''} ${className}`} onClick={onClick}
+      {...(onClick ? {
+        role: 'button', tabIndex: 0,
+        onKeyDown: (e: EventoTeclado<HTMLDivElement>) => {
+          if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick() }
+        },
+      } : {})}>
       {(titulo || acciones) && (
         <div className="tarjeta-cabecera">
           <h3>{icono}{titulo}</h3>
@@ -81,7 +91,7 @@ export function Dato({ icono, valor, etiqueta, tono }: { icono: ReactNode; valor
       <div className={`icono-dato ${tono ?? ''}`}>{icono}</div>
       <div>
         <div className="valor">{valor}</div>
-        <div className="etiqueta">{etiqueta}</div>
+        <div className="dato-etiqueta">{etiqueta}</div>
       </div>
     </div>
   )
@@ -96,7 +106,7 @@ export function Etiqueta({ children, tono, icono, title }: {
 export function Aviso({ tono, children, titulo }: { tono?: 'exito' | 'alerta' | 'amarillo'; children: ReactNode; titulo?: string }) {
   const icono = tono === 'exito' ? <CheckCircle2 /> : tono === 'alerta' ? <AlertTriangle /> : <Info />
   return (
-    <div className={`aviso ${tono ?? ''}`}>
+    <div className={`aviso ${tono ?? ''}`} role={tono === 'alerta' ? 'alert' : undefined}>
       {icono}
       <div>{titulo && <div className="negrita">{titulo}</div>}{children}</div>
     </div>
@@ -122,7 +132,20 @@ export function Vacio({ icono, titulo, children, accion }: { icono?: ReactNode; 
 }
 
 export function Cargando({ texto = 'Cargando…' }: { texto?: string }) {
-  return <div className="cargando"><Loader2 className="girando" size={20} /> {texto}</div>
+  return <div className="cargando" role="status" aria-live="polite"><Loader2 className="girando" size={20} /> {texto}</div>
+}
+
+/** Esqueleto genérico de una página: cabecera y tarjetas. Para la carga perezosa de las rutas. */
+export function EsqueletoPagina() {
+  return (
+    <div className="esqueleto-pagina" role="status" aria-label="Cargando la página">
+      <Esqueleto alto={13} ancho={120} />
+      <Esqueleto alto={30} ancho="42%" className="mt-1" />
+      <Esqueleto alto={15} ancho="64%" className="mt-1" />
+      <div className="rejilla c3 mt-3">{[0, 1, 2].map((i) => <Esqueleto key={i} alto={86} />)}</div>
+      <Esqueleto alto={260} className="mt-2" />
+    </div>
+  )
 }
 
 export function Esqueleto({ alto = 16, ancho = '100%', className = '' }: { alto?: number; ancho?: number | string; className?: string }) {
@@ -135,21 +158,37 @@ export function BarraProgreso({ valor, tono }: { valor: number; tono?: 'amarilla
 
 export function ErrorCarga({ error, reintentar }: { error: unknown; reintentar?: () => void }) {
   const msg = error instanceof ErrorApi || error instanceof Error ? error.message : String(error)
+  const sinConexion = error instanceof ErrorApi && (error.estado === 0 || error.estado >= 502)
   return (
-    <Vacio icono={<XCircle />} titulo="No se ha podido cargar" accion={reintentar && <Boton onClick={reintentar}>Reintentar</Boton>}>
-      {msg}
-    </Vacio>
+    <div role="alert">
+      <Vacio icono={sinConexion ? <WifiOff /> : <XCircle />}
+        titulo={sinConexion ? 'Sin conexión con el servidor' : 'No se ha podido cargar'}
+        accion={reintentar && <Boton onClick={reintentar}>Reintentar</Boton>}>
+        {msg}
+      </Vacio>
+    </div>
   )
 }
 
 // ------------------------------------------------------------------ formularios
 
+const CONTROLES = new Set<unknown>(['input', 'select', 'textarea'])
+
 export function Campo({ etiqueta, ayuda, children }: { etiqueta?: ReactNode; ayuda?: ReactNode; children: ReactNode }) {
+  // Asocia la etiqueta (y la ayuda) al control cuando el campo contiene uno solo.
+  const id = useId()
+  const unico = Children.count(children) === 1 && isValidElement(children) ? (children as ReactElement<Record<string, unknown>>) : null
+  const esControl = !!unico && (CONTROLES.has(unico.type) || unico.type === Entrada || unico.type === Selector || unico.type === Area)
+  const idControl = esControl ? ((unico!.props.id as string | undefined) ?? id) : undefined
+  const idAyuda = ayuda && esControl ? `${id}-ayuda` : undefined
+  const control = esControl
+    ? cloneElement(unico!, { id: idControl, 'aria-describedby': (unico!.props['aria-describedby'] as string | undefined) ?? idAyuda })
+    : children
   return (
     <div className="campo">
-      {etiqueta && <label>{etiqueta}</label>}
-      {children}
-      {ayuda && <div className="ayuda">{ayuda}</div>}
+      {etiqueta && <label htmlFor={idControl}>{etiqueta}</label>}
+      {control}
+      {ayuda && <div className="ayuda" id={idAyuda}>{ayuda}</div>}
     </div>
   )
 }
@@ -178,7 +217,7 @@ export function Interruptor({ activo, onCambio, etiqueta, deshabilitado }: {
 }) {
   return (
     <label className="interruptor">
-      <input type="checkbox" checked={activo} disabled={deshabilitado} onChange={(e) => onCambio(e.target.checked)} />
+      <input type="checkbox" role="switch" checked={activo} disabled={deshabilitado} onChange={(e) => onCambio(e.target.checked)} />
       <span className="pista" />
       {etiqueta && <span>{etiqueta}</span>}
     </label>
@@ -194,13 +233,27 @@ export function Casilla({ marcada, onCambio, children }: { marcada: boolean; onC
   )
 }
 
-export function Pestanas<T extends string>({ pestanas, activa, onCambio }: {
+export function Pestanas<T extends string>({ pestanas, activa, onCambio, etiqueta }: {
   pestanas: { id: T; texto: ReactNode; icono?: ReactNode; contador?: number }[]; activa: T; onCambio: (id: T) => void
+  etiqueta?: string
 }) {
+  const lista = useRef<HTMLDivElement>(null)
+  // Flechas, Inicio y Fin mueven entre pestañas (patrón ARIA de pestañas).
+  const tecla = (e: EventoTeclado<HTMLDivElement>) => {
+    const i = pestanas.findIndex((p) => p.id === activa)
+    const destino = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0
+      : e.key === 'End' ? pestanas.length - 1 : null
+    if (destino === null || !pestanas.length) return
+    e.preventDefault()
+    const j = (destino + pestanas.length) % pestanas.length
+    onCambio(pestanas[j].id)
+    requestAnimationFrame(() => lista.current?.querySelectorAll<HTMLButtonElement>('[role=tab]')[j]?.focus())
+  }
   return (
-    <div className="pestanas" role="tablist">
+    <div className="pestanas" role="tablist" aria-label={etiqueta} ref={lista} onKeyDown={tecla}>
       {pestanas.map((p) => (
-        <button key={p.id} role="tab" className={`pestana ${p.id === activa ? 'activa' : ''}`} onClick={() => onCambio(p.id)}>
+        <button key={p.id} type="button" role="tab" aria-selected={p.id === activa} tabIndex={p.id === activa ? 0 : -1}
+          className={`pestana ${p.id === activa ? 'activa' : ''}`} onClick={() => onCambio(p.id)}>
           {p.icono}{p.texto}{p.contador !== undefined && <span className="contador">{p.contador}</span>}
         </button>
       ))}
@@ -216,7 +269,9 @@ export function ZonaSubida({ onFicheros, acepta, multiple, texto, detalle }: {
   return (
     <div
       className={`zona-subida ${encima ? 'encima' : ''}`}
+      role="button" tabIndex={0}
       onClick={() => ref.current?.click()}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ref.current?.click() } }}
       onDragOver={(e) => { e.preventDefault(); setEncima(true) }}
       onDragLeave={() => setEncima(false)}
       onDrop={(e) => {
@@ -240,19 +295,44 @@ export function ZonaSubida({ onFicheros, acepta, multiple, texto, detalle }: {
 const pilaModales: number[] = []
 let siguienteModal = 1
 
+const ENFOCABLES = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), '
+  + 'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 export function Modal({ abierto, titulo, onCerrar, children, pie, ancho }: {
   abierto: boolean; titulo: ReactNode; onCerrar: () => void; children: ReactNode; pie?: ReactNode; ancho?: boolean
 }) {
   const cerrar = useRef(onCerrar)
   cerrar.current = onCerrar
+  const caja = useRef<HTMLDivElement>(null)
+  const idTitulo = useId()
   useEffect(() => {
     if (!abierto) return
     const id = siguienteModal++
     pilaModales.push(id)
+    const anterior = document.activeElement as HTMLElement | null
+    // Foco dentro del diálogo: el primer campo si lo hay; si no, el propio diálogo.
+    requestAnimationFrame(() => {
+      const c = caja.current
+      if (!c || c.contains(document.activeElement)) return
+      const campo = c.querySelector<HTMLElement>(
+        '[autofocus], .modal-cuerpo input:not([type=hidden]):not([disabled]), .modal-cuerpo textarea:not([disabled]), .modal-cuerpo select:not([disabled])')
+      ;(campo ?? c).focus({ preventScroll: true })
+    })
+    document.body.classList.add('sin-desplazamiento')
     const tecla = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && pilaModales[pilaModales.length - 1] === id) {
+      if (pilaModales[pilaModales.length - 1] !== id) return
+      if (e.key === 'Escape') {
         e.stopPropagation()
         cerrar.current()
+      } else if (e.key === 'Tab' && caja.current) {
+        // El foco no sale del diálogo mientras está abierto.
+        const lista = Array.from(caja.current.querySelectorAll<HTMLElement>(ENFOCABLES)).filter((x) => x.offsetParent !== null)
+        if (!lista.length) return
+        const primero = lista[0]
+        const ultimo = lista[lista.length - 1]
+        const activo = document.activeElement
+        if (e.shiftKey && (activo === primero || activo === caja.current)) { e.preventDefault(); ultimo.focus() }
+        else if (!e.shiftKey && (activo === ultimo || !caja.current.contains(activo))) { e.preventDefault(); primero.focus() }
       }
     }
     window.addEventListener('keydown', tecla)
@@ -260,14 +340,16 @@ export function Modal({ abierto, titulo, onCerrar, children, pie, ancho }: {
       window.removeEventListener('keydown', tecla)
       const i = pilaModales.indexOf(id)
       if (i >= 0) pilaModales.splice(i, 1)
+      if (!pilaModales.length) document.body.classList.remove('sin-desplazamiento')
+      if (anterior && document.contains(anterior)) anterior.focus({ preventScroll: true })
     }
   }, [abierto])
   if (!abierto) return null
   return (
     <div className="velo" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
-      <div className={`modal ${ancho ? 'ancho' : ''}`} role="dialog" aria-modal="true">
+      <div ref={caja} className={`modal ${ancho ? 'ancho' : ''}`} role="dialog" aria-modal="true" aria-labelledby={idTitulo} tabIndex={-1}>
         <div className="modal-cabecera">
-          <h2>{titulo}</h2>
+          <h2 id={idTitulo}>{titulo}</h2>
           <Boton variante="fantasma" icono={<X />} onClick={onCerrar} aria-label="Cerrar" />
         </div>
         <div className="modal-cuerpo">{children}</div>
@@ -284,19 +366,22 @@ const CtxAvisos = createContext<(texto: string, tono?: AvisoFlotante['tono']) =>
 
 export function ProveedorAvisos({ children }: { children: ReactNode }) {
   const [avisos, setAvisos] = useState<AvisoFlotante[]>([])
+  const quitar = useCallback((id: number) => setAvisos((a) => a.filter((x) => x.id !== id)), [])
   const avisar = useCallback((texto: string, tono: AvisoFlotante['tono'] = 'exito') => {
     const id = Date.now() + Math.random()
-    setAvisos((a) => [...a, { id, tono, texto }])
-    setTimeout(() => setAvisos((a) => a.filter((x) => x.id !== id)), tono === 'error' ? 6500 : 3800)
-  }, [])
+    // Sin repetir el mismo aviso si ya está a la vista; como mucho tres a la vez.
+    setAvisos((a) => a.some((x) => x.texto === texto && x.tono === tono) ? a : [...a, { id, tono, texto }].slice(-3))
+    setTimeout(() => quitar(id), tono === 'error' ? 7000 : 4000)
+  }, [quitar])
   return (
     <CtxAvisos.Provider value={avisar}>
       {children}
       <div className="avisos-flotantes" aria-live="polite">
         {avisos.map((a) => (
-          <div key={a.id} className={`aviso-flotante ${a.tono}`}>
+          <div key={a.id} className={`aviso-flotante ${a.tono}`} role={a.tono === 'error' ? 'alert' : 'status'}>
             {a.tono === 'exito' ? <CheckCircle2 /> : a.tono === 'error' ? <XCircle /> : <Info />}
-            <span>{a.texto}</span>
+            <span className="crece">{a.texto}</span>
+            <button type="button" className="cerrar-aviso" aria-label="Cerrar aviso" onClick={() => quitar(a.id)}><X /></button>
           </div>
         ))}
       </div>
@@ -355,7 +440,10 @@ export function TextoFormato({ texto, onCita }: { texto: string; onCita?: (n: nu
             const m = href?.match(/^#cita-(\d+)$/)
             if (m) {
               const n = Number(m[1])
-              return <span className="cita" role="button" onClick={() => onCita?.(n)}>{n}</span>
+              return (
+                <span className="cita" role="button" tabIndex={0} aria-label={`Fuente ${n}`} onClick={() => onCita?.(n)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCita?.(n) } }}>{n}</span>
+              )
             }
             return <a href={href} target="_blank" rel="noreferrer">{children}</a>
           },

@@ -63,6 +63,14 @@ export interface Instruccion {
   editable?: boolean
   reevaluaciones?: number
   ya_existia?: boolean
+  /** Lo que dijo el experto en el vídeo de la captura (solo en el detalle). */
+  transcripcion?: Segmento[] | null
+}
+
+export interface Segmento {
+  inicio: number
+  fin: number
+  texto: string
 }
 
 export interface TareaGestionable extends TareaResumen {

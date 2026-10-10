@@ -15,11 +15,12 @@ para las tareas de ese departamento) o la administración.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from cidia.modelos import (
@@ -28,11 +29,9 @@ from cidia.modelos import (
     Ejecucion,
     Formacion,
     Instruccion,
-    IntentoEval,
     Microleccion,
     MicroleccionVista,
     NivelIluo,
-    Observacion,
     PreguntaEval,
     Puesto,
     Tarea,
@@ -67,8 +66,6 @@ def tareas_de(bd: Session, usuario: Usuario) -> list[Tarea]:
     formación o, si no tiene, todo el departamento) y las que ya ha empezado o certificado."""
     puestos: set[int] = set()
     deps: set[int] = set()
-    if usuario.puesto_id:
-        puestos.add(usuario.puesto_id)
     for f in bd.scalars(select(Formacion).where(Formacion.usuario_id == usuario.id, Formacion.estado == "activa")):
         if f.puesto_id:
             puestos.add(f.puesto_id)
@@ -78,6 +75,10 @@ def tareas_de(bd: Session, usuario: Usuario) -> list[Tarea]:
         Tarea.id.in_(select(NivelIluo.tarea_id).where(NivelIluo.usuario_id == usuario.id, NivelIluo.nivel > 0)),
         Tarea.id.in_(select(Ejecucion.tarea_id).where(Ejecucion.usuario_id == usuario.id)),
     ]
+    if usuario.puesto_id:
+        # De su puesto, las que corresponden a su nivel (como en el modo planta: una tarea de
+        # nivel 3 no entra en el itinerario de un operario de nivel 1).
+        conds.append(and_(Tarea.puesto_id == usuario.puesto_id, Tarea.nivel_minimo <= usuario.nivel_orden))
     if puestos:
         conds.append(Tarea.puesto_id.in_(puestos))
     if deps:
@@ -91,30 +92,49 @@ def tareas_de(bd: Session, usuario: Usuario) -> list[Tarea]:
 # --------------------------------------------------------------------------- detalle de una tarea
 
 
-def _evidencias(bd: Session, usuario: Usuario, tarea: Tarea, fila: NivelIluo,
-                vigente: Instruccion | None) -> dict[str, Any]:
-    versiones = dict(bd.execute(select(Instruccion.id, Instruccion.version)
-                                .where(Instruccion.tarea_id == tarea.id)).all())
-    intentos = bd.scalars(select(IntentoEval).where(IntentoEval.usuario_id == usuario.id,
-                                                    IntentoEval.instruccion_id.in_(list(versiones)))
-                          .order_by(IntentoEval.creado.desc()).limit(20)).all() if versiones else []
-    ejecuciones = bd.scalars(select(Ejecucion).where(Ejecucion.usuario_id == usuario.id, Ejecucion.tarea_id == tarea.id)
-                             .order_by(Ejecucion.inicio.desc()).limit(30)).all()
-    observaciones = bd.scalars(select(Observacion).where(Observacion.usuario_id == usuario.id,
-                                                         Observacion.tarea_id == tarea.id)
-                               .order_by(Observacion.creada.desc()).limit(10)).all()
-    aportaciones = bd.scalars(select(Aportacion).where(Aportacion.autor_id == usuario.id, Aportacion.tarea_id == tarea.id,
-                                                       Aportacion.estado == "validada")
-                              .order_by(Aportacion.creada.desc()).limit(20)).all()
+_MINIMA = datetime.min.replace(tzinfo=timezone.utc)
+
+
+@dataclass
+class Extras:
+    """Lo que muestra el pasaporte además de las evidencias del nivel, leído de una vez para
+    varias tareas: aportaciones validadas, micro-lecciones y preguntas aprobadas."""
+
+    aportaciones: defaultdict[int, list[Aportacion]] = field(default_factory=lambda: defaultdict(list))
+    micro_total: dict[int, int] = field(default_factory=dict)  # instruccion_id -> micro-lecciones
+    preguntas: dict[int, int] = field(default_factory=dict)  # instruccion_id -> preguntas aprobadas
+
+
+def extras(bd: Session, usuario_id: int, tarea_ids: list[int], vigentes: dict[int, Instruccion]) -> Extras:
+    ex = Extras()
+    if not tarea_ids:
+        return ex
+    for a in bd.scalars(select(Aportacion).where(Aportacion.autor_id == usuario_id, Aportacion.tarea_id.in_(tarea_ids),
+                                                 Aportacion.estado == "validada")
+                        .order_by(Aportacion.creada.desc())):
+        ex.aportaciones[a.tarea_id].append(a)
+    ins_ids = [ins.id for t, ins in vigentes.items() if t in tarea_ids]
+    if ins_ids:
+        ex.micro_total = {i: n for i, n in bd.execute(
+            select(Microleccion.instruccion_id, func.count(Microleccion.id))
+            .where(Microleccion.instruccion_id.in_(ins_ids)).group_by(Microleccion.instruccion_id))}
+        ex.preguntas = {i: n for i, n in bd.execute(
+            select(PreguntaEval.instruccion_id, func.count(PreguntaEval.id))
+            .where(PreguntaEval.instruccion_id.in_(ins_ids), PreguntaEval.estado == "aprobada")
+            .group_by(PreguntaEval.instruccion_id))}
+    return ex
+
+
+def _evidencias(p: iluo.Precarga, ex: Extras, tarea: Tarea, fila: NivelIluo, vigente: Instruccion | None) -> dict[str, Any]:
+    versiones = p.versiones.get(tarea.id, {})
+    intentos = sorted(p.intentos.get(tarea.id, []), key=lambda i: i.creado or _MINIMA, reverse=True)[:20]
+    ejecuciones = sorted(p.ejecuciones.get(tarea.id, []), key=lambda e: e.inicio or _MINIMA, reverse=True)[:30]
+    observaciones = sorted(p.observaciones.get(tarea.id, []), key=lambda o: o.creada or _MINIMA, reverse=True)[:10]
+    aportaciones = ex.aportaciones.get(tarea.id, [])[:20]
     micro_total = micro_vistas = 0
     if vigente is not None:
-        micro_total = bd.scalar(select(func.count(Microleccion.id)).where(Microleccion.instruccion_id == vigente.id)) or 0
-        micro_vistas = bd.scalar(
-            select(func.count(MicroleccionVista.id)).join(Microleccion, Microleccion.id == MicroleccionVista.microleccion_id)
-            .where(Microleccion.instruccion_id == vigente.id, MicroleccionVista.usuario_id == usuario.id)) or 0
-    ids_evaluadores = sorted({o.evaluador_id for o in observaciones if o.evaluador_id})
-    evaluadores = {u.id: u.nombre for u in bd.scalars(select(Usuario).where(Usuario.id.in_(ids_evaluadores)))} \
-        if ids_evaluadores else {}
+        micro_total = ex.micro_total.get(vigente.id, 0)
+        micro_vistas = sum(1 for v in p.vistas.get(tarea.id, []) if v.instruccion_id == vigente.id)
     formador = (fila.evidencias or {}).get("formador") if fila.formador_validado else None
     return {
         "cuestionarios": [{"id": i.id, "fecha": iluo.iso(i.creado), "puntuacion": round(i.puntuacion, 4),
@@ -125,7 +145,7 @@ def _evidencias(bd: Session, usuario: Usuario, tarea: Tarea, fila: NivelIluo,
                          "consultas": e.consultas or 0, "consultas_criticos": e.consultas_criticos or 0}
                         for e in ejecuciones],
         "observaciones": [{"id": o.id, "fecha": iluo.iso(o.creada), "aprobada": o.aprobada,
-                           "evaluador": evaluadores.get(o.evaluador_id), "comentario": o.comentario,
+                           "evaluador": p.nombres.get(o.evaluador_id), "comentario": o.comentario,
                            "pasos": len(o.lista or []), "pasos_ok": sum(1 for x in (o.lista or []) if x.get("ok"))}
                           for o in observaciones],
         "aportaciones": [{"id": a.id, "titulo": a.titulo or (a.problema or "Aportación")[:120],
@@ -135,22 +155,29 @@ def _evidencias(bd: Session, usuario: Usuario, tarea: Tarea, fila: NivelIluo,
     }
 
 
-def _curva(bd: Session, usuario_id: int, tarea_id: int) -> list[dict[str, Any]]:
+def _curva(p: iluo.Precarga, tarea_id: int) -> list[dict[str, Any]]:
     """Curva de autonomía: consultas en cada ejecución completada, en orden."""
-    filas = bd.execute(
-        select(Ejecucion.id, Ejecucion.inicio, Ejecucion.fin, Ejecucion.consultas, Ejecucion.consultas_criticos)
-        .where(Ejecucion.usuario_id == usuario_id, Ejecucion.tarea_id == tarea_id, Ejecucion.estado == "completada")
-        .order_by(func.coalesce(Ejecucion.fin, Ejecucion.inicio), Ejecucion.id)
-    ).all()
+    filas = sorted((e for e in p.ejecuciones.get(tarea_id, []) if e.estado == "completada"),
+                   key=lambda e: (e.fin or e.inicio or _MINIMA, e.id))
     return [{"n": i, "ejecucion_id": e.id, "fecha": iluo.iso(e.fin or e.inicio), "consultas": e.consultas or 0,
              "consultas_criticos": e.consultas_criticos or 0} for i, e in enumerate(filas, start=1)]
 
 
 def detalle_tarea(bd: Session, usuario: Usuario, tarea: Tarea, fila: NivelIluo, ev: iluo.Evidencias,
-                  momento: datetime | None = None, con_departamento: bool = False) -> dict[str, Any]:
-    """Una fila del pasaporte: nivel, avance, caducidad, siguiente requisito, evidencias y curva."""
+                  momento: datetime | None = None, con_departamento: bool = False,
+                  ex: Extras | None = None) -> dict[str, Any]:
+    """Una fila del pasaporte: nivel, avance, caducidad, siguiente requisito, evidencias y curva.
+
+    Reutiliza los datos que leyó `iluo.evaluar` (`ev.precarga`); `ex` trae los extras ya leídos
+    cuando se preparan muchas tareas a la vez.
+    """
     from cidia.servicios.evaluacion import siguiente_paso  # import tardío: evaluacion usa este módulo
 
+    p = ev.precarga
+    if p is None or p.usuario_id != usuario.id:
+        p = iluo.precargar(bd, usuario.id, [tarea.id])
+    if ex is None:
+        ex = extras(bd, usuario.id, [tarea.id], p.vigentes)
     momento = momento or ahora()
     nivel = fila.nivel or 0
     dias = (fila.caduca - momento).days if fila.caduca and nivel > 0 else None
@@ -159,10 +186,7 @@ def detalle_tarea(bd: Session, usuario: Usuario, tarea: Tarea, fila: NivelIluo, 
     else:
         porcentaje = max(PISO_PORCENTAJE.get(nivel, 0), ev.porcentaje())
     vigente = ev.instruccion
-    preguntas = 0
-    if vigente is not None:
-        preguntas = bd.scalar(select(func.count(PreguntaEval.id)).where(PreguntaEval.instruccion_id == vigente.id,
-                                                                        PreguntaEval.estado == "aprobada")) or 0
+    preguntas = ex.preguntas.get(vigente.id, 0) if vigente is not None else 0
     texto_siguiente = siguiente_paso(fila, ev)
     historial = list(reversed((fila.evidencias or {}).get("historial") or []))
     return {
@@ -185,9 +209,9 @@ def detalle_tarea(bd: Session, usuario: Usuario, tarea: Tarea, fila: NivelIluo, 
         "siguiente": {"nivel": nivel + 1, "letra": iluo.nivel_letra(nivel + 1), "texto": texto_siguiente}
         if nivel < 4 else None,
         "requisitos": ev.requisitos(),
-        "evidencias": _evidencias(bd, usuario, tarea, fila, vigente),
+        "evidencias": _evidencias(p, ex, tarea, fila, vigente),
         "historial": historial,
-        "curva": _curva(bd, usuario.id, tarea.id),
+        "curva": _curva(p, tarea.id),
     }
 
 
@@ -213,10 +237,15 @@ def progreso_de(bd: Session, usuario: Usuario, con_departamento: bool = False,
     """Pasaporte de una persona. Recalcula antes cada tarea (idempotente: aplica caducidades
     y evidencias que otros módulos no hayan notificado)."""
     momento = ahora()
+    lista = tareas if tareas is not None else tareas_de(bd, usuario)
+    ids = [t.id for t in lista]
+    # Todas las evidencias de la persona de una vez (unas diez consultas en lugar de veinte por tarea).
+    p = iluo.precargar(bd, usuario.id, ids)
+    ex = extras(bd, usuario.id, ids, p.vigentes)
     filas = []
-    for t in tareas if tareas is not None else tareas_de(bd, usuario):
-        fila, ev = iluo.recalcular_con_evidencias(bd, usuario.id, t.id)
-        filas.append(detalle_tarea(bd, usuario, t, fila, ev, momento, con_departamento))
+    for t in lista:
+        fila, ev = iluo.recalcular_con_evidencias(bd, usuario.id, t.id, precarga=p)
+        filas.append(detalle_tarea(bd, usuario, t, fila, ev, momento, con_departamento, ex=ex))
     por_nivel = {letra: sum(1 for f in filas if f["letra"] == letra) for letra in ("I", "L", "U", "O")}
     return {
         "persona": _persona_dict(bd, usuario, con_departamento),
@@ -234,7 +263,11 @@ def progreso_de(bd: Session, usuario: Usuario, con_departamento: bool = False,
 
 def mi_progreso(bd: Session, actor: Actor) -> dict[str, Any]:
     assert actor.usuario is not None
-    return progreso_de(bd, actor.usuario, con_departamento=actor.es_jefe)
+    datos = progreso_de(bd, actor.usuario, con_departamento=actor.es_jefe)
+    # La cabecera del pasaporte dice siempre el departamento de la persona.
+    u = actor.usuario
+    datos["persona"]["departamento"] = u.departamento.nombre if u.departamento else None
+    return datos
 
 
 def _en_su_alcance(bd: Session, usuario: Usuario, tarea: Tarea) -> bool:

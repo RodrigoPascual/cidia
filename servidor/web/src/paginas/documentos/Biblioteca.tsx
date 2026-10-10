@@ -1,15 +1,16 @@
 // Biblioteca de documentos: cifras, filtros, tabla paginada y recarga automática mientras se indexa.
 
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileText, FilterX, Globe, GraduationCap,
-  Loader2, Pencil, RefreshCw, Search, Trash2, Upload,
+  ListChecks, Loader2, Pencil, RefreshCw, Search, Trash2, Upload,
 } from 'lucide-react'
 import { fecha, get, hace, tamano, urlServidor } from '../../api'
 import { Boton, Dato, ErrorCarga, Esqueleto, Selector, Tarjeta, Vacio, useDatos } from '../../ui'
 import type { AccionesDocumento } from './acciones'
 import { EstadoEtiqueta, IconoTipo, NivelMinimo } from './comunes'
-import { NOMBRE_ORIGEN, type Documento, type ListaDocumentos, type Opciones } from './tipos'
+import { NOMBRE_ORIGEN, sePuedeReindexar, type Documento, type ListaDocumentos, type Opciones } from './tipos'
 
 interface Filtros {
   texto: string
@@ -81,11 +82,18 @@ function Fila({ d, maxNivel, acciones, onAbrir }: {
           <>
             <Boton variante="fantasma" tamano="pequeno" icono={<Pencil />} title="Editar etiquetas"
               aria-label={`Editar ${d.titulo}`} onClick={() => acciones.editar(d)} />
-            <Boton variante="fantasma" tamano="pequeno" icono={<RefreshCw />} cargando={ocupado}
-              title={d.indexando ? 'Se está indexando' : 'Reindexar'}
-              aria-label={`Reindexar ${d.titulo}`} disabled={d.indexando} onClick={() => acciones.reindexar(d)} />
-            <Boton variante="fantasma" tamano="pequeno" icono={<Trash2 />} title="Borrar" disabled={ocupado}
-              aria-label={`Borrar ${d.titulo}`} onClick={() => acciones.borrar(d)} />
+            {sePuedeReindexar(d) && (
+              <Boton variante="fantasma" tamano="pequeno" icono={<RefreshCw />} cargando={ocupado}
+                title={d.indexando ? 'Se está indexando' : 'Reindexar'}
+                aria-label={`Reindexar ${d.titulo}`} disabled={d.indexando} onClick={() => acciones.reindexar(d)} />
+            )}
+            {d.origen === 'instruccion' ? (
+              <Link className="boton fantasma pequeno icono" to={`/instrucciones/${d.origen_id}`}
+                title="Se gestiona desde Instrucciones" aria-label={`Abrir la instrucción ${d.titulo}`}><ListChecks /></Link>
+            ) : (
+              <Boton variante="fantasma" tamano="pequeno" icono={<Trash2 />} title="Borrar" disabled={ocupado}
+                aria-label={`Borrar ${d.titulo}`} onClick={() => acciones.borrar(d)} />
+            )}
           </>
         )}
       </td>

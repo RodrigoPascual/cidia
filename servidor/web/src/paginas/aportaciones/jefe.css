@@ -1,0 +1,31 @@
+/* ==========================================================================
+   Bandeja del jefe (Validar) y Lagunas: retoques propios de estas dos páginas.
+   Los estilos comunes de aportaciones siguen en aportaciones.css.
+   ========================================================================== */
+
+/* Títulos de los campos de edición: icono y texto en la misma línea. */
+.apo-campo-titulo { display: inline-flex; align-items: center; gap: 6px; }
+.apo-campo-titulo svg { flex-shrink: 0; color: var(--pizarra); }
+.apo-edicion-etiquetas label > .apo-campo-titulo svg { margin-right: 0; }
+
+/* En edición, el texto se escribe dentro del propio bloque (sin un segundo recuadro). */
+.apo-revision .apo-bloque.editando { transition: box-shadow var(--transicion); }
+.apo-revision .apo-bloque.editando:focus-within { box-shadow: 0 0 0 3px rgba(242, 194, 0, 0.22); }
+.apo-revision .apo-bloque.editando .apo-area-auto {
+  border: none; box-shadow: none; background: transparent; padding: 0; min-height: 48px; border-radius: 0;
+}
+.apo-revision .apo-bloque.editando .apo-area-auto:focus { outline: none; box-shadow: none; }
+
+/* Resumen de la bandeja: en móvil, tres cifras compactas en una fila. */
+@media (max-width: 640px) {
+  .apo-resumen.rejilla { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .apo-resumen .dato { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; }
+  .apo-resumen .dato .icono-dato { width: 30px; height: 30px; border-radius: 9px; }
+  .apo-resumen .dato .icono-dato svg { width: 16px; height: 16px; }
+  .apo-resumen .dato .valor { font-size: 20px; }
+  .apo-resumen .dato .dato-etiqueta { font-size: 12px; }
+}
+
+/* Pedir a alguien que responda una laguna. */
+.apo-pedir-a { margin-bottom: 12px; }
+.apo-pedir-a .campo { margin-bottom: 0; }

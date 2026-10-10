@@ -26,7 +26,8 @@ export default function Instrucciones() {
   const [nueva, setNueva] = useState(false)
 
   const lista = datos ?? []
-  const cuenta = (e: EstadoInstruccion) => lista.filter((i) => i.estado === e).length
+  // Sin datos todavía, las pestañas no muestran contadores (un «0» mientras carga confunde).
+  const cuenta = (e: EstadoInstruccion) => (datos ? lista.filter((i) => i.estado === e).length : undefined)
   const departamentos = useMemo(() => {
     const m = new Map<number, string>()
     for (const i of lista) if (i.tarea.departamento_id) m.set(i.tarea.departamento_id, i.tarea.departamento ?? '')
@@ -73,7 +74,7 @@ export default function Instrucciones() {
         activa={filtro}
         onCambio={setFiltro}
         pestanas={[
-          { id: 'todas', texto: 'Todas', contador: lista.length },
+          { id: 'todas', texto: 'Todas', contador: datos ? lista.length : undefined },
           { id: 'borrador', texto: 'Borradores', contador: cuenta('borrador') },
           { id: 'publicada', texto: 'Publicadas', contador: cuenta('publicada') },
           { id: 'obsoleta', texto: 'Obsoletas', contador: cuenta('obsoleta') },

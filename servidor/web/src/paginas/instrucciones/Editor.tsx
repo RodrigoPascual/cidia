@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CopyPlus, FileText,
-  Film, HardHat, History, ImageIcon, ImagePlus, ListChecks, Loader2, PlayCircle, Plus, Save, Send, ShieldAlert,
+  Film, HardHat, History, ImageIcon, ImagePlus, ListChecks, Loader2, PlayCircle, Plus, Quote, Save, Send, ShieldAlert,
   Trash2, User, UserCheck, Video, Wrench,
 } from 'lucide-react'
 import { del, enviarFormulario, fecha, get, post, put, urlServidor } from '../../api'
@@ -17,7 +17,7 @@ import {
   Vacio, useAvisarError, useAvisos, useConfirmar, useDatos,
 } from '../../ui'
 import Historial from './Historial'
-import { ESTADOS, mmss, textoTarea, type Instruccion, type Paso } from './tipos'
+import { ESTADOS, mmss, textoTarea, type Instruccion, type Paso, type Segmento } from './tipos'
 import './instrucciones.css'
 
 interface PasoEdicion extends Paso {
@@ -68,6 +68,7 @@ export default function Editor() {
   const [historial, setHistorial] = useState(false)
   const video = useRef<HTMLVideoElement>(null)
   const tarjetaVideo = useRef<HTMLDivElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
   const guardarRef = useRef<() => void>(() => {})
 
   useEffect(() => {
@@ -110,6 +111,14 @@ export default function Editor() {
   const estado = ESTADOS[ins.estado]
 
   // ------------------------------------------------------------------ edición local
+
+  // En pantallas estrechas la lista de pasos queda encima del paso: al elegir uno se baja hasta él.
+  function elegir(i: number) {
+    setSel(i)
+    if (window.matchMedia('(max-width: 1080px)').matches) {
+      requestAnimationFrame(() => panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
+  }
 
   function cambiar<K extends keyof Edicion>(campo: K, valor: Edicion[K]) {
     setEd((e) => (e ? { ...e, [campo]: valor } : e))
@@ -379,8 +388,8 @@ export default function Editor() {
           ) : (
             <ol className="ins-pasos">
               {ed.pasos.map((p, i) => (
-                <li key={p.clave} className={`ins-paso-item ${i === indice ? 'activo' : ''}`} onClick={() => setSel(i)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSel(i) } }}
+                <li key={p.clave} className={`ins-paso-item ${i === indice ? 'activo' : ''}`} onClick={() => elegir(i)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegir(i) } }}
                   tabIndex={0} aria-current={i === indice ? 'step' : undefined}>
                   <span className={`ins-numero ${p.es_critico ? 'critico' : ''}`}>{i + 1}</span>
                   {p.imagen_url ? <img src={urlServidor(p.imagen_url)} alt="" className="ins-paso-mini" loading="lazy" />
@@ -406,13 +415,15 @@ export default function Editor() {
         </Tarjeta>
 
         {paso ? (
+          <div ref={panel} className="ins-panel-ancla">
           <PanelPaso
             paso={paso} indice={indice} total={total} editable={editable}
-            hayVideo={!!ins.video_url} subiendoImagen={ocupado === 'imagen'}
+            hayVideo={!!ins.video_url} subiendoImagen={ocupado === 'imagen'} dicho={dichoEn(ins.transcripcion, paso)}
             onCambio={(c) => cambiarPaso(indice, c)} onQuitar={() => quitar(indice)}
             onImagen={(f) => cambiarImagen(indice, f)} onVerVideo={verEnVideo}
             onIr={(i) => setSel(i)}
           />
+          </div>
         ) : (
           <Tarjeta><Vacio icono={<FileText />} titulo="Elige o añade un paso">Aquí verás su imagen, su clip y su texto.</Vacio></Tarjeta>
         )}
@@ -448,7 +459,8 @@ export default function Editor() {
         {ins.video_url && (
           <div ref={tarjetaVideo}>
             <Tarjeta titulo="Vídeo original" icono={<Video size={18} />}>
-              <video ref={video} src={urlServidor(ins.video_url)} controls preload="metadata" playsInline className="ins-video" />
+              <video ref={video} src={urlServidor(ins.video_url)} controls preload="metadata" playsInline className="ins-video"
+                poster={ins.miniatura_url ? urlServidor(ins.miniatura_url) : undefined} />
               <div className="pequeno apagado mt-1 mb-1">Salta al momento de cada paso:</div>
               <div className="ins-saltos">
                 {ed.pasos.map((p, i) => p.t_inicio === null ? null : (
@@ -479,13 +491,21 @@ export default function Editor() {
   )
 }
 
-function PanelPaso({ paso, indice, total, editable, hayVideo, subiendoImagen, onCambio, onQuitar, onImagen, onVerVideo, onIr }: {
+/** Lo que dijo el experto en el tramo del vídeo de un paso (segmentos que se solapan con él). */
+function dichoEn(segmentos: Segmento[] | null | undefined, p: Paso): string {
+  if (!segmentos?.length || p.t_inicio === null || p.t_fin === null) return ''
+  const [a, b] = [p.t_inicio, p.t_fin]
+  return segmentos.filter((s) => Math.min(s.fin, b) - Math.max(s.inicio, a) > 0.4).map((s) => s.texto).join(' ')
+}
+
+function PanelPaso({ paso, indice, total, editable, hayVideo, subiendoImagen, dicho, onCambio, onQuitar, onImagen, onVerVideo, onIr }: {
   paso: PasoEdicion
   indice: number
   total: number
   editable: boolean
   hayVideo: boolean
   subiendoImagen: boolean
+  dicho: string
   onCambio: (c: Partial<PasoEdicion>) => void
   onQuitar: () => void
   onImagen: (f: File) => void
@@ -528,7 +548,8 @@ function PanelPaso({ paso, indice, total, editable, hayVideo, subiendoImagen, on
             {paso.t_inicio !== null && paso.t_fin !== null && <span className="apagado">· {mmss(paso.t_inicio)} a {mmss(paso.t_fin)}</span>}
           </div>
           <div className="ins-marco">
-            {paso.clip_url ? <video key={paso.clip_url} src={urlServidor(paso.clip_url)} controls preload="metadata" playsInline />
+            {paso.clip_url ? <video key={paso.clip_url} src={urlServidor(paso.clip_url)} controls preload="metadata" playsInline
+                poster={paso.imagen_url ? urlServidor(paso.imagen_url) : undefined} />
               : <div className="ins-marco-vacio"><Film /><span>Sin clip</span></div>}
           </div>
           {hayVideo && paso.t_inicio !== null && (
@@ -546,6 +567,12 @@ function PanelPaso({ paso, indice, total, editable, hayVideo, subiendoImagen, on
               <Area value={paso.texto} rows={4} placeholder="Explícalo en frases cortas y en imperativo: «Coloca…», «Aprieta…»."
                 onChange={(e) => onCambio({ texto: e.target.value })} />
             </Campo>
+            {dicho && (
+              <details className="ins-dicho">
+                <summary><Quote />Lo que se dice en el vídeo en este paso ({mmss(paso.t_inicio)} a {mmss(paso.t_fin)})</summary>
+                <p>{dicho}</p>
+              </details>
+            )}
             <Campo etiqueta="Criterio de aceptación" ayuda="Cómo se comprueba que el paso está bien hecho.">
               <Area value={paso.criterio_aceptacion} rows={2} placeholder="Por ejemplo: par de 25 N·m comprobado con la llave dinamométrica."
                 onChange={(e) => onCambio({ criterio_aceptacion: e.target.value })} />
@@ -597,7 +624,7 @@ function BloqueLista({ icono, titulo, tono, valor, editable, onCambio, ejemplo }
 }) {
   const lineas = valor.split('\n').map((l) => l.replace(/^[-·•*]\s*/, '').trim()).filter(Boolean)
   return (
-    <div className={`ins-bloque ${tono}`}>
+    <div className={`ins-bloque tono-${tono}`}>
       <div className="ins-bloque-titulo">{icono}{titulo}</div>
       {editable ? (
         <Area value={valor} rows={4} placeholder={`Uno por línea. Por ejemplo: ${ejemplo}`} onChange={(e) => onCambio(e.target.value)} />

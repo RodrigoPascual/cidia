@@ -34,8 +34,11 @@ RUN pip install .
 COPY --from=web /web/dist /srv/web
 RUN useradd -u 1000 -m cidia && mkdir -p /datos && chown cidia:cidia /datos
 USER cidia
-ENV CIDIA_DIR_DATOS=/datos CIDIA_DIR_WEB=/srv/web
+# X-Forwarded-For solo se cree a un proxy de confianza: con «*» cualquier equipo de la red podría
+# falsear su dirección (registro de sesiones y límites por dirección). El gateway se publica sin
+# proxy delante; si se pone uno, su dirección va en FORWARDED_ALLOW_IPS (variable de uvicorn).
+ENV CIDIA_DIR_DATOS=/datos CIDIA_DIR_WEB=/srv/web FORWARDED_ALLOW_IPS=127.0.0.1
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/salud', timeout=4).status==200 else 1)"
-CMD ["uvicorn", "cidia.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["uvicorn", "cidia.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

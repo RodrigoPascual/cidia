@@ -521,10 +521,27 @@ def _veredicto_modelo(r: Any) -> dict[str, Any]:
     return {"coincide": coincide, "observaciones": observaciones, "confianza": confianza}
 
 
+UMBRAL_CONFIANZA = 0.7  # por debajo, el modelo «duda» y la foto la revisa el jefe aunque diga que coincide
+
+
+def necesita_revision(v: dict[str, Any] | None) -> bool:
+    """¿Tiene que mirar la foto una persona? Sí cuando no se pudo comparar (sin visión, sin imagen de
+    referencia o error del modelo), cuando el modelo ve diferencias y cuando duda (poca confianza).
+    Se calcula con los datos del veredicto, no con el indicador guardado, para valer también con
+    las fotos guardadas antes de existir la revisión."""
+    if not v:
+        return False
+    if v.get("estado") != "comparada" or v.get("coincide") is not True:
+        return True
+    confianza = v.get("confianza")
+    return isinstance(confianza, (int, float)) and confianza < UMBRAL_CONFIANZA
+
+
 def comparar_foto(bd: Session, ruta_foto: str, referencia: Paso | None) -> dict[str, Any]:
     """Compara la foto con la imagen del experto si hay un modelo con visión permitido.
 
-    El resultado es siempre orientativo: decide una persona (revision_humana = True).
+    El resultado es siempre orientativo. `revision_humana` indica que el jefe tiene que revisarla
+    (ver `necesita_revision`); puede revisar también las demás desde la ejecución.
     """
     base: dict[str, Any] = {"revision_humana": True, "coincide": None, "observaciones": "", "confianza": None,
                             "modelo": None, "referencia_paso_id": referencia.id if referencia else None}
@@ -565,7 +582,11 @@ def comparar_foto(bd: Session, ruta_foto: str, referencia: Paso | None) -> dict[
                 "mensaje": "No se ha podido comparar la foto automáticamente. La revisará una persona."}
     mensaje = ("La foto se parece a la referencia del experto." if v["coincide"]
                else "El modelo ve diferencias con la referencia: revísalo antes de dar la tarea por buena.")
-    return {**base, **v, "estado": "comparada", "modelo": modelo, "mensaje": mensaje}
+    veredicto = {**base, **v, "estado": "comparada", "modelo": modelo, "mensaje": mensaje}
+    veredicto["revision_humana"] = necesita_revision(veredicto)
+    if v["coincide"] and veredicto["revision_humana"]:
+        veredicto["mensaje"] = "El modelo cree que se parece, pero no está seguro: la revisará tu responsable."
+    return veredicto
 
 
 def tipo_imagen(cabecera: bytes) -> str | None:
@@ -621,7 +642,128 @@ def veredicto_dict(ej: Ejecucion, ins: Instruccion | None, restringido: bool = F
     ref = _paso_referencia(ins) if ins is not None and not restringido else None
     v["foto_url"] = url_fichero(ej.foto_ruta)
     v["referencia_url"] = url_fichero(ref.imagen_ruta) if ref else None
+    v["necesita_revision"] = necesita_revision(v)
+    v.setdefault("revision", None)
+    v["pendiente_revision"] = v["necesita_revision"] and not v["revision"]
     return v
+
+
+# --------------------------------------------------------------------------- revisión de la foto por el jefe
+
+DECISIONES = ("aprobada", "rechazada")
+MAX_COMENTARIO = 1000
+ESTADOS_REVISABLES = ("en_curso", "completada")
+
+
+def puede_revisar(bd: Session, actor: Actor, ej: Ejecucion) -> bool:
+    """Revisa la foto del resultado el jefe del departamento de la tarea (cuando la persona es de ese
+    departamento o se forma en él) o la administración, nunca quien hizo la tarea: la misma regla que
+    la observación en el puesto (iluo.puede_evaluar)."""
+    if actor.es_invitado or actor.usuario is None or ej.usuario_id == actor.id:
+        return False
+    persona = bd.get(Usuario, ej.usuario_id)
+    tarea = bd.get(Tarea, ej.tarea_id)
+    if persona is None or tarea is None:
+        return False
+    return iluo.puede_evaluar(bd, actor, persona, tarea)
+
+
+def revisar_foto(bd: Session, actor: Actor, ej: Ejecucion, decision: str, comentario: str | None) -> dict[str, Any]:
+    """El jefe da por buena la foto del resultado o la rechaza con un comentario para la persona.
+
+    Queda en el veredicto (`revision`), con su sentencia xAPI («validó» o «rechazó»), y se recalcula
+    el nivel ILUO si la ejecución ya está completada. Se puede cambiar de decisión; una foto nueva
+    vuelve a quedar pendiente. No hace commit."""
+    if not puede_revisar(bd, actor, ej):
+        raise HTTPException(403, "Solo el jefe del departamento de la tarea puede revisar esta foto.")
+    if not ej.foto_ruta:
+        raise HTTPException(409, "Esta ejecución no tiene foto del resultado.")
+    if ej.estado not in ESTADOS_REVISABLES:
+        raise HTTPException(409, "La ejecución se abandonó: no hay resultado que revisar.")
+    if decision not in DECISIONES:
+        raise HTTPException(400, "Decisión no válida: da la foto por buena o recházala.")
+    comentario = (comentario or "").strip()[:MAX_COMENTARIO]
+    if decision == "rechazada" and len(comentario) < 3:
+        raise HTTPException(400, "Explica qué hay que corregir: quien hizo la tarea verá tu comentario.")
+    v = dict(ej.foto_veredicto or {})
+    anterior = v.get("revision") or None
+    v["revision"] = {"estado": decision, "comentario": comentario or None, "revisor_id": actor.id,
+                     "revisor": actor.nombre, "fecha": ahora().isoformat()}
+    ej.foto_veredicto = v  # un diccionario nuevo: así JSONB guarda el cambio
+    tarea = bd.get(Tarea, ej.tarea_id)
+    ins = bd.get(Instruccion, ej.instruccion_id)
+    xapi.registrar(
+        bd, actor, "valido" if decision == "aprobada" else "rechazo", "ejecucion", ej.id,
+        tarea.nombre if tarea else None,
+        resultado={"objeto": "foto_resultado", "decision": decision, "comentario": comentario or None,
+                   "decision_anterior": anterior.get("estado") if isinstance(anterior, dict) else None,
+                   "veredicto_modelo": v.get("estado"), "coincide": v.get("coincide")},
+        contexto={**_contexto(ej, ins), "usuario_id": ej.usuario_id},
+    )
+    bd.flush()
+    if ej.estado == "completada":
+        iluo.recalcular(bd, ej.usuario_id, ej.tarea_id)
+    return veredicto_dict(ej, ins) or {}
+
+
+def revisiones(bd: Session, actor: Actor, estado: str = "pendientes", limite: int = 60) -> dict[str, Any]:
+    """Fotos del resultado que puede revisar el actor (jefe o administración).
+
+    estado: «pendientes» (sin visión, con diferencias o con dudas del modelo, y sin revisar),
+    «revisadas» o «todas». Devuelve {elementos, pendientes} con el total de pendientes."""
+    if actor.es_invitado or actor.usuario is None or not (actor.es_admin or actor.rol == "jefe"):
+        raise HTTPException(403, "Solo los jefes de departamento y la administración revisan las fotos.")
+    q = select(Ejecucion).where(Ejecucion.foto_ruta.is_not(None), Ejecucion.estado.in_(ESTADOS_REVISABLES),
+                                Ejecucion.usuario_id != actor.id)
+    if not actor.es_admin:
+        if not actor.departamento_id:
+            return {"elementos": [], "pendientes": 0}
+        q = (q.join(Tarea, Tarea.id == Ejecucion.tarea_id).join(Puesto, Puesto.id == Tarea.puesto_id)
+             .where(Puesto.departamento_id == actor.departamento_id))
+    filas = bd.scalars(q.order_by(func.coalesce(Ejecucion.fin, Ejecucion.inicio).desc(), Ejecucion.id.desc())
+                       .limit(400)).all()
+    if not filas:
+        return {"elementos": [], "pendientes": 0}
+    personas = {u.id: u for u in bd.scalars(select(Usuario).where(Usuario.id.in_({e.usuario_id for e in filas})))}
+    tareas_ = {t.id: t for t in bd.scalars(select(Tarea).where(Tarea.id.in_({e.tarea_id for e in filas})))}
+    inss = {i.id: i for i in bd.scalars(select(Instruccion).where(Instruccion.id.in_({e.instruccion_id for e in filas}))
+                                        .options(selectinload(Instruccion.pasos)))}
+    permitido: dict[int, bool] = {}  # por persona: es de su departamento o se forma en él
+
+    def puede(e: Ejecucion) -> bool:
+        if actor.es_admin:
+            return True
+        if e.usuario_id not in permitido:
+            u = personas.get(e.usuario_id)
+            permitido[e.usuario_id] = u is not None and (
+                u.departamento_id == actor.departamento_id or iluo.en_formacion(bd, u.id, actor.departamento_id))
+        return permitido[e.usuario_id]
+
+    elementos: list[dict[str, Any]] = []
+    pendientes = 0
+    for e in filas:
+        if not puede(e):
+            continue
+        v = e.foto_veredicto or {}
+        pendiente = necesita_revision(v) and not v.get("revision")
+        pendientes += pendiente
+        if (estado == "pendientes" and not pendiente) or (estado == "revisadas" and not v.get("revision")):
+            continue
+        if len(elementos) >= limite:
+            continue
+        u, t, ins = personas.get(e.usuario_id), tareas_.get(e.tarea_id), inss.get(e.instruccion_id)
+        elementos.append({
+            "id": e.id,
+            "estado": e.estado,
+            "inicio": e.inicio.isoformat() if e.inicio else None,
+            "fin": e.fin.isoformat() if e.fin else None,
+            "persona": {"id": u.id, "nombre": u.nombre} if u else None,
+            "tarea": {"id": t.id, "codigo": t.codigo, "nombre": t.nombre} if t else None,
+            "instruccion": {"codigo": ins.codigo, "version": ins.version} if ins else None,
+            "pendiente": pendiente,
+            "foto": veredicto_dict(e, ins),
+        })
+    return {"elementos": elementos, "pendientes": pendientes}
 
 
 # --------------------------------------------------------------------------- representación
@@ -734,6 +876,7 @@ def a_dict(bd: Session, ej: Ejecucion, actor: Actor) -> dict[str, Any]:
         "pasos_confirmados": hechos,
         "paso_actual": actual,
         "foto": veredicto_dict(ej, ins, restringido),
+        "puede_revisar": bool(ej.foto_ruta) and ej.estado in ESTADOS_REVISABLES and puede_revisar(bd, actor, ej),
         "historial": [
             {"id": c.id, "paso_id": c.paso_id, "pregunta": c.pregunta, "respuesta": oculto(c.respuesta),
              "fuentes": fuentes.get(c.id, []), "con_respaldo": c.con_respaldo, "creada": c.creada.isoformat()}

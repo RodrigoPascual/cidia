@@ -808,8 +808,10 @@ function EmpresaReglas() {
         <div className="pequeno apagado mt-2">Cada nivel caduca a los {meses} {meses === 1 ? 'mes' : 'meses'}.</div>
       </Tarjeta>
 
-      <div className="fila" style={{ justifyContent: 'flex-end', position: 'sticky', bottom: 12 }}>
-        {cambiado && <span className="pequeno apagado">Hay cambios sin guardar</span>}
+      <div className={`adm-barra-guardar ${cambiado ? 'con-cambios' : ''}`}>
+        <span className="pequeno apagado crece">
+          {cambiado ? (valido ? 'Hay cambios sin guardar.' : 'Revisa los valores: alguno está fuera de los límites.') : 'Todo guardado.'}
+        </span>
         <Boton disabled={!cambiado} onClick={() => cargar(datos)}>Descartar</Boton>
         <Boton variante="primario" icono={<Save />} cargando={guardando} disabled={!cambiado || !valido} onClick={guardar}>
           Guardar cambios

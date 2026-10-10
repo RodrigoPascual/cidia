@@ -2,7 +2,9 @@
 
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { BadgeCheck, ChevronLeft, ChevronRight, ExternalLink, FileText, ListChecks, Quote, UserRound, X } from 'lucide-react'
+import {
+  BadgeCheck, ChevronLeft, ChevronRight, ExternalLink, FileText, GraduationCap, ListChecks, Quote, UserRound, Wrench, X,
+} from 'lucide-react'
 import { urlServidor } from '../../api'
 import { useSesion } from '../../sesion'
 import { Aviso, Boton, Etiqueta } from '../../ui'
@@ -32,7 +34,17 @@ export default function PanelFuente({ fuentes, n, citadas, onCambiar, onCerrar }
 
   if (!f) return null
   const donde = ubicacion(f)
-  const verInstruccion = f.origen === 'instruccion' && !!f.origen_id && puede('instrucciones')
+  // El editor de instrucciones solo lo abren expertos, jefes y administración. Los demás van a la
+  // tarea: en formación (lecciones, resumen y pasos) o, si no tienen formación, al modo planta.
+  const esInstruccion = f.origen === 'instruccion' && f.disponible !== false
+  const enlace = !esInstruccion ? null
+    : puede('instrucciones') && f.origen_id
+      ? { a: `/instrucciones/${f.origen_id}`, texto: 'Ver la instrucción', icono: <ListChecks /> }
+      : f.tarea_id && puede('formacion')
+        ? { a: `/formacion/tarea/${f.tarea_id}`, texto: 'Ver la tarea en formación', icono: <GraduationCap /> }
+        : puede('planta')
+          ? { a: '/planta', texto: 'Practicarla en el modo planta', icono: <Wrench /> }
+          : null
 
   return (
     <>
@@ -105,11 +117,11 @@ export default function PanelFuente({ fuentes, n, citadas, onCambiar, onCerrar }
           )}
         </div>
 
-        {(f.url || verInstruccion) && (
+        {(f.url || enlace) && (
           <div className="panel-fuente-pie">
-            {verInstruccion && (
-              <Link to={`/instrucciones/${f.origen_id}`} className="boton secundario">
-                <ListChecks /> Ver la instrucción
+            {enlace && (
+              <Link to={enlace.a} className="boton secundario">
+                {enlace.icono} {enlace.texto}
               </Link>
             )}
             {f.url && (

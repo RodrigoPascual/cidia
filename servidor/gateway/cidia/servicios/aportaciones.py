@@ -22,7 +22,7 @@ from typing import Any
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.exc import InvalidRequestError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from cidia import trabajos
 from cidia.ficheros import guardar_subida, ruta_absoluta
@@ -697,6 +697,11 @@ def a_dicts(bd: Session, aps: list[Aportacion], actor: Actor) -> list[dict[str, 
     deps = {d.id: d.nombre for d in bd.scalars(select(Departamento).where(
         Departamento.id.in_({a.departamento_id for a in aps if a.departamento_id})))}
     niveles = {n.orden: n.nombre for n in bd.scalars(select(Nivel))}
+    # Autores y validadores (con su puesto y nivel) de una vez: sin una consulta por tarjeta.
+    ids_personas = {a.autor_id for a in aps if a.autor_id} | {a.validador_id for a in aps if a.validador_id}
+    personas = {u.id: u for u in bd.scalars(
+        select(Usuario).where(Usuario.id.in_(ids_personas))
+        .options(selectinload(Usuario.puesto), selectinload(Usuario.nivel)))} if ids_personas else {}
     salida = []
     for ap in aps:
         tarea = tareas.get(ap.tarea_id) if ap.tarea_id else None
@@ -721,13 +726,13 @@ def a_dicts(bd: Session, aps: list[Aportacion], actor: Actor) -> list[dict[str, 
             "laguna": {"id": laguna.id, "pregunta": laguna.pregunta, "frecuencia": laguna.frecuencia,
                        "estado": laguna.estado} if laguna else None,
             "motivo_rechazo": ap.motivo_rechazo,
-            "revisada_por": ap.validador.nombre if ap.validador else None,
+            "revisada_por": personas[ap.validador_id].nombre if ap.validador_id in personas else None,
             "documento": {"id": doc.id, "titulo": doc.titulo, "estado": doc.estado, "tipo": doc.tipo,
                           "contenido": doc.contenido_texto} if doc else None,
             "es_mia": ap.autor_id == actor.id,
         }
         if puede_gestionar(actor, ap):
-            autor = ap.autor
+            autor = personas.get(ap.autor_id)
             d["autor"] = {"id": autor.id, "nombre": autor.nombre,
                           "puesto": autor.puesto.nombre if autor.puesto else None,
                           "nivel": autor.nivel.nombre if autor.nivel else None} if autor else None

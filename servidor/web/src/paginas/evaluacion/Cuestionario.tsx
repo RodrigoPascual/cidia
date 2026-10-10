@@ -4,9 +4,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, ArrowRight, CheckCircle2, ClipboardCheck, RotateCcw, Send, ShieldAlert, TrendingUp, XCircle,
+  ArrowLeft, ArrowRight, CheckCircle2, ClipboardCheck, RotateCcw, Send, ShieldAlert, TrendingUp, Wrench, XCircle,
 } from 'lucide-react'
 import { ErrorApi, get, post } from '../../api'
+import { refrescarContadores } from '../../Marco'
 import {
   Aviso, BarraProgreso, Boton, Cargando, ErrorCarga, Etiqueta, Iluo, Tarjeta, useAvisarError, useAvisos, useConfirmar,
   useDatos,
@@ -52,6 +53,9 @@ function Resultado({ r, tareaId, onRepetir, onSalir }: {
         )}
         <div className="fila envolver mt-2" style={{ gap: 8 }}>
           {!r.aprobado && <Boton variante="primario" icono={<RotateCcw />} onClick={onRepetir}>Repetir el cuestionario</Boton>}
+          {r.aprobado && r.siguiente?.includes('modo planta') && (
+            <Boton variante="primario" icono={<Wrench />} onClick={() => navegar('/planta')}>Practicar en modo planta</Boton>
+          )}
           <Boton icono={<TrendingUp />} onClick={() => navegar(`/progreso?tarea=${tareaId}`)}>Ver mi progreso</Boton>
           <Boton variante="fantasma" onClick={onSalir}>Volver a mis cuestionarios</Boton>
         </div>
@@ -135,6 +139,7 @@ export default function Cuestionario({ tareaId, onSalir }: { tareaId: number; on
         { instruccion_id: q.instruccion.id, respuestas })
       setResultado(r)
       setFase('resultado')
+      refrescarContadores()
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (e) {
       if (e instanceof ErrorApi && e.estado === 409) {

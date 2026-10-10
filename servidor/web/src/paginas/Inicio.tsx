@@ -139,7 +139,7 @@ export default function Inicio() {
       {d.accesos.length > 0 && (
         <nav className="ini-accesos" aria-label="Accesos rápidos">
           {d.accesos.map((a) => (
-            <Link key={a.clave} to={a.ruta} className={`ini-acceso ${a.clave}`}>
+            <Link key={a.clave} to={a.ruta} className={`ini-acceso acceso-${a.clave}`}>
               <div className="icono">{ICONO_ACCESO[a.clave] ?? <ArrowRight />}</div>
               <ArrowRight className="flecha" size={18} />
               <h3>{a.titulo}</h3>
@@ -229,7 +229,7 @@ function CifrasPlanta({ p }: { p: NonNullable<DatosInicio['planta']> }) {
         <h2><TrendingUp /> La planta en cifras</h2>
         <span className="pequeno apagado">Consultas de los últimos 7 días</span>
       </div>
-      <div className="ini-cifras">
+      <div className="ini-cifras seis">
         <Dato icono={<Users />} valor={p.personas} etiqueta={`Personas en ${p.departamentos} ${p.departamentos === 1 ? 'departamento' : 'departamentos'}`} />
         <Dato icono={<FileText />} tono="info" valor={p.documentos}
           etiqueta={p.documentos_procesando ? `Documentos listos · ${p.documentos_procesando} pendientes` : 'Documentos listos para consultar'} />

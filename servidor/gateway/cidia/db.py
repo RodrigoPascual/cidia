@@ -52,11 +52,21 @@ def sesion_bd() -> Iterator[Session]:
         s.close()
 
 
+# Columnas añadidas a tablas que ya existían en instalaciones anteriores. create_all no altera
+# tablas existentes, así que se añaden aquí (idempotente: IF NOT EXISTS).
+COLUMNAS_NUEVAS = [
+    "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS debe_cambiar_contrasena BOOLEAN NOT NULL DEFAULT false",
+]
+
+
 def inicializar_bd() -> None:
-    """Crea la extensión vector y todas las tablas que falten."""
+    """Crea la extensión vector, todas las tablas que falten y las columnas nuevas."""
     from cidia import modelos  # noqa: F401  (registra las tablas)
 
     eng = motor_bd()
     with eng.begin() as c:
         c.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(eng)
+    with eng.begin() as c:
+        for orden in COLUMNAS_NUEVAS:
+            c.execute(text(orden))

@@ -23,12 +23,14 @@ Las funciones no hacen commit (lo hace quien llama).
 from __future__ import annotations
 
 import calendar
+from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -121,6 +123,18 @@ def instruccion_vigente(bd: Session, tarea_id: int) -> Instruccion | None:
     )
 
 
+def instrucciones_vigentes(bd: Session, tarea_ids: Iterable[int]) -> dict[int, Instruccion]:
+    """{tarea_id: versión publicada más reciente} de varias tareas en una sola consulta."""
+    ids = sorted(set(tarea_ids))
+    if not ids:
+        return {}
+    vigentes: dict[int, Instruccion] = {}
+    for ins in bd.scalars(select(Instruccion).where(Instruccion.tarea_id.in_(ids), Instruccion.estado == "publicada")
+                          .order_by(Instruccion.tarea_id, Instruccion.version.desc())):
+        vigentes.setdefault(ins.tarea_id, ins)
+    return vigentes
+
+
 def fila_de(bd: Session, usuario_id: int, tarea_id: int) -> NivelIluo | None:
     return bd.scalar(select(NivelIluo).where(NivelIluo.usuario_id == usuario_id, NivelIluo.tarea_id == tarea_id))
 
@@ -188,6 +202,80 @@ def puede_evaluar(bd: Session, actor: Actor, usuario: Usuario, tarea: Tarea, exp
 # --------------------------------------------------------------------------- evidencias
 
 
+def _por_tarea() -> defaultdict[int, list[Any]]:
+    return defaultdict(list)
+
+
+@dataclass
+class Precarga:
+    """Todo lo que hace falta para evaluar a una persona en varias tareas, leído de una vez.
+
+    El pasaporte recalcula todas las tareas de la persona en cada visita: sin esto serían unas
+    veinte consultas por tarea. Con la precarga son unas pocas consultas en total y `evaluar`
+    trabaja en memoria. Las listas no están filtradas por la ventana de validez (cada tarea
+    tiene la suya); `evaluar` las filtra.
+    """
+
+    usuario_id: int
+    cfg: dict[str, Any]
+    filas: dict[int, NivelIluo] = field(default_factory=dict)
+    vigentes: dict[int, Instruccion] = field(default_factory=dict)
+    versiones: dict[int, dict[int, int]] = field(default_factory=dict)  # tarea_id -> {instruccion_id: versión}
+    vistas: defaultdict[int, list[Any]] = field(default_factory=_por_tarea)  # (id, completada_en, instruccion_id)
+    ejecuciones: defaultdict[int, list[Any]] = field(default_factory=_por_tarea)
+    formaciones: list[Any] = field(default_factory=list)  # activas: (id, inicio, puesto_id, departamento_id)
+    intentos: defaultdict[int, list[IntentoEval]] = field(default_factory=_por_tarea)  # de cualquier versión
+    observaciones: defaultdict[int, list[Observacion]] = field(default_factory=_por_tarea)
+    nombres: dict[int, str] = field(default_factory=dict)  # evaluadores de las observaciones
+
+
+def precargar(bd: Session, usuario_id: int, tarea_ids: Iterable[int], cfg: dict[str, Any] | None = None) -> Precarga:
+    """Lee de una vez las evidencias de una persona en unas tareas (ver `Precarga`)."""
+    ids = sorted(set(tarea_ids))
+    p = Precarga(usuario_id=usuario_id, cfg=cfg or configuracion(bd))
+    if not ids:
+        return p
+    p.filas = {f.tarea_id: f for f in bd.scalars(
+        select(NivelIluo).where(NivelIluo.usuario_id == usuario_id, NivelIluo.tarea_id.in_(ids)))}
+    tarea_de: dict[int, int] = {}
+    for ins in bd.scalars(select(Instruccion).where(Instruccion.tarea_id.in_(ids))
+                          .order_by(Instruccion.tarea_id, Instruccion.version.desc())):
+        tarea_de[ins.id] = ins.tarea_id
+        p.versiones.setdefault(ins.tarea_id, {})[ins.id] = ins.version
+        if ins.estado == "publicada":
+            p.vigentes.setdefault(ins.tarea_id, ins)  # la publicada de versión más alta
+    for v in bd.execute(
+        select(MicroleccionVista.id, MicroleccionVista.completada_en, Microleccion.instruccion_id, Instruccion.tarea_id)
+        .join(Microleccion, Microleccion.id == MicroleccionVista.microleccion_id)
+        .join(Instruccion, Instruccion.id == Microleccion.instruccion_id)
+        .where(MicroleccionVista.usuario_id == usuario_id, Instruccion.tarea_id.in_(ids))
+    ):
+        p.vistas[v.tarea_id].append(v)
+    for e in bd.execute(
+        select(Ejecucion.id, Ejecucion.tarea_id, Ejecucion.inicio, Ejecucion.fin, Ejecucion.estado,
+               Ejecucion.consultas, Ejecucion.consultas_criticos)
+        .where(Ejecucion.usuario_id == usuario_id, Ejecucion.tarea_id.in_(ids))
+    ):
+        p.ejecuciones[e.tarea_id].append(e)
+    p.formaciones = list(bd.execute(
+        select(Formacion.id, Formacion.inicio, Formacion.puesto_id, Formacion.departamento_id)
+        .where(Formacion.usuario_id == usuario_id, Formacion.estado == "activa")).all())
+    if tarea_de:
+        for it in bd.scalars(select(IntentoEval).where(IntentoEval.usuario_id == usuario_id,
+                                                       IntentoEval.instruccion_id.in_(list(tarea_de)))):
+            p.intentos[tarea_de[it.instruccion_id]].append(it)
+    for o in bd.scalars(select(Observacion).where(Observacion.usuario_id == usuario_id, Observacion.tarea_id.in_(ids))):
+        p.observaciones[o.tarea_id].append(o)
+    evaluadores = {o.evaluador_id for lista in p.observaciones.values() for o in lista if o.evaluador_id}
+    if evaluadores:
+        p.nombres = {i: n for i, n in bd.execute(select(Usuario.id, Usuario.nombre).where(Usuario.id.in_(evaluadores)))}
+    return p
+
+
+def _en_ventana(fecha: datetime | None, ventana: datetime) -> bool:
+    return fecha is not None and fecha >= ventana
+
+
 @dataclass
 class Evidencias:
     """Evidencias vigentes de una persona en una tarea y el nivel que respaldan."""
@@ -200,6 +288,8 @@ class Evidencias:
     completadas: list[dict[str, Any]] = field(default_factory=list)
     observacion: dict[str, Any] | None = None
     formador: dict[str, Any] | None = None
+    # Datos leídos para calcularlas (el pasaporte los reutiliza para mostrar las evidencias).
+    precarga: Precarga | None = field(default=None, repr=False, compare=False)
 
     @property
     def ultima(self) -> dict[str, Any] | None:
@@ -275,10 +365,6 @@ class Evidencias:
         }
 
 
-def _fecha_ejecucion():
-    return func.coalesce(Ejecucion.fin, Ejecucion.inicio)
-
-
 def inicio_ventana(fila: NivelIluo | None, cfg: dict[str, Any], momento: datetime | None = None) -> datetime:
     """Desde cuándo cuentan las evidencias: los últimos `meses_validez` meses y, si un jefe
     bajó el nivel a mano, solo las posteriores a ese ajuste («corte»)."""
@@ -288,57 +374,44 @@ def inicio_ventana(fila: NivelIluo | None, cfg: dict[str, Any], momento: datetim
 
 
 def evaluar(bd: Session, usuario_id: int, tarea: Tarea, fila: NivelIluo | None = None,
-            cfg: dict[str, Any] | None = None, momento: datetime | None = None) -> Evidencias:
-    """Reúne las evidencias vigentes (sin escribir nada)."""
-    cfg = cfg or configuracion(bd)
+            cfg: dict[str, Any] | None = None, momento: datetime | None = None,
+            precarga: Precarga | None = None) -> Evidencias:
+    """Reúne las evidencias vigentes (sin escribir nada). Con `precarga` no consulta la BD."""
+    p = precarga if precarga is not None else precargar(bd, usuario_id, [tarea.id], cfg)
+    cfg = cfg or p.cfg
     momento = momento or ahora()
     ventana = inicio_ventana(fila, cfg, momento)
     datos = (fila.evidencias or {}) if fila is not None else {}
-    ev = Evidencias(ventana=ventana, necesarias=cfg["ejecuciones_para_L"])
-    ev.instruccion = ins = instruccion_vigente(bd, tarea.id)
+    ev = Evidencias(ventana=ventana, necesarias=cfg["ejecuciones_para_L"], precarga=p)
+    ev.instruccion = ins = p.vigentes.get(tarea.id)
+    ejecuciones = p.ejecuciones.get(tarea.id, [])
+    intentos = p.intentos.get(tarea.id, [])
+    observaciones = p.observaciones.get(tarea.id, [])
+
+    def primera(filas: list[Any], fecha: Any) -> Any:
+        """La fila más antigua dentro de la ventana según `fecha(fila)`."""
+        validas = [f for f in filas if _en_ventana(fecha(f), ventana)]
+        return min(validas, key=fecha) if validas else None
 
     # Actividad: lo primero que hizo dentro de la ventana (o una formación activa que la incluye).
     candidatas: list[tuple[str, int, datetime]] = []
-    vista = bd.execute(
-        select(MicroleccionVista.id, MicroleccionVista.completada_en)
-        .join(Microleccion, Microleccion.id == MicroleccionVista.microleccion_id)
-        .join(Instruccion, Instruccion.id == Microleccion.instruccion_id)
-        .where(MicroleccionVista.usuario_id == usuario_id, Instruccion.tarea_id == tarea.id,
-               MicroleccionVista.completada_en >= ventana)
-        .order_by(MicroleccionVista.completada_en).limit(1)
-    ).first()
+    vista = primera(p.vistas.get(tarea.id, []), lambda v: v.completada_en)
     if vista:
         candidatas.append(("microleccion", vista.id, vista.completada_en))
-    eje = bd.execute(
-        select(Ejecucion.id, Ejecucion.inicio)
-        .where(Ejecucion.usuario_id == usuario_id, Ejecucion.tarea_id == tarea.id, Ejecucion.inicio >= ventana)
-        .order_by(Ejecucion.inicio).limit(1)
-    ).first()
+    eje = primera(ejecuciones, lambda e: e.inicio)
     if eje:
         candidatas.append(("ejecucion", eje.id, eje.inicio))
     dep = departamento_de_tarea(tarea)
-    form = bd.execute(
-        select(Formacion.id, Formacion.inicio)
-        .where(Formacion.usuario_id == usuario_id, Formacion.estado == "activa",
-               or_(Formacion.puesto_id == tarea.puesto_id,
-                   (Formacion.puesto_id.is_(None)) & (Formacion.departamento_id == dep)))
-        .order_by(Formacion.inicio).limit(1)
-    ).first()
-    if form:
+    formaciones = [f for f in p.formaciones if f.inicio is not None and (
+        (tarea.puesto_id is not None and f.puesto_id == tarea.puesto_id)
+        or (f.puesto_id is None and dep is not None and f.departamento_id == dep))]
+    if formaciones:
+        form = min(formaciones, key=lambda f: f.inicio)
         candidatas.append(("formacion", form.id, form.inicio))
-    intento = bd.execute(
-        select(IntentoEval.id, IntentoEval.creado)
-        .join(Instruccion, Instruccion.id == IntentoEval.instruccion_id)
-        .where(IntentoEval.usuario_id == usuario_id, Instruccion.tarea_id == tarea.id, IntentoEval.creado >= ventana)
-        .order_by(IntentoEval.creado).limit(1)
-    ).first()
+    intento = primera(intentos, lambda i: i.creado)
     if intento:
         candidatas.append(("cuestionario", intento.id, intento.creado))
-    obs_cualquiera = bd.execute(
-        select(Observacion.id, Observacion.creada)
-        .where(Observacion.usuario_id == usuario_id, Observacion.tarea_id == tarea.id, Observacion.creada >= ventana)
-        .order_by(Observacion.creada).limit(1)
-    ).first()
+    obs_cualquiera = primera(observaciones, lambda o: o.creada)
     if obs_cualquiera:
         candidatas.append(("observacion", obs_cualquiera.id, obs_cualquiera.creada))
     if candidatas:
@@ -347,37 +420,24 @@ def evaluar(bd: Session, usuario_id: int, tarea: Tarea, fila: NivelIluo | None =
 
     # Cuestionario aprobado de la versión vigente (el más reciente).
     if ins is not None:
-        it = bd.scalar(
-            select(IntentoEval)
-            .where(IntentoEval.usuario_id == usuario_id, IntentoEval.instruccion_id == ins.id,
-                   IntentoEval.aprobado.is_(True), IntentoEval.creado >= ventana)
-            .order_by(IntentoEval.creado.desc()).limit(1)
-        )
-        if it:
+        aprobados = [i for i in intentos if i.instruccion_id == ins.id and i.aprobado and _en_ventana(i.creado, ventana)]
+        if aprobados:
+            it = max(aprobados, key=lambda i: i.creado)
             ev.cuestionario = {"intento_id": it.id, "instruccion_id": ins.id, "version": ins.version,
                                "puntuacion": round(it.puntuacion, 3), "fecha": iso(it.creado)}
 
     # Ejecuciones completadas (de cualquier versión), en orden.
-    filas_e = bd.execute(
-        select(Ejecucion.id, Ejecucion.inicio, Ejecucion.fin, Ejecucion.consultas, Ejecucion.consultas_criticos)
-        .where(Ejecucion.usuario_id == usuario_id, Ejecucion.tarea_id == tarea.id,
-               Ejecucion.estado == "completada", _fecha_ejecucion() >= ventana)
-        .order_by(_fecha_ejecucion(), Ejecucion.id)
-    ).all()
+    filas_e = sorted((e for e in ejecuciones if e.estado == "completada" and _en_ventana(e.fin or e.inicio, ventana)),
+                     key=lambda e: (e.fin or e.inicio, e.id))
     ev.completadas = [{"id": e.id, "fecha": iso(e.fin or e.inicio), "consultas": e.consultas or 0,
                        "consultas_criticos": e.consultas_criticos or 0} for e in filas_e]
 
     # Observación aprobada (la más reciente).
-    obs = bd.scalar(
-        select(Observacion)
-        .where(Observacion.usuario_id == usuario_id, Observacion.tarea_id == tarea.id,
-               Observacion.aprobada.is_(True), Observacion.creada >= ventana)
-        .order_by(Observacion.creada.desc()).limit(1)
-    )
-    if obs:
-        evaluador = bd.get(Usuario, obs.evaluador_id) if obs.evaluador_id else None
+    aprobadas = [o for o in observaciones if o.aprobada and _en_ventana(o.creada, ventana)]
+    if aprobadas:
+        obs = max(aprobadas, key=lambda o: o.creada)
         ev.observacion = {"id": obs.id, "fecha": iso(obs.creada), "evaluador_id": obs.evaluador_id,
-                          "evaluador": evaluador.nombre if evaluador else None}
+                          "evaluador": p.nombres.get(obs.evaluador_id) if obs.evaluador_id else None}
 
     # Validación como formador (si sigue dentro de la ventana).
     if fila is not None and fila.formador_validado:
@@ -411,17 +471,24 @@ def _certificar(bd: Session, usuario: Usuario, tarea: Tarea, nivel: int, anterio
     )
 
 
-def recalcular_con_evidencias(bd: Session, usuario_id: int, tarea_id: int) -> tuple[NivelIluo, Evidencias]:
-    """Como `recalcular`, pero devuelve también las evidencias calculadas."""
+def recalcular_con_evidencias(bd: Session, usuario_id: int, tarea_id: int,
+                              precarga: Precarga | None = None) -> tuple[NivelIluo, Evidencias]:
+    """Como `recalcular`, pero devuelve también las evidencias calculadas.
+
+    `precarga` (de `precargar`, con esta persona y esta tarea) evita releer las evidencias
+    cuando se recalculan muchas tareas seguidas, como en el pasaporte.
+    """
     usuario, tarea = _cargar(bd, usuario_id, tarea_id)
-    cfg = configuracion(bd)
+    if precarga is not None and precarga.usuario_id != usuario_id:
+        precarga = None
+    cfg = precarga.cfg if precarga is not None else configuracion(bd)
     momento = ahora()
-    fila = fila_de(bd, usuario_id, tarea_id)
+    fila = precarga.filas.get(tarea_id) if precarga is not None else fila_de(bd, usuario_id, tarea_id)
     nueva = fila is None
     if fila is None:
         fila = NivelIluo(usuario_id=usuario_id, tarea_id=tarea_id, nivel=0, evidencias={},
                          requiere_reevaluacion=False, formador_validado=False)
-    ev = evaluar(bd, usuario_id, tarea, fila, cfg, momento)
+    ev = evaluar(bd, usuario_id, tarea, fila, cfg, momento, precarga=precarga)
     calculado = ev.nivel
     datos = dict(fila.evidencias or {})
     anterior = fila.nivel or 0
@@ -454,8 +521,15 @@ def recalcular_con_evidencias(bd: Session, usuario_id: int, tarea_id: int) -> tu
 
     datos.update(ev.a_dict())
     datos["calculado"] = calculado
-    datos["actualizado"] = iso(momento)
-    fila.evidencias = datos  # dict nuevo: SQLAlchemy detecta el cambio en JSONB
+
+    def sin_fecha(d: dict[str, Any]) -> dict[str, Any]:
+        # «ventana_desde» avanza con el reloj (hoy menos la validez): no es un cambio de evidencias.
+        return {k: v for k, v in d.items() if k not in ("actualizado", "ventana_desde")}
+
+    # Solo se escribe si algo cambia: ver el pasaporte no reescribe cada fila en cada visita.
+    if sin_fecha(datos) != sin_fecha(fila.evidencias or {}):
+        datos["actualizado"] = iso(momento)
+        fila.evidencias = datos  # dict nuevo: SQLAlchemy detecta el cambio en JSONB
 
     if nueva and fila.nivel == 0:
         return fila, ev  # sin nada que guardar: no se crea la fila

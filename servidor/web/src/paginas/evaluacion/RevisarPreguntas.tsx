@@ -1,7 +1,7 @@
 // «Revisar preguntas» (expertos): las preguntas propuestas por la IA se aprueban, se editan o se
 // descartan antes de que entren en el cuestionario. También se pueden generar más o escribir otras.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Check, CheckCircle2, ListChecks, Loader2, Plus, RotateCcw, Save, Sparkles, Trash2, X } from 'lucide-react'
 import { del, get, post, put } from '../../api'
@@ -168,10 +168,14 @@ function PanelPreguntas({ instruccionId, onCambio }: { instruccionId: number; on
   const [nueva, setNueva] = useState(false)
   const [lanzando, setLanzando] = useState(false)
 
-  // Mientras la IA genera, se consulta cada pocos segundos.
+  // Mientras la IA genera, se consulta cada pocos segundos; al terminar se avisa a la página
+  // (pestañas y menú) una sola vez.
+  const generaba = useRef(false)
   useEffect(() => {
+    if (generaba.current && datos && !datos.generando) onCambio()
+    generaba.current = !!datos?.generando
     if (!datos?.generando) return
-    const t = setTimeout(() => { recargar(); onCambio() }, 3500)
+    const t = setTimeout(recargar, 3500)
     return () => clearTimeout(t)
   }, [datos, recargar, onCambio])
 
@@ -190,6 +194,8 @@ function PanelPreguntas({ instruccionId, onCambio }: { instruccionId: number; on
       const r = await post<{ mensaje: string }>(`/api/evaluacion/instrucciones/${instruccionId}/generar-preguntas`, { n: 6 })
       avisar(r.mensaje, 'info')
       setFiltro('propuesta')
+      // Se muestra ya como «generando» (la lista tarda en recargarse y no debe ofrecer generar otra vez).
+      setDatos((d) => d && ({ ...d, generando: true }))
       recargar()
       onCambio()
     } catch (e) {

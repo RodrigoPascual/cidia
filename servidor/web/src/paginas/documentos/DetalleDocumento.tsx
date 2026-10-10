@@ -1,14 +1,15 @@
 // Ficha de un documento: etiquetas, datos, acciones y los fragmentos tal como los guarda el motor.
 
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Download, GraduationCap, Globe, Layers, Pencil, RefreshCw, ScanText, Trash2, Workflow,
+  Download, GraduationCap, Globe, Layers, ListChecks, Pencil, RefreshCw, ScanText, Trash2, Workflow,
 } from 'lucide-react'
 import { fecha, get, hace, tamano, urlServidor } from '../../api'
 import { Aviso, BarraProgreso, Boton, ErrorCarga, Esqueleto, Etiqueta, Vacio, useDatos } from '../../ui'
 import type { AccionesDocumento } from './acciones'
 import { Cajon, EstadoEtiqueta, IconoTipo, MetaFragmento, NivelMinimo } from './comunes'
-import { NOMBRE_ORIGEN, type DetalleDocumento as Detalle, type FragmentoMuestra } from './tipos'
+import { NOMBRE_ORIGEN, sePuedeReindexar, type DetalleDocumento as Detalle, type FragmentoMuestra } from './tipos'
 
 const ESTADO_TRABAJO: Record<string, string> = {
   pendiente: 'En cola', en_curso: 'En curso', completado: 'Completado', error: 'Error',
@@ -87,11 +88,19 @@ export default function DetalleDocumento({ documentoId, version, acciones, onCer
       {actual.puede_editar && (
         <>
           <Boton tamano="pequeno" icono={<Pencil />} onClick={() => acciones.editar(actual)}>Editar etiquetas</Boton>
-          <Boton tamano="pequeno" icono={<RefreshCw />} cargando={ocupado} disabled={actual.indexando}
-            onClick={() => acciones.reindexar(actual)}>Reindexar</Boton>
+          {sePuedeReindexar(actual) && (
+            <Boton tamano="pequeno" icono={<RefreshCw />} cargando={ocupado} disabled={actual.indexando}
+              onClick={() => acciones.reindexar(actual)}>Reindexar</Boton>
+          )}
           <span className="crece" />
-          <Boton tamano="pequeno" variante="peligro" icono={<Trash2 />} disabled={ocupado}
-            onClick={() => acciones.borrar(actual)}>Borrar</Boton>
+          {actual.origen === 'instruccion' ? (
+            <Link className="boton secundario pequeno" to={`/instrucciones/${actual.origen_id}`}>
+              <ListChecks /> Abrir la instrucción
+            </Link>
+          ) : (
+            <Boton tamano="pequeno" variante="peligro" icono={<Trash2 />} disabled={ocupado}
+              onClick={() => acciones.borrar(actual)}>Borrar</Boton>
+          )}
         </>
       )}
     </>
@@ -125,6 +134,26 @@ export default function DetalleDocumento({ documentoId, version, acciones, onCer
                 El indexado se cortó antes de terminar (por ejemplo, porque se reinició el servidor) y no seguirá solo.
                 {actual.puede_editar ? ' Pulsa «Reindexar» para terminarlo.' : ' Avisa a quien gestiona este documento.'}
               </Aviso>
+            </div>
+          )}
+          {actual.estado === 'borrador' && (
+            <div className="mb-2">
+              <Aviso tono="amarillo" titulo="Ficha en borrador">
+                Su autor todavía no la ha publicado desde Captura, así que el copiloto no la encuentra.
+              </Aviso>
+            </div>
+          )}
+          {actual.estado === 'obsoleto' && (
+            <div className="mb-2">
+              <Aviso titulo="Versión sustituida">
+                {actual.mensaje_estado ?? 'Sustituida por una versión posterior.'} El copiloto ya no la usa; se conserva
+                para que las respuestas antiguas que la citaron sigan llevando a su origen.
+              </Aviso>
+            </div>
+          )}
+          {actual.origen === 'instruccion' && actual.estado !== 'obsoleto' && actual.puede_editar && (
+            <div className="mb-2">
+              <Aviso>Es una instrucción de trabajo publicada: se cambia desde Instrucciones, creando y publicando una versión nueva.</Aviso>
             </div>
           )}
           {!actual.puede_editar && (

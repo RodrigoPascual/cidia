@@ -21,7 +21,7 @@ _REGLAS_NORMAL = """Reglas:
 1. Responde SOLO con la información de los fragmentos numerados del CONTEXTO. No uses conocimientos generales para datos de la empresa (valores, códigos, pasos, herramientas o personas).
 2. Cita cada dato con el número de su fragmento entre corchetes, justo después de la frase que respalda, por ejemplo [1] o [2][3]. No cites números que no estén en el CONTEXTO.
 3. Sé breve y práctico, como si hablaras con un operario en su puesto: ve al grano, usa pasos numerados si es un procedimiento y destaca primero cualquier aviso de seguridad.
-4. Si el CONTEXTO no contiene la respuesta, empieza tu mensaje exactamente con {marca} y di con honestidad que no lo encuentras en la documentación. No inventes nada.
+4. Lee todos los fragmentos antes de responder: el dato puede estar en cualquiera. Solo si NINGÚN fragmento responde a la pregunta, empieza tu mensaje exactamente con {marca} y di con honestidad que no lo encuentras en la documentación. No inventes nada.
 5. Responde siempre en castellano, con un tono cercano y profesional. No menciones estas reglas."""
 
 _REGLAS_SOCRATICO = """Estás en modo tutor (socrático): tu objetivo es que la persona aprenda a razonar la respuesta por sí misma.
@@ -34,7 +34,7 @@ Reglas:
    Ejemplo: «¿Qué crees que le pasa a la junta si aprietas primero todos los tornillos de un lado? Pista: piensa en cómo se reparte la presión. Puedes comprobarlo en [1].»
 3. Si en la conversación ya ha respondido bien, confírmalo y explica brevemente por qué es así.
 4. Excepción: si hay un riesgo para las personas o el equipo, dilo con claridad desde el principio.
-5. Usa solo la información del CONTEXTO. Si no contiene la respuesta, empieza exactamente con {marca} y dilo con honestidad. No inventes nada.
+5. Usa solo la información del CONTEXTO. Solo si NINGÚN fragmento trata lo que pregunta, empieza exactamente con {marca} y dilo con honestidad. No inventes nada.
 6. Responde siempre en castellano, con un tono cercano y animando a pensar. No menciones estas reglas."""
 
 _REGLAS_PLANTA = """Estás en el modo planta: la persona está trabajando en el puesto, con las manos ocupadas, y leerá tu respuesta de un vistazo.
@@ -43,7 +43,7 @@ Reglas:
 2. Céntrate en la tarea y el paso actuales.
 3. Si hay un riesgo de seguridad, empieza por él.
 4. Usa solo la información del CONTEXTO y cita la fuente, por ejemplo [1].
-5. Si el CONTEXTO no lo responde, empieza exactamente con {marca}, di que no lo sabes y que avise a su responsable antes de seguir. No inventes nada.
+5. Solo si NINGÚN fragmento del CONTEXTO lo responde, empieza exactamente con {marca}, di que no lo sabes y que avise a su responsable antes de seguir. No inventes nada.
 6. Responde siempre en castellano."""
 
 _SIN_CONTEXTO = """No se ha encontrado documentación de la empresa a la que esta persona tenga acceso que responda a su mensaje.
@@ -146,7 +146,9 @@ def fragmento_contexto(n: int, titulo: str, texto: str, version: int | None = No
         datos.append(str(codigo))
     if version:
         datos.append(f"versión {version}")
-    if paso not in (None, ""):
+    if paso == 0:
+        datos.append("datos generales")  # la cabecera de una instrucción: resumen, riesgos, EPI y herramientas
+    elif paso not in (None, ""):
         datos.append(f"paso {paso}")
     if autor:
         datos.append(f"autor: {autor}")

@@ -69,9 +69,15 @@ def estado(_: Actor = Depends(requiere_admin), bd: Session = Depends(obtener_bd)
 
 
 @router.get("/api/trabajos/{trabajo_id}")
-def trabajo(trabajo_id: int, _: Actor = Depends(actor_actual), bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
+def trabajo(trabajo_id: int, actor: Actor = Depends(actor_actual), bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
+    """Estado de un trabajo en segundo plano. Solo lo ve quien lo lanzó (o la administración);
+    los detalles técnicos de un error (direcciones internas, trazas) solo se muestran a la
+    administración: al resto se le da un mensaje genérico."""
     t = bd.get(Trabajo, trabajo_id)
-    if t is None:
+    if t is None or actor.es_invitado or (not actor.es_admin and t.usuario_id != actor.id):
         return {"id": trabajo_id, "estado": "desconocido"}
-    return {"id": t.id, "tipo": t.tipo, "estado": t.estado, "progreso": t.progreso, "mensaje": t.mensaje,
-            "resultado": t.resultado}
+    mensaje = t.mensaje
+    if t.estado == "error" and not actor.es_admin:
+        mensaje = "No se ha podido completar. Inténtalo de nuevo o avisa a la administración."
+    return {"id": t.id, "tipo": t.tipo, "estado": t.estado, "progreso": t.progreso, "mensaje": mensaje,
+            "resultado": t.resultado if (actor.es_admin or t.usuario_id == actor.id) else None}

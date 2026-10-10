@@ -1,23 +1,26 @@
 // Modo planta a pantalla completa (fuera del Marco): un paso por pantalla con letra grande,
 // imagen o clip del experto, confirmación obligatoria de los pasos críticos, copiloto por voz o
 // texto en el contexto del paso, foto del resultado comparada con la referencia y cierre con resumen.
-// Quien supervisa (jefes, administración) la recorre en solo lectura, foto del resultado incluida.
+// Quien supervisa (jefes, administración) la recorre en solo lectura, foto del resultado incluida, y
+// el jefe del departamento de la tarea da la foto por buena o la rechaza con un comentario
+// (con ?revisar=1 se abre directamente en la foto).
 // Atajos: → o espacio = Hecho / Siguiente, ← = Anterior.
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, ClipboardCheck, Clock, Eye, Film, Flag,
-  HardHat, ListChecks, Loader2, Maximize2, RefreshCw, ShieldAlert, TrendingUp, Wrench, X, XCircle,
+  AlertTriangle, ArrowLeft, ArrowRight, BadgeCheck, Camera, Check, CheckCircle2, ClipboardCheck, Clock, Eye, Film, Flag,
+  HardHat, ListChecks, Loader2, Maximize2, RefreshCw, ShieldAlert, ThumbsDown, ThumbsUp, TrendingUp, UserRound, Wrench,
+  X, XCircle,
 } from 'lucide-react'
 import { EMBEBIDA, enviarFormulario, fecha, get, post, urlServidor } from '../../api'
 import {
-  Aviso, Boton, ErrorCarga, Esqueleto, Etiqueta, Iluo, LogoCidia, Modal, NOMBRE_ILUO, TextoFormato, Vacio,
+  Area, Aviso, Boton, Campo, ErrorCarga, Esqueleto, Etiqueta, Iluo, LogoCidia, Modal, NOMBRE_ILUO, TextoFormato, Vacio,
   useAvisarError, useAvisos, useDatos,
 } from '../../ui'
 import { consumirRespuesta, duracion, idLocal, reloj, RESPUESTA_VACIA } from './copiloto'
 import { PanelCopiloto, type Mensaje } from './PanelCopiloto'
-import type { EjecucionDatos, PasoEjecucion, ResumenFin, Veredicto } from './tipos'
+import type { EjecucionDatos, PasoEjecucion, ResumenFin, RevisionFoto, Veredicto } from './tipos'
 import './planta.css'
 
 type Fase = 'pasos' | 'cierre' | 'fin'
@@ -97,11 +100,30 @@ function useSegundos(base: number, activo: boolean) {
   return activo ? base + (ahora - cargado.current) / 1000 : base
 }
 
+/** «Pedro Ruiz» → «Pedro R.» (en la barra del modo planta, como en la maqueta del plan). */
+function nombreCorto(nombre: string): string {
+  const [nombrePila, ...resto] = nombre.trim().split(/ +/)
+  return resto.length ? `${nombrePila} ${resto[0][0]}.` : nombrePila
+}
+
+/** Texto de riesgos sin repetir: la instrucción y la tarea a menudo traen el mismo. */
+function unirRiesgos(...textos: (string | null | undefined)[]): string {
+  const vistos = new Set<string>()
+  return textos.filter((t): t is string => !!t?.trim()).filter((t) => {
+    const clave = t.trim().toLowerCase()
+    if (vistos.has(clave)) return false
+    vistos.add(clave)
+    return true
+  }).join('\n')
+}
+
 function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
   const navegar = useNavigate()
   const volver = useVolver()
   const avisar = useAvisos()
   const avisarError = useAvisarError()
+  const [params] = useSearchParams()
+  const aRevisar = params.get('revisar') === '1'
 
   const [ej, setEj] = useState(inicial)
   const total = ej.pasos.length
@@ -109,13 +131,14 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
   const [indice, setIndice] = useState(Math.max(0, Math.min(inicial.paso_actual, total - 1)))
   const [atras, setAtras] = useState(false)
   const [fase, setFase] = useState<Fase>(() => {
-    if (!inicial.es_mia) return 'pasos'
+    if (!inicial.es_mia) return aRevisar && inicial.foto && inicial.pasos.every((p) => p.confirmado) ? 'cierre' : 'pasos'
     if (inicial.estado === 'completada') return 'fin'
     return inicial.estado === 'en_curso' && inicial.pasos.every((p) => p.confirmado) ? 'cierre' : 'pasos'
   })
   const [marcados, setMarcados] = useState<Record<number, boolean>>({})
   const [enviando, setEnviando] = useState(false)
   const [sacudir, setSacudir] = useState(false)
+  const [faltaMarcar, setFaltaMarcar] = useState<number | null>(null) // paso crítico sin marcar al pulsar «Hecho»
   const [resumen, setResumen] = useState<ResumenFin | null>(null)
   const [salir, setSalir] = useState(false)
   const [ampliada, setAmpliada] = useState<string | null>(null)
@@ -163,9 +186,10 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
     if (fase !== 'pasos' || enviando || !paso) return
     if (soloLectura || paso.confirmado) { siguiente(ej.pasos); return }
     if (paso.es_critico && !marcados[paso.id]) {
+      // Aviso dentro del recuadro rojo (un aviso flotante taparía el botón «Hecho»).
       setSacudir(true)
+      setFaltaMarcar(paso.id)
       setTimeout(() => setSacudir(false), 420)
-      avisar('Es un paso crítico: marca la casilla para confirmar que lo has comprobado.', 'error')
       return
     }
     setEnviando(true)
@@ -290,7 +314,7 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
   function pedirSalida() {
     if (ej.es_mia && ej.estado === 'en_curso') setSalir(true)
     else if (ej.es_mia) navegar('/planta')
-    else volver('/equipo')
+    else volver(aRevisar ? '/planta?vista=fotos' : '/equipo')
   }
 
   // ------------------------------------------------------------------ pantalla
@@ -354,7 +378,7 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
               {subiendo ? (
                 <div className="fila apagado"><Loader2 className="girando" size={18} /> Comparando con la referencia…</div>
               ) : ej.foto ? (
-                <VeredictoAviso v={ej.foto} />
+                <VeredictoAviso v={ej.foto} propia={ej.es_mia} />
               ) : !soloLectura ? (
                 <div className="pequeno apagado">La foto es opcional: puedes finalizar sin ella. Vale JPG, PNG o WEBP.</div>
               ) : null}
@@ -364,11 +388,18 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
                 <Boton variante="fantasma" icono={<RefreshCw />} onClick={() => entradaFoto.current?.click()}>Repetir la foto</Boton>
               </div>
             )}
+            {ej.foto?.revision && !ej.puede_revisar && (
+              <div className="mt-2"><EstadoRevision r={ej.foto.revision} propia={ej.es_mia} /></div>
+            )}
             {!soloLectura && (
               <input ref={entradaFoto} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden
                 onChange={subirFoto} />
             )}
           </section>
+          <div className="ej-cierre-lateral">
+          {ej.puede_revisar && ej.foto && (
+            <PanelRevision ej={ej} onRevisada={(v) => setEj((x) => ({ ...x, foto: v }))} />
+          )}
           <section className="ej-tarjeta">
             <h2><ClipboardCheck /> {soloLectura ? 'Resumen de la ejecución' : 'Has terminado los pasos'}</h2>
             <div className="apagado">
@@ -391,12 +422,13 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
               </div>
             )}
           </section>
+          </div>
         </div>
       </div>
     )
   } else if (paso) {
     const marcado = paso.confirmado ? paso.critico_confirmado || paso.es_critico : !!marcados[paso.id]
-    const riesgos = [ins.riesgos, ej.tarea.riesgos_prl].filter(Boolean).join('\n')
+    const riesgos = unirRiesgos(ins.riesgos, ej.tarea.riesgos_prl)
     const antes = indice === 0 && (ins.epis || ins.herramientas || riesgos)
     cuerpo = (
       <main className="planta-cuerpo">
@@ -417,9 +449,18 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
                 </div>
                 <label className={`ej-casilla ${marcado ? 'marcada' : ''} ${sacudir ? 'aviso' : ''}`}>
                   <input type="checkbox" checked={marcado} disabled={soloLectura || paso.confirmado}
-                    onChange={(e) => setMarcados((m) => ({ ...m, [paso.id]: e.target.checked }))} />
+                    onChange={(e) => {
+                      const v = e.target.checked
+                      setMarcados((m) => ({ ...m, [paso.id]: v }))
+                      if (v) setFaltaMarcar(null)
+                    }} />
                   {paso.confirmado ? 'Confirmado: este punto se comprobó' : 'He comprobado este punto crítico'}
                 </label>
+                {faltaMarcar === paso.id && !marcado && (
+                  <div className="ej-critico-falta" role="alert">
+                    Marca la casilla para confirmar que lo has comprobado. Sin ella no se puede seguir.
+                  </div>
+                )}
               </div>
             )}
             {antes && (
@@ -430,8 +471,8 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
                 {riesgos && <div className="ej-antes-fila riesgo"><ShieldAlert /><div><strong>Riesgos</strong>{riesgos}</div></div>}
               </div>
             )}
-            <Media paso={paso} onAmpliar={setAmpliada} />
             {paso.texto && <div className="planta-texto"><TextoFormato texto={paso.texto} /></div>}
+            <Media paso={paso} onAmpliar={setAmpliada} />
             {!paso.es_critico && paso.criterio_aceptacion && (
               <div className="ej-criterio"><strong>Cómo saber que está bien</strong>{paso.criterio_aceptacion}</div>
             )}
@@ -457,6 +498,9 @@ function Pantalla({ inicial }: { inicial: EjecucionDatos }) {
           </div>
           <div className="detalle">{ins.codigo ?? 'Instrucción'} · versión {ins.version}</div>
         </div>
+        {ej.es_mia && ej.persona && (
+          <div className="ej-persona" title={ej.persona.nombre}><UserRound /> {nombreCorto(ej.persona.nombre)}</div>
+        )}
         {ej.estado === 'en_curso' && <div className="ej-reloj" title="Tiempo de la ejecución"><Clock /> {reloj(segundos)}</div>}
         <div className="ej-chip-paso">{chip}</div>
         <Boton variante="fantasma" className="ej-salir" icono={<X />} onClick={pedirSalida}>Salir</Boton>
@@ -565,15 +609,106 @@ function Cifra({ valor, etiqueta, tono }: { valor: ReactNode; etiqueta: string; 
   )
 }
 
-function VeredictoAviso({ v }: { v: Veredicto }) {
+function VeredictoAviso({ v, propia }: { v: Veredicto; propia: boolean }) {
   const confianza = v.confianza != null ? ` Confianza del modelo: ${Math.round(v.confianza * 100)} %.` : ''
-  if (v.estado === 'comparada' && v.coincide) {
+  const quien = propia ? 'tu responsable' : 'el responsable'
+  if (v.estado === 'comparada' && v.coincide && !v.revision_humana) {
     return <Aviso tono="exito" titulo="Se parece a la referencia">{v.observaciones || v.mensaje}{confianza} Decide siempre una persona.</Aviso>
   }
-  if (v.estado === 'comparada') {
-    return <Aviso tono="amarillo" titulo="Revisa el resultado">{v.observaciones || v.mensaje}{confianza} Si tienes dudas, avisa a tu responsable.</Aviso>
+  if (v.estado === 'comparada' && v.coincide) {
+    return <Aviso tono="amarillo" titulo="El modelo tiene dudas">{v.observaciones || v.mensaje}{confianza} La revisará {quien}.</Aviso>
   }
-  return <Aviso titulo="La revisará una persona">{v.mensaje}</Aviso>
+  if (v.estado === 'comparada') {
+    return <Aviso tono="amarillo" titulo="Revisa el resultado">{v.observaciones || v.mensaje}{confianza} Si tienes dudas, avisa a {quien}.</Aviso>
+  }
+  return <Aviso titulo={`La revisará ${quien}`}>{v.mensaje}</Aviso>
+}
+
+/** Decisión del jefe sobre la foto, tal y como la ve quien hizo la tarea (o quien supervisa). */
+function EstadoRevision({ r, propia }: { r: RevisionFoto; propia: boolean }) {
+  const cuando = fecha(r.fecha, true)
+  if (r.estado === 'aprobada') {
+    return (
+      <Aviso tono="exito" titulo={`${r.revisor} ha dado la foto por buena`}>
+        {r.comentario ? `«${r.comentario}» · ` : ''}{cuando}
+      </Aviso>
+    )
+  }
+  return (
+    <Aviso tono="alerta" titulo={`${r.revisor} ha rechazado la foto`}>
+      {r.comentario ? `«${r.comentario}»` : 'Sin comentario.'} · {cuando}
+      {propia && <div className="mt-1">Corrige lo que indica y, si lo necesitas, pregúntale cómo hacerlo.</div>}
+    </Aviso>
+  )
+}
+
+/** El jefe del departamento de la tarea da la foto por buena o la rechaza con un comentario. */
+function PanelRevision({ ej, onRevisada }: { ej: EjecucionDatos; onRevisada: (v: Veredicto) => void }) {
+  const avisar = useAvisos()
+  const avisarError = useAvisarError()
+  const r = ej.foto?.revision ?? null
+  const [editando, setEditando] = useState(!r)
+  const [comentario, setComentario] = useState(r?.comentario ?? '')
+  const [enviando, setEnviando] = useState<'aprobada' | 'rechazada' | null>(null)
+  const [falta, setFalta] = useState(false)
+  const nombre = ej.persona?.nombre?.split(' ')[0] ?? 'la persona'
+
+  async function decidir(decision: 'aprobada' | 'rechazada') {
+    const texto = comentario.trim()
+    if (decision === 'rechazada' && texto.length < 3) { setFalta(true); return }
+    setEnviando(decision)
+    try {
+      const v = await post<Veredicto>(`/api/planta/ejecuciones/${ej.id}/revision`, { decision, comentario: texto || null })
+      onRevisada(v)
+      setEditando(false)
+      setFalta(false)
+      avisar(decision === 'aprobada' ? 'Foto dada por buena.' : `Foto rechazada. ${nombre} verá tu comentario.`)
+    } catch (e) {
+      avisarError(e)
+    } finally {
+      setEnviando(null)
+    }
+  }
+
+  return (
+    <section className={`ej-tarjeta ej-revision ${ej.foto?.pendiente_revision ? 'pendiente' : ''}`}>
+      <h2><BadgeCheck /> Revisión del responsable</h2>
+      {r && !editando ? (
+        <>
+          <EstadoRevision r={r} propia={false} />
+          <div className="mt-1">
+            <Boton variante="fantasma" icono={<RefreshCw />} onClick={() => setEditando(true)}>Cambiar la decisión</Boton>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="apagado">
+            {ej.foto?.necesita_revision
+              ? 'CidIA no ha podido confirmar que el resultado está bien. Compara la foto con la referencia y decide tú.'
+              : 'El modelo cree que coincide con la referencia. Puedes confirmarlo o rechazarlo si ves algo mal.'}
+          </div>
+          <div className="mt-2">
+            <Campo etiqueta={`Comentario para ${nombre}`} ayuda="Obligatorio si la rechazas: explica qué hay que corregir.">
+              <Area rows={3} maxLength={1000} value={comentario} placeholder="Por ejemplo: falta la marca de testigo en el tornillo 3."
+                onChange={(e) => { setComentario(e.target.value); if (falta) setFalta(false) }} />
+            </Campo>
+          </div>
+          {falta && <div className="ej-revision-falta" role="alert">Escribe qué hay que corregir antes de rechazarla.</div>}
+          <div className="ej-revision-botones">
+            <Boton variante="verde" tamano="grande" icono={<ThumbsUp />} cargando={enviando === 'aprobada'} disabled={!!enviando}
+              onClick={() => decidir('aprobada')}>
+              Dar por buena
+            </Boton>
+            <Boton variante="peligro" tamano="grande" icono={<ThumbsDown />} cargando={enviando === 'rechazada'} disabled={!!enviando}
+              onClick={() => decidir('rechazada')}>
+              Rechazar
+            </Boton>
+            {r && <Boton variante="fantasma" disabled={!!enviando} onClick={() => setEditando(false)}>Cancelar</Boton>}
+          </div>
+        </>
+      )}
+    </section>
+  )
 }
 
 function Exito({ ej, resumen, onVolver, onProgreso }: {
@@ -622,6 +757,11 @@ function Exito({ ej, resumen, onVolver, onProgreso }: {
           </div>
         )}
         <p className="apagado mb-3">{consejo}</p>
+        {ej.foto?.revision ? (
+          <div className="ej-exito-revision"><EstadoRevision r={ej.foto.revision} propia={ej.es_mia} /></div>
+        ) : ej.foto?.pendiente_revision ? (
+          <p className="pequeno apagado mb-3">Tu responsable revisará la foto del resultado y verás aquí su decisión.</p>
+        ) : null}
         <div className="fila envolver" style={{ justifyContent: 'center' }}>
           <Boton variante="primario" tamano="grande" icono={<ListChecks />} onClick={onVolver}>Volver a mis tareas</Boton>
           <Boton tamano="grande" icono={<TrendingUp />} onClick={onProgreso}>Ver mi progreso</Boton>

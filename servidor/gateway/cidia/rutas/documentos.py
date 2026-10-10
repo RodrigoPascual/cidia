@@ -46,7 +46,8 @@ NOMBRE_TIPO = {
     "pdf": "PDF", "office": "Office", "texto": "Texto", "audio": "Audio", "imagen": "Imagen",
     "instruccion": "Instrucción", "faq": "Pregunta frecuente", "ficha": "Ficha",
 }
-NOMBRE_ESTADO = {"procesando": "Procesando", "listo": "Listo", "error": "Con error", "borrador": "Borrador"}
+NOMBRE_ESTADO = {"procesando": "Procesando", "listo": "Listo", "error": "Con error", "borrador": "Borrador",
+                 "obsoleto": "Sustituido"}
 CAMPOS_PERMISO = ("departamento_id", "nivel_minimo", "es_formacion", "es_publico")
 TRABAJO_ACTIVO = ("pendiente", "en_curso")
 
@@ -279,11 +280,14 @@ def opciones(actor: Actor = Depends(requiere_jefe), bd: Session = Depends(obtene
         "umbral_respaldo": ajustes().umbral_respaldo,
         "fragmentos_por_consulta": ajustes().fragmentos_por_consulta,
     }
-    if actor.es_admin:  # para «buscar como...» en la consola de depuración
+    # Para «buscar como...» en la consola de depuración: la administración, como cualquiera; un jefe,
+    # como las personas de su departamento (para comprobar qué encuentra cada una de su equipo).
+    if actor.es_admin or actor.departamento_id is not None:
+        q = select(Usuario).where(Usuario.activo.is_(True))
+        if not actor.es_admin:
+            q = q.where(Usuario.departamento_id == actor.departamento_id, Usuario.id != actor.id)
         personas = bd.scalars(
-            select(Usuario).where(Usuario.activo.is_(True))
-            .options(selectinload(Usuario.departamento), selectinload(Usuario.nivel))
-            .order_by(Usuario.nombre)
+            q.options(selectinload(Usuario.departamento), selectinload(Usuario.nivel)).order_by(Usuario.nombre)
         ).all()
         datos["personas"] = [
             {"id": u.id, "nombre": u.nombre, "usuario": u.usuario, "rol": u.rol,
@@ -299,7 +303,7 @@ def opciones(actor: Actor = Depends(requiere_jefe), bd: Session = Depends(obtene
 
 class PruebaBusqueda(BaseModel):
     consulta: str
-    como_usuario_id: int | None = None  # solo administración
+    como_usuario_id: int | None = None  # administración (cualquiera) o jefe (personas de su departamento)
     como_invitado: bool = False  # solo administración: alcance de alguien sin sesión
     k: int | None = None
 
@@ -326,8 +330,10 @@ def probar_busqueda(datos: PruebaBusqueda, actor: Actor = Depends(requiere_jefe)
                     bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
     """Consola de depuración: qué fragmentos encuentra una pregunta y con qué puntuación.
 
-    Busca con el alcance de quien pregunta (calculado en el servidor). La administración
-    puede buscar además como otra persona o como invitado.
+    Busca con el alcance de quien pregunta (calculado en el servidor). La administración puede
+    buscar además como cualquier persona o como invitado; un jefe, como las personas de su
+    departamento, y entonces solo ve lo que encuentran entre lo que él mismo puede ver (una
+    persona que se forma en otro departamento encuentra material que su jefe no tiene por qué ver).
     """
     consulta = (datos.consulta or "").strip()
     if not consulta:
@@ -336,21 +342,27 @@ def probar_busqueda(datos: PruebaBusqueda, actor: Actor = Depends(requiere_jefe)
         raise HTTPException(400, "La pregunta es demasiado larga (máximo 2000 caracteres).")
     k = min(max(datos.k or ajustes().fragmentos_por_consulta, 1), 20)
     como = actor
-    if datos.como_usuario_id is not None or datos.como_invitado:
+    if datos.como_invitado:
         if not actor.es_admin:
-            raise HTTPException(403, "Solo la administración puede probar la búsqueda como otra persona.")
-        if datos.como_invitado:
-            como = Actor(sesion=actor.sesion, usuario=None)
-        else:
-            u = bd.get(Usuario, datos.como_usuario_id)
-            if u is None:
-                raise HTTPException(404, "No existe esa persona.")
-            como = Actor(sesion=actor.sesion, usuario=u)
+            raise HTTPException(403, "Solo la administración puede probar la búsqueda como invitado.")
+        como = Actor(sesion=actor.sesion, usuario=None)
+    elif datos.como_usuario_id is not None:
+        u = bd.get(Usuario, datos.como_usuario_id)
+        if not actor.es_admin and (u is None or actor.departamento_id is None
+                                   or u.departamento_id != actor.departamento_id):
+            raise HTTPException(403, "Solo puedes probar la búsqueda como personas de tu departamento.")
+        if u is None:
+            raise HTTPException(404, "No existe esa persona.")
+        como = Actor(sesion=actor.sesion, usuario=u)
     alcance = alcance_de(bd, como)
     m = motor()
     inicio = time.perf_counter()
     try:
         encontrados = m.buscar(bd, consulta, alcance, k)
+        if como is not actor and not actor.es_admin:  # solo lo que también puede ver quien prueba
+            visibles = {d.id for d in bd.scalars(select(Documento).where(
+                Documento.id.in_({r.documento_id for r in encontrados}), _filtro_visibles(actor)))} if encontrados else set()
+            encontrados = [r for r in encontrados if r.documento_id in visibles]
         ambitos = [a.__dict__ for a in (m.ambitos(bd, alcance) or [])] if m.externo else None
     except (ErrorModelo, ErrorWeKnora) as e:  # mensajes pensados para mostrarse (modelo o WeKnora caídos)
         log.warning("Fallo en la prueba de búsqueda: %s", e)
@@ -573,6 +585,9 @@ def reindexar(documento_id: int, actor: Actor = Depends(requiere_jefe),
     d = _cargar(bd, actor, documento_id, gestionar=True)
     if d.estado == "obsoleto":
         raise HTTPException(400, "Es una versión sustituida de una instrucción: se conserva solo para la trazabilidad de las citas y no se vuelve a indexar.")
+    if d.estado == "borrador":
+        # Reindexarla la pondría al alcance del copiloto sin que nadie la haya validado.
+        raise HTTPException(409, "Es una ficha en borrador: el copiloto la encontrará cuando su autor la publique desde Captura.")
     if _indexado_en_curso(bd, d):
         raise HTTPException(409, "El documento ya se está procesando. Espera a que termine.")
     auditar(bd, actor, "documento.reindexar", "documento", d.id, {"titulo": d.titulo})
@@ -586,6 +601,12 @@ def reindexar(documento_id: int, actor: Actor = Depends(requiere_jefe),
 def borrar(documento_id: int, actor: Actor = Depends(requiere_jefe),
            bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
     d = _cargar(bd, actor, documento_id, gestionar=True)
+    if d.origen == "instruccion":
+        # La instrucción seguiría publicada (en el modo planta y la formación) pero el copiloto no la
+        # citaría, y no hay forma de volver a indexarla sin publicar otra versión. Las versiones
+        # sustituidas se conservan para que las citas antiguas sigan llevando a su origen.
+        raise HTTPException(409, "Este documento es una instrucción de trabajo y se gestiona desde Instrucciones: "
+                                 "para cambiarla, crea y publica una versión nueva.")
     if motor().externo and _indexado_en_curso(bd, d):
         # Con un motor externo, el indexado en curso dejaría el documento huérfano allí.
         raise HTTPException(409, "El documento se está indexando. Espera a que termine para borrarlo.")

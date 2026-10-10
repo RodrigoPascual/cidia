@@ -185,7 +185,19 @@ def detalle(bd: Session, actor: Actor, instruccion_id: int) -> dict[str, Any]:
     d["borrador_existente"] = {"id": bor.id, "version": bor.version} if bor and bor.id != ins.id else None
     d["n_versiones"] = bd.scalar(select(func.count(Instruccion.id)).where(Instruccion.tarea_id == ins.tarea_id)) or 0
     d["editable"] = ins.estado in EDITABLES
+    d["transcripcion"] = _transcripcion_de(bd, ins.captura_id)
     return d
+
+
+def _transcripcion_de(bd: Session, captura_id: int | None) -> list[dict[str, Any]] | None:
+    """Lo que dijo el experto en el vídeo, con sus tiempos, para revisar cada paso contra ello en el
+    editor. Solo los segmentos (sin el fichero ni el resto de la captura)."""
+    cap = bd.get(Captura, captura_id) if captura_id else None
+    trans = cap.transcripcion if cap is not None and cap.tipo == "video" else None
+    segmentos = (trans.get("segmentos") or []) if isinstance(trans, dict) else []
+    salida = [{"inicio": s.get("inicio"), "fin": s.get("fin"), "texto": str(s.get("texto") or "").strip()}
+              for s in segmentos if isinstance(s, dict) and str(s.get("texto") or "").strip()]
+    return salida or None
 
 
 

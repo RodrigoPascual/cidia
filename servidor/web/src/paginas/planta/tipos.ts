@@ -51,16 +51,43 @@ export interface PasoEjecucion {
   consultas: number
 }
 
+/** Decisión del jefe sobre la foto del resultado (POST /api/planta/ejecuciones/{id}/revision). */
+export interface RevisionFoto {
+  estado: 'aprobada' | 'rechazada'
+  comentario: string | null
+  revisor_id: number
+  revisor: string
+  fecha: string
+}
+
 export interface Veredicto {
   estado: 'comparada' | 'sin_vision' | 'sin_referencia' | 'error'
   coincide: boolean | null
   observaciones: string
   confianza: number | null
   modelo: string | null
+  /** El jefe tiene que revisarla: sin visión, con diferencias o con dudas del modelo. */
   revision_humana: boolean
+  necesita_revision?: boolean
+  /** Necesita revisión y nadie la ha revisado todavía. */
+  pendiente_revision?: boolean
+  revision?: RevisionFoto | null
   mensaje: string
   foto_url: string | null
   referencia_url: string | null
+}
+
+/** Una foto del resultado en la lista del jefe (GET /api/planta/revisiones). */
+export interface FotoPorRevisar {
+  id: number
+  estado: 'en_curso' | 'completada'
+  inicio: string | null
+  fin: string | null
+  persona: { id: number; nombre: string } | null
+  tarea: { id: number; codigo: string | null; nombre: string } | null
+  instruccion: { codigo: string | null; version: number } | null
+  pendiente: boolean
+  foto: Veredicto
 }
 
 export interface ConsultaHistorial {
@@ -103,6 +130,8 @@ export interface EjecucionDatos {
   pasos_confirmados: number
   paso_actual: number
   foto: Veredicto | null
+  /** Quien mira es el jefe del departamento de la tarea (o la administración) y puede revisar la foto. */
+  puede_revisar?: boolean
   historial: ConsultaHistorial[]
   reanudada?: boolean
 }

@@ -1,10 +1,11 @@
 // Panel del copiloto en el modo planta: respuestas del paso actual con sus citas, botón de
-// micrófono «mantén pulsado para preguntar» y caja de texto.
+// micrófono «mantén pulsado para preguntar» y caja de texto. Donde el navegador no deja usar el
+// micrófono (http desde otro equipo) se explica por qué y se ofrece escribir la pregunta.
 
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { Bot, Loader2, MessageCircleQuestion, Mic, Send } from 'lucide-react'
+import { Bot, Loader2, MessageCircleQuestion, Mic, MicOff, Send } from 'lucide-react'
 import { Aviso, Boton, Etiqueta, useAvisarError, useAvisos, useGrabadora } from '../../ui'
-import { transcribir, type Respuesta } from './copiloto'
+import { motivoSinMicrofono, transcribir, type Respuesta } from './copiloto'
 import { RespuestaCopiloto } from './Fuentes'
 
 export interface Mensaje {
@@ -27,6 +28,8 @@ export function PanelCopiloto({ numero, mensajes, soloLectura, onPreguntar }: {
   const [transcribiendo, setTranscribiendo] = useState(false)
   const pulsado = useRef(false)
   const lista = useRef<HTMLDivElement>(null)
+  const entrada = useRef<HTMLInputElement>(null)
+  const sinMicrofono = motivoSinMicrofono()
 
   // Siempre a la vista la última respuesta (también mientras llega en streaming).
   const ultimo = mensajes[mensajes.length - 1]
@@ -112,34 +115,45 @@ export function PanelCopiloto({ numero, mensajes, soloLectura, onPreguntar }: {
       {!soloLectura && (
         <div className="ej-voz">
           {errorMicro && <Aviso tono="alerta">{errorMicro}</Aviso>}
-          <div className="ej-voz-fila">
-            <button
-              type="button"
-              className={`boton-voz ${grabando ? 'grabando' : ''}`}
-              disabled={transcribiendo}
-              aria-label="Mantén pulsado para preguntar"
-              aria-pressed={grabando}
-              onPointerDown={alPulsar}
-              onPointerUp={soltar}
-              onPointerCancel={soltar}
-              onKeyDown={teclaAbajo}
-              onKeyUp={teclaArriba}
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              {transcribiendo ? <Loader2 className="girando" /> : <Mic />}
-            </button>
-            <div className="ej-voz-ayuda">
-              {grabando ? (
-                <><strong>Te escucho…</strong>Suelta para enviar la pregunta.</>
-              ) : transcribiendo ? (
-                <><strong>Transcribiendo…</strong>Un momento.</>
-              ) : (
-                <><strong>Mantén pulsado para preguntar</strong>Habla con normalidad. La respuesta cita la instrucción y el paso.</>
-              )}
+          {sinMicrofono ? (
+            <div className="ej-voz-fila">
+              <button type="button" className="boton-voz no-disponible" onClick={() => entrada.current?.focus()}
+                aria-label="Micrófono no disponible: escribe la pregunta" title="Micrófono no disponible en esta conexión">
+                <MicOff />
+              </button>
+              <div className="ej-voz-ayuda"><strong>El micrófono no está disponible aquí</strong>{sinMicrofono}</div>
             </div>
-          </div>
+          ) : (
+            <div className="ej-voz-fila">
+              <button
+                type="button"
+                className={`boton-voz ${grabando ? 'grabando' : ''}`}
+                disabled={transcribiendo}
+                aria-label="Mantén pulsado para preguntar"
+                aria-pressed={grabando}
+                onPointerDown={alPulsar}
+                onPointerUp={soltar}
+                onPointerCancel={soltar}
+                onKeyDown={teclaAbajo}
+                onKeyUp={teclaArriba}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                {transcribiendo ? <Loader2 className="girando" /> : <Mic />}
+              </button>
+              <div className="ej-voz-ayuda">
+                {grabando ? (
+                  <><strong>Te escucho…</strong>Suelta para enviar la pregunta.</>
+                ) : transcribiendo ? (
+                  <><strong>Transcribiendo…</strong>Un momento.</>
+                ) : (
+                  <><strong>Mantén pulsado para preguntar</strong>Habla con normalidad. La respuesta cita la instrucción y el paso.</>
+                )}
+              </div>
+            </div>
+          )}
           <form className="ej-escribir" onSubmit={(e) => { e.preventDefault(); enviar() }}>
-            <input className="entrada" placeholder="O escribe tu pregunta" value={texto} maxLength={2000}
+            <input ref={entrada} className="entrada" placeholder={sinMicrofono ? 'Escribe tu pregunta' : 'O escribe tu pregunta'}
+              value={texto} maxLength={2000}
               onChange={(e) => setTexto(e.target.value)} aria-label="Pregunta para el copiloto" />
             <Boton variante="oscuro" type="submit" icono={<Send />} disabled={!texto.trim()} aria-label="Enviar pregunta" />
           </form>

@@ -1,14 +1,18 @@
-// Modo planta: elección de la tarea que se va a hacer en el puesto.
+// Modo planta: elección de la tarea que se va a hacer en el puesto. Los jefes (y la administración)
+// tienen además la pestaña «Fotos por revisar» (/planta?vista=fotos) con las fotos del resultado
+// que CidIA no ha podido confirmar.
 
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  AlertTriangle, Briefcase, GraduationCap, ListChecks, Play, RefreshCw, RotateCcw, Search, Wrench,
+  AlertTriangle, Briefcase, Camera, GraduationCap, ListChecks, Play, RefreshCw, RotateCcw, Search, Wrench,
 } from 'lucide-react'
 import { get, hace, post, urlServidor } from '../../api'
+import { useSesion } from '../../sesion'
 import {
-  Boton, Cabecera, ErrorCarga, Esqueleto, Etiqueta, Iluo, NOMBRE_ILUO, Tarjeta, Vacio, useAvisarError, useDatos,
+  Boton, Cabecera, ErrorCarga, Esqueleto, Etiqueta, Iluo, NOMBRE_ILUO, Pestanas, Tarjeta, Vacio, useAvisarError, useDatos,
 } from '../../ui'
+import Revisiones, { type ListaRevisiones } from './Revisiones'
 import type { EjecucionDatos, TareaPlanta } from './tipos'
 import './planta.css'
 
@@ -85,7 +89,12 @@ function EsqueletoTareas() {
 export default function Tareas() {
   const navegar = useNavigate()
   const avisarError = useAvisarError()
+  const { puede } = useSesion()
+  const revisa = puede('observar') // jefes y administración: revisan las fotos del resultado
+  const [params, setParams] = useSearchParams()
+  const vista = revisa && params.get('vista') === 'fotos' ? 'fotos' : 'tareas'
   const { datos, error, cargando, recargar } = useDatos((s) => get<TareaPlanta[]>('/api/planta/tareas', s))
+  const fotos = useDatos((s) => (revisa ? get<ListaRevisiones>('/api/planta/revisiones', s) : Promise.resolve(null)), [revisa])
   const [filtro, setFiltro] = useState('')
   const [empezando, setEmpezando] = useState<number | null>(null)
 
@@ -111,6 +120,12 @@ export default function Tareas() {
   }
 
   const total = datos?.length ?? 0
+  const cambiarVista = (v: 'tareas' | 'fotos') => {
+    const siguientes = new URLSearchParams(params)
+    if (v === 'fotos') siguientes.set('vista', 'fotos')
+    else siguientes.delete('vista')
+    setParams(siguientes, { replace: true })
+  }
   const rejilla = (lista: TareaPlanta[]) => (
     <div className="pt-rejilla">
       {lista.map((t) => <TarjetaTarea key={t.id} t={t} empezando={empezando === t.id} onEmpezar={() => empezar(t)} />)}
@@ -121,9 +136,11 @@ export default function Tareas() {
     <>
       <Cabecera
         antetitulo={<><Wrench size={14} /> Modo planta</>}
-        titulo="¿Qué tarea vas a hacer?"
-        subtitulo="Elige la tarea y CidIA te guía paso a paso. Puedes preguntar por voz en cualquier momento sin soltar la herramienta."
-        acciones={total > 6 && (
+        titulo={vista === 'fotos' ? 'Fotos del resultado por revisar' : '¿Qué tarea vas a hacer?'}
+        subtitulo={vista === 'fotos'
+          ? 'Cuando CidIA no puede confirmar que el resultado está bien (sin visión, con diferencias o con dudas), decides tú: dala por buena o recházala con un comentario.'
+          : 'Elige la tarea y CidIA te guía paso a paso. Puedes preguntar por voz en cualquier momento sin soltar la herramienta.'}
+        acciones={vista === 'tareas' && total > 6 && (
           <div className="entrada-icono pt-buscador">
             <Search />
             <input className="entrada" placeholder="Buscar por nombre o código" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
@@ -131,7 +148,18 @@ export default function Tareas() {
         )}
       />
 
-      {cargando && !datos ? <EsqueletoTareas /> : error ? (
+      {revisa && (
+        <div className="pt-pestanas">
+          <Pestanas etiqueta="Modo planta" activa={vista} onCambio={cambiarVista} pestanas={[
+            { id: 'tareas', texto: 'Mis tareas', icono: <Wrench /> },
+            { id: 'fotos', texto: 'Fotos por revisar', icono: <Camera />, contador: fotos.datos?.pendientes || undefined },
+          ]} />
+        </div>
+      )}
+
+      {vista === 'fotos' ? (
+        <Revisiones pendientes={fotos} recargarPendientes={fotos.recargar} />
+      ) : cargando && !datos ? <EsqueletoTareas /> : error ? (
         <Tarjeta><ErrorCarga error={error} reintentar={recargar} /></Tarjeta>
       ) : total === 0 ? (
         <Tarjeta>

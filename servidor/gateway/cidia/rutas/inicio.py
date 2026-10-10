@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.sql import Select
 
 from cidia.db import obtener_bd
@@ -204,28 +204,31 @@ def _bandejas(bd: Session, actor: Actor) -> dict[str, Any]:
         return {"ambito": None, "pendientes_validar": 0, "aportaciones": [], "lagunas_abiertas": 0, "lagunas": [],
                 "reevaluaciones_total": 0, "reevaluaciones": [], "observaciones_sugeridas": [], "personas": 0}
 
-    q_ap = _en_alcance(select(Aportacion).where(Aportacion.estado == "pendiente"), Aportacion.departamento_id, actor)
-    pendientes = bd.scalar(select(func.count()).select_from(q_ap.subquery())) or 0
-    aportaciones = [
-        {"id": a.id, "titulo": a.titulo or (a.problema or a.texto_original or "Aportación")[:90],
-         "autor": a.autor.nombre if a.autor else None, "creada": _iso(a.creada), "nota_de_voz": bool(a.audio_ruta)}
-        for a in bd.scalars(q_ap.order_by(Aportacion.creada).limit(5)).all()
-    ]
-
-    q_la = _en_alcance(select(Laguna).where(Laguna.estado == "abierta"), Laguna.departamento_id, actor)
-    lagunas_n = bd.scalar(select(func.count()).select_from(q_la.subquery())) or 0
-    lagunas = [{"id": la.id, "pregunta": la.pregunta, "frecuencia": la.frecuencia, "ultima_vez": _iso(la.ultima_vez)}
-               for la in bd.scalars(q_la.order_by(Laguna.frecuencia.desc(), Laguna.ultima_vez.desc()).limit(5)).all()]
-
-    # Niveles ILUO del equipo que piden reevaluación (nueva versión) o caducan pronto.
     limite = ahora + timedelta(days=DIAS_AVISO_CADUCIDAD)
+    q_ap = _en_alcance(select(Aportacion).where(Aportacion.estado == "pendiente"), Aportacion.departamento_id, actor)
+    q_la = _en_alcance(select(Laguna).where(Laguna.estado == "abierta"), Laguna.departamento_id, actor)
+    # Niveles ILUO del equipo que piden reevaluación (nueva versión) o caducan pronto.
     q_re = _en_alcance(
         select(NivelIluo, Usuario.nombre, Tarea.nombre).join(Usuario, Usuario.id == NivelIluo.usuario_id)
         .join(Tarea, Tarea.id == NivelIluo.tarea_id)
         .where(Usuario.activo.is_(True), NivelIluo.nivel > 0,
                (NivelIluo.requiere_reevaluacion.is_(True)) | (NivelIluo.caduca < limite)),
         Usuario.departamento_id, actor)
-    reeval_total = bd.scalar(select(func.count()).select_from(q_re.subquery())) or 0
+    cuenta = _contar(
+        bd,
+        pendientes=select(func.count()).select_from(q_ap.subquery()),
+        lagunas=select(func.count()).select_from(q_la.subquery()),
+        reevaluaciones=select(func.count()).select_from(q_re.subquery()),
+        personas=_en_alcance(select(func.count(Usuario.id)).where(Usuario.activo.is_(True)), Usuario.departamento_id, actor),
+    )
+    aportaciones = [
+        {"id": a.id, "titulo": a.titulo or (a.problema or a.texto_original or "Aportación")[:90],
+         "autor": a.autor.nombre if a.autor else None, "creada": _iso(a.creada), "nota_de_voz": bool(a.audio_ruta)}
+        for a in bd.scalars(q_ap.options(joinedload(Aportacion.autor)).order_by(Aportacion.creada).limit(5)).all()
+    ]
+    lagunas = [{"id": la.id, "pregunta": la.pregunta, "frecuencia": la.frecuencia, "ultima_vez": _iso(la.ultima_vez)}
+               for la in bd.scalars(q_la.order_by(Laguna.frecuencia.desc(), Laguna.ultima_vez.desc()).limit(5)).all()]
+
     reevaluaciones = []
     for n, persona, tarea in bd.execute(q_re.order_by(NivelIluo.requiere_reevaluacion.desc(),
                                                       NivelIluo.caduca.nulls_last()).limit(8)).all():
@@ -250,20 +253,18 @@ def _bandejas(bd: Session, actor: Actor) -> dict[str, Any]:
     observaciones = [{"usuario_id": uid, "persona": persona, "tarea_id": tid, "tarea": tarea, "codigo": codigo}
                      for uid, persona, tid, tarea, codigo in bd.execute(q_ob.order_by(Usuario.nombre).limit(8)).all()]
 
-    personas = bd.scalar(_en_alcance(select(func.count(Usuario.id)).where(Usuario.activo.is_(True)),
-                                     Usuario.departamento_id, actor)) or 0
     ambito = "Toda la planta"
     if not actor.es_admin:
         dep = bd.get(Departamento, actor.departamento_id)
         ambito = dep.nombre if dep else None
     return {
         "ambito": ambito,
-        "personas": personas,
-        "pendientes_validar": pendientes,
+        "personas": cuenta["personas"],
+        "pendientes_validar": cuenta["pendientes"],
         "aportaciones": aportaciones,
-        "lagunas_abiertas": lagunas_n,
+        "lagunas_abiertas": cuenta["lagunas"],
         "lagunas": lagunas,
-        "reevaluaciones_total": reeval_total,
+        "reevaluaciones_total": cuenta["reevaluaciones"],
         "reevaluaciones": reevaluaciones,
         "observaciones_sugeridas": observaciones,
     }
@@ -272,39 +273,49 @@ def _bandejas(bd: Session, actor: Actor) -> dict[str, Any]:
 # --------------------------------------------------------------------------- cifras
 
 
+def _contar(bd: Session, **consultas: Select) -> dict[str, int]:
+    """Varios recuentos en una sola ida y vuelta a la base de datos (SELECT de subconsultas)."""
+    fila = bd.execute(select(*(c.scalar_subquery().label(k) for k, c in consultas.items()))).one()
+    return {k: int(v or 0) for k, v in fila._mapping.items()}
+
+
 def _cifras_planta(bd: Session) -> dict[str, Any]:
     semana = _ahora() - timedelta(days=7)
-    consultas = bd.scalar(select(func.count(Consulta.id)).where(Consulta.creada >= semana)) or 0
-    con_respaldo = bd.scalar(select(func.count(Consulta.id)).where(
-        Consulta.creada >= semana, Consulta.con_respaldo.is_(True))) or 0
+    n = _contar(
+        bd,
+        personas=select(func.count(Usuario.id)).where(Usuario.activo.is_(True)),
+        departamentos=select(func.count(Departamento.id)),
+        documentos=select(func.count(Documento.id)).where(Documento.estado == "listo"),
+        documentos_procesando=select(func.count(Documento.id)).where(Documento.estado.in_(["procesando", "error"])),
+        instrucciones_publicadas=select(func.count(Instruccion.id)).where(Instruccion.estado == "publicada"),
+        consultas=select(func.count(Consulta.id)).where(Consulta.creada >= semana),
+        con_respaldo=select(func.count(Consulta.id)).where(Consulta.creada >= semana, Consulta.con_respaldo.is_(True)),
+        lagunas_abiertas=select(func.count(Laguna.id)).where(Laguna.estado == "abierta"),
+    )
     return {
-        "personas": bd.scalar(select(func.count(Usuario.id)).where(Usuario.activo.is_(True))) or 0,
-        "departamentos": bd.scalar(select(func.count(Departamento.id))) or 0,
-        "documentos": bd.scalar(select(func.count(Documento.id)).where(Documento.estado == "listo")) or 0,
-        "documentos_procesando": bd.scalar(select(func.count(Documento.id)).where(
-            Documento.estado.in_(["procesando", "error"]))) or 0,
-        "instrucciones_publicadas": bd.scalar(select(func.count(Instruccion.id)).where(
-            Instruccion.estado == "publicada")) or 0,
-        "consultas_semana": consultas,
-        "pct_con_respaldo": round(100 * con_respaldo / consultas) if consultas else None,
-        "lagunas_abiertas": bd.scalar(select(func.count(Laguna.id)).where(Laguna.estado == "abierta")) or 0,
+        "personas": n["personas"],
+        "departamentos": n["departamentos"],
+        "documentos": n["documentos"],
+        "documentos_procesando": n["documentos_procesando"],
+        "instrucciones_publicadas": n["instrucciones_publicadas"],
+        "consultas_semana": n["consultas"],
+        "pct_con_respaldo": round(100 * n["con_respaldo"] / n["consultas"]) if n["consultas"] else None,
+        "lagunas_abiertas": n["lagunas_abiertas"],
     }
 
 
 def _cifras_personales(bd: Session, u: Usuario) -> dict[str, Any]:
     semana = _ahora() - timedelta(days=7)
-    return {
-        "tareas_autonomas": bd.scalar(select(func.count(NivelIluo.id)).where(
-            NivelIluo.usuario_id == u.id, NivelIluo.nivel >= 3)) or 0,
-        "tareas_en_formacion": bd.scalar(select(func.count(NivelIluo.id)).where(
-            NivelIluo.usuario_id == u.id, NivelIluo.nivel.in_([1, 2]))) or 0,
-        "ejecuciones": bd.scalar(select(func.count(Ejecucion.id)).where(
-            Ejecucion.usuario_id == u.id, Ejecucion.estado == "completada")) or 0,
-        "consultas_semana": bd.scalar(select(func.count(Consulta.id)).where(
-            Consulta.usuario_id == u.id, Consulta.creada >= semana)) or 0,
-        "aportaciones_validadas": bd.scalar(select(func.count(Aportacion.id)).where(
-            Aportacion.autor_id == u.id, Aportacion.estado == "validada")) or 0,
-    }
+    return _contar(
+        bd,
+        tareas_autonomas=select(func.count(NivelIluo.id)).where(NivelIluo.usuario_id == u.id, NivelIluo.nivel >= 3),
+        tareas_en_formacion=select(func.count(NivelIluo.id)).where(
+            NivelIluo.usuario_id == u.id, NivelIluo.nivel.in_([1, 2])),
+        ejecuciones=select(func.count(Ejecucion.id)).where(Ejecucion.usuario_id == u.id, Ejecucion.estado == "completada"),
+        consultas_semana=select(func.count(Consulta.id)).where(Consulta.usuario_id == u.id, Consulta.creada >= semana),
+        aportaciones_validadas=select(func.count(Aportacion.id)).where(
+            Aportacion.autor_id == u.id, Aportacion.estado == "validada"),
+    )
 
 
 # --------------------------------------------------------------------------- contadores compartidos
@@ -407,11 +418,13 @@ def contadores(actor: Actor = Depends(usuario_actual), bd: Session = Depends(obt
     assert u is not None
     salida = {"aportaciones": 0, "lagunas": 0, "borradores": 0, "evaluacion": 0}
     if actor.es_jefe and (actor.es_admin or actor.departamento_id is not None):
-        salida["aportaciones"] = bd.scalar(_en_alcance(
-            select(func.count(Aportacion.id)).where(Aportacion.estado == "pendiente"),
-            Aportacion.departamento_id, actor)) or 0
-        salida["lagunas"] = bd.scalar(_en_alcance(
-            select(func.count(Laguna.id)).where(Laguna.estado == "abierta"), Laguna.departamento_id, actor)) or 0
+        salida.update(_contar(
+            bd,
+            aportaciones=_en_alcance(select(func.count(Aportacion.id)).where(Aportacion.estado == "pendiente"),
+                                     Aportacion.departamento_id, actor),
+            lagunas=_en_alcance(select(func.count(Laguna.id)).where(Laguna.estado == "abierta"),
+                                Laguna.departamento_id, actor),
+        ))
     if actor.es_experto:
         from cidia.servicios.instrucciones import contar_borradores
 

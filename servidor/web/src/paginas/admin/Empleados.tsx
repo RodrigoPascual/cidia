@@ -193,8 +193,8 @@ function ModalClave({ clave, onCerrar }: { clave: ClaveMostrada; onCerrar: () =>
       <div className="adm-clave">{clave.contrasena}</div>
       <div className="mt-2">
         <Aviso tono="amarillo" titulo="Solo se muestra ahora">
-          CidIA no guarda la contraseña en claro y no podrá enseñártela otra vez. Entrégasela a la persona en mano y pídele que
-          la cambie desde su perfil la primera vez que entre.
+          CidIA no guarda la contraseña en claro y no podrá enseñártela otra vez. Entrégasela a la persona en mano: la primera
+          vez que entre, CidIA le pedirá que la cambie por una suya.
         </Aviso>
       </div>
     </Modal>

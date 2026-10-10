@@ -12,6 +12,7 @@ import { flujo, get, post } from '../api'
 import { useSesion } from '../sesion'
 import { Aviso, Boton, Cabecera, Interruptor, LogoCidia, TextoFormato, useAvisarError, useAvisos } from '../ui'
 import BotonVoz from './copiloto/BotonVoz'
+import { limpiarCitas, motivoSinMicrofono } from './planta/copiloto'
 import Historial from './copiloto/Historial'
 import PanelFuente from './copiloto/PanelFuente'
 import { ubicacion, type ConsultaGuardada, type Fuente, type Mensaje, type Modo, type PaginaHistorial } from './copiloto/tipos'
@@ -36,12 +37,6 @@ const SUGERENCIAS_INVITADO: { icono: ReactNode; texto: string }[] = [
 
 let contadorIds = 0
 const nuevoId = () => `m${Date.now().toString(36)}${(contadorIds++).toString(36)}`
-
-/** «[1, 2]» → «[1][2]»: así cada número es una cita pulsable (TextoFormato solo reconoce [n]). */
-function separarCitas(texto: string): string {
-  return texto.replace(/\[(\d{1,2}(?:\s*,\s*\d{1,2})+)\]/g, (_, grupo: string) =>
-    grupo.split(',').map((n) => `[${n.trim()}]`).join(''))
-}
 
 function saludo(): string {
   const h = new Date().getHours()
@@ -264,7 +259,7 @@ export default function Copiloto() {
   }
 
   const copiar = async (m: Mensaje) => {
-    const limpio = separarCitas(m.texto).replace(/\s?\[\d{1,2}\]/g, '').trim()
+    const limpio = limpiarCitas(m.texto, []).trim() // sin ninguna cita
     avisar((await copiarTexto(limpio)) ? 'Respuesta copiada.' : 'No se ha podido copiar.', 'info')
   }
 
@@ -337,7 +332,9 @@ export default function Copiloto() {
             <h2>{nombre ? `${saludo()}, ${nombre}.` : `${saludo()}.`} ¿En qué te ayudo?</h2>
             <p className="apagado">
               Pregunta como se lo preguntarías a un compañero con experiencia.
-              {!invitado && <> También puedes hablarme: mantén pulsado el <Mic size={14} className="en-linea" /> y suelta al terminar.</>}
+              {!invitado && !motivoSinMicrofono() && (
+                <> También puedes hablarme: mantén pulsado el <Mic size={14} className="en-linea" /> y suelta al terminar.</>
+              )}
             </p>
             <div className="sugerencias">
               {sugerencias.map((s) => (
@@ -402,7 +399,9 @@ export default function Copiloto() {
               }
             }}
           />
-          {!invitado && <BotonVoz onTexto={(t) => enviar(t, true)} deshabilitado={enCurso} />}
+          {!invitado && (
+            <BotonVoz onTexto={(t) => enviar(t, true)} deshabilitado={enCurso} onSinMicrofono={() => area.current?.focus()} />
+          )}
           {enCurso ? (
             <Boton type="button" variante="oscuro" icono={<Square />} onClick={detener} title="Detener la respuesta"
               aria-label="Detener la respuesta" />
@@ -469,7 +468,7 @@ function Respuesta({ m, invitado, onCita, onValorar, onCopiar, onReintentar }: {
               : 'Buscando en la documentación…'}
           </div>
         ) : m.texto ? (
-          <TextoFormato texto={separarCitas(m.texto)} onCita={onCita} />
+          <TextoFormato texto={limpiarCitas(m.texto, fuentes.map((f) => f.n))} onCita={onCita} />
         ) : null}
 
         {terminado && m.error && <div className="diminuto apagado mt-1">{m.error}</div>}

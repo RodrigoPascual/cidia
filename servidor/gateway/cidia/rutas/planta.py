@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -28,6 +28,11 @@ class NuevaEjecucion(BaseModel):
 
 class Confirmacion(BaseModel):
     critico_confirmado: bool = False
+
+
+class Revision(BaseModel):
+    decision: Literal["aprobada", "rechazada"]
+    comentario: str | None = Field(default=None, max_length=planta.MAX_COMENTARIO)
 
 
 class PreguntaPlanta(BaseModel):
@@ -119,6 +124,23 @@ def foto(ejecucion_id: int, imagen: UploadFile = File(...), actor: Actor = Depen
     veredicto = planta.guardar_foto(bd, actor, ej, imagen)
     bd.commit()
     return veredicto or {}
+
+
+@router.get("/revisiones")
+def revisiones(estado: Literal["pendientes", "revisadas", "todas"] = Query("pendientes"),
+               actor: Actor = Depends(usuario_actual), bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
+    """Fotos del resultado que el jefe (o la administración) puede revisar: {elementos, pendientes}."""
+    return planta.revisiones(bd, actor, estado)
+
+
+@router.post("/ejecuciones/{ejecucion_id}/revision")
+def revisar(ejecucion_id: int, datos: Revision, actor: Actor = Depends(usuario_actual),
+            bd: Session = Depends(obtener_bd)) -> dict[str, Any]:
+    """El jefe da por buena la foto del resultado o la rechaza con un comentario."""
+    ej = planta.obtener_ejecucion(bd, actor, ejecucion_id)  # 404 a quien no puede verla
+    veredicto = planta.revisar_foto(bd, actor, ej, datos.decision, datos.comentario)
+    bd.commit()
+    return veredicto
 
 
 @router.post("/ejecuciones/{ejecucion_id}/finalizar")

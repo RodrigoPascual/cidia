@@ -67,7 +67,9 @@ MAX_NOMBRE = 150  # caracteres de un nombre nuevo
 MAX_ORDEN = 10_000  # caracteres de una orden
 TIEMPO_MAX = 120  # segundos de una orden
 
-NO_DISPONIBLE = "El espacio de trabajo no está disponible en este servidor."
+# Solo falta la consola (el servicio espacio-trabajo): los ficheros siguen funcionando.
+NO_DISPONIBLE = ("La consola para ejecutar órdenes no está disponible en este servidor. "
+                 "Tus ficheros sí: puedes verlos, subirlos y descargarlos.")
 _RELATIVA = "Ruta no válida: usa rutas relativas a tu carpeta (p. ej. informes/resumen.md)."
 _TEMPORAL = ".cidia-"  # prefijo de los ficheros temporales del gateway (no se listan)
 

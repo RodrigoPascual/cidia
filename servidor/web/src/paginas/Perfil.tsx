@@ -113,7 +113,7 @@ function CambioContrasena() {
     setEnviando(true)
     try {
       await post('/api/auth/contrasena', { actual, nueva })
-      avisar('Contraseña cambiada. Úsala la próxima vez que inicies sesión.')
+      avisar('Contraseña cambiada. Si tenías la sesión abierta en otros equipos, allí tendrás que volver a entrar.')
       setActual('')
       setNueva('')
       setRepetida('')

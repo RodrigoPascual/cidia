@@ -652,3 +652,138 @@ def test_foto_con_vision_real(cliente, bd, planta, monkeypatch, recalculos):
                      files={"imagen": ("azul.png", _png_color((30, 30, 200)), "image/png")}, headers=h).json()
     print(v)
     assert v["estado"] == "comparada" and v["coincide"] is False
+
+
+# --------------------------------------------------------------------------- revisión de la foto por el jefe
+
+
+def _ejecucion_con_foto(cliente, bd, planta, usuario: str = "pedro", dep: str = "prod",
+                        completar: bool = True) -> tuple[dict[str, Any], dict[str, str]]:
+    """Ejecución con todos los pasos confirmados, foto del resultado y (si `completar`) finalizada."""
+    tarea, _ = crear_tarea_con_instruccion(bd, planta, dep)
+    h = cab(cliente, usuario)
+    ej = cliente.post("/api/planta/ejecuciones", json={"tarea_id": tarea.id}, headers=h).json()
+    base = f"/api/planta/ejecuciones/{ej['id']}"
+    for p in ej["pasos"]:
+        r = cliente.post(f"{base}/pasos/{p['id']}/confirmar", json={"critico_confirmado": p["es_critico"]}, headers=h)
+        assert r.status_code == 200, r.text
+    assert cliente.post(f"{base}/foto", files={"imagen": ("r.png", PNG, "image/png")}, headers=h).status_code == 200
+    if completar:
+        assert cliente.post(f"{base}/finalizar", headers=h).status_code == 200
+    return ej, h
+
+
+def test_necesita_revision():
+    from cidia.servicios.planta import necesita_revision
+
+    assert necesita_revision({"estado": "sin_vision"}) and necesita_revision({"estado": "error"})
+    assert necesita_revision({"estado": "sin_referencia"})
+    assert necesita_revision({"estado": "comparada", "coincide": False, "confianza": 0.95})
+    assert necesita_revision({"estado": "comparada", "coincide": True, "confianza": 0.4})  # duda
+    assert not necesita_revision({"estado": "comparada", "coincide": True, "confianza": 0.9})
+    assert not necesita_revision({"estado": "comparada", "coincide": True, "confianza": None})
+    assert not necesita_revision(None)
+
+
+def test_foto_con_dudas_del_modelo_queda_para_revision(cliente, bd, planta, ia, recalculos):
+    ia.json = {"coincide": True, "observaciones": "Parece igual.", "confianza": 0.3}
+    tarea, _ = crear_tarea_con_instruccion(bd, planta, "prod")
+    h = cab(cliente, "pedro")
+    ej = cliente.post("/api/planta/ejecuciones", json={"tarea_id": tarea.id}, headers=h).json()
+    v = cliente.post(f"/api/planta/ejecuciones/{ej['id']}/foto", files={"imagen": ("r.png", PNG, "image/png")},
+                     headers=h).json()
+    assert v["coincide"] is True and v["revision_humana"] is True and v["pendiente_revision"] is True
+    assert "no está seguro" in v["mensaje"]
+    ia.json = {"coincide": True, "observaciones": "Igual.", "confianza": 0.95}
+    v = cliente.post(f"/api/planta/ejecuciones/{ej['id']}/foto", files={"imagen": ("r.png", PNG, "image/png")},
+                     headers=h).json()
+    assert v["revision_humana"] is False and v["pendiente_revision"] is False and v["revision"] is None
+
+
+def test_el_jefe_revisa_la_foto(cliente, bd, planta, monkeypatch, recalculos):
+    monkeypatch.setattr(llm, "modelo_vision", lambda bd=None: None)  # sin visión: la revisa una persona
+    ej, h = _ejecucion_con_foto(cliente, bd, planta)
+    base = f"/api/planta/ejecuciones/{ej['id']}"
+    hj = cab(cliente, "javier")
+
+    # La ve en su lista de pendientes y en la ejecución, con los botones de revisión.
+    lista = cliente.get("/api/planta/revisiones", headers=hj)
+    assert lista.status_code == 200, lista.text
+    pend = {e["id"]: e for e in lista.json()["elementos"]}
+    assert ej["id"] in pend and lista.json()["pendientes"] >= 1
+    item = pend[ej["id"]]
+    assert item["persona"]["nombre"] == "Pedro Ruiz" and item["pendiente"] is True
+    assert item["foto"]["foto_url"] and item["foto"]["estado"] == "sin_vision"
+    vista = cliente.get(base, headers=hj).json()
+    assert vista["puede_revisar"] is True and vista["foto"]["pendiente_revision"] is True
+    assert cliente.get(base, headers=h).json()["puede_revisar"] is False  # quien la hizo no se revisa
+
+    # Quien no es jefe del departamento de la tarea no puede.
+    assert cliente.get("/api/planta/revisiones", headers=h).status_code == 403
+    assert cliente.get("/api/planta/revisiones", headers=cab(cliente, "carmen")).status_code == 403  # experta
+    assert cliente.post(f"{base}/revision", json={"decision": "aprobada"}, headers=h).status_code == 403
+    assert cliente.post(f"{base}/revision", json={"decision": "aprobada"},
+                        headers=cab(cliente, "carmen")).status_code == 404  # no la supervisa: no existe
+    assert cliente.post(f"{base}/revision", json={"decision": "aprobada"},
+                        headers=cab(cliente, "ana")).status_code == 404  # otro departamento
+    ajenas = cliente.get("/api/planta/revisiones", headers=cab(cliente, "ana")).json()["elementos"]
+    assert ej["id"] not in {e["id"] for e in ajenas}
+    assert cliente.post(f"{base}/revision", json={"decision": "quizás"}, headers=hj).status_code == 422
+
+    # Rechazar exige explicar qué hay que corregir.
+    r = cliente.post(f"{base}/revision", json={"decision": "rechazada", "comentario": " "}, headers=hj)
+    assert r.status_code == 400 and "comentario" in r.json()["detail"]
+    recalculos.clear()
+    r = cliente.post(f"{base}/revision", json={"decision": "rechazada", "comentario": "Falta la marca de testigo."},
+                     headers=hj)
+    assert r.status_code == 200, r.text
+    v = r.json()
+    assert v["revision"]["estado"] == "rechazada" and v["revision"]["revisor"] == "Javier Martín"
+    assert v["revision"]["comentario"] == "Falta la marca de testigo." and v["pendiente_revision"] is False
+    assert recalculos == [(planta.personas["pedro"].id, ej["tarea"]["id"])]  # completada: se recalcula el ILUO
+    rechazo = _sentencias(bd, "rechazo", ej["id"])
+    assert len(rechazo) == 1 and rechazo[0].resultado["decision"] == "rechazada"
+    assert rechazo[0].actor_id == planta.personas["javier"].id
+    assert rechazo[0].contexto["usuario_id"] == planta.personas["pedro"].id
+
+    # La persona ve la decisión y el comentario; ya no está entre las pendientes, sí entre las revisadas.
+    propia = cliente.get(base, headers=h).json()["foto"]["revision"]
+    assert propia["estado"] == "rechazada" and propia["comentario"] == "Falta la marca de testigo."
+    assert ej["id"] not in {e["id"] for e in cliente.get("/api/planta/revisiones", headers=hj).json()["elementos"]}
+    revisadas = cliente.get("/api/planta/revisiones?estado=revisadas", headers=hj).json()["elementos"]
+    assert ej["id"] in {e["id"] for e in revisadas}
+
+    # Puede cambiar de decisión (queda constancia de la anterior); la administración también revisa.
+    r = cliente.post(f"{base}/revision", json={"decision": "aprobada"}, headers=cab(cliente, "admin"))
+    assert r.status_code == 200 and r.json()["revision"]["estado"] == "aprobada"
+    valido = _sentencias(bd, "valido", ej["id"])
+    assert len(valido) == 1 and valido[0].resultado["decision_anterior"] == "rechazada"
+
+
+def test_revision_de_quien_se_forma_en_otro_departamento(cliente, bd, planta, monkeypatch, recalculos):
+    """Marta (Producción) se forma en Oficina técnica: su foto de una tarea de Oficina técnica la revisa
+    Ana (jefa de ese departamento). Javier, su jefe, ve el avance pero no la instrucción: no la revisa."""
+    monkeypatch.setattr(llm, "modelo_vision", lambda bd=None: None)
+    ej, _ = _ejecucion_con_foto(cliente, bd, planta, usuario="marta", dep="ot", completar=False)
+    base = f"/api/planta/ejecuciones/{ej['id']}"
+    ha, hj = cab(cliente, "ana"), cab(cliente, "javier")
+    assert ej["id"] in {e["id"] for e in cliente.get("/api/planta/revisiones", headers=ha).json()["elementos"]}
+    assert ej["id"] not in {e["id"] for e in cliente.get("/api/planta/revisiones", headers=hj).json()["elementos"]}
+    assert cliente.get(base, headers=hj).json()["puede_revisar"] is False
+    assert cliente.post(f"{base}/revision", json={"decision": "aprobada"}, headers=hj).status_code == 403
+    recalculos.clear()
+    r = cliente.post(f"{base}/revision", json={"decision": "aprobada", "comentario": "Bien montado."}, headers=ha)
+    assert r.status_code == 200 and r.json()["revision"]["estado"] == "aprobada"
+    assert recalculos == []  # todavía en curso: el nivel se recalcula al finalizar
+    # Una foto nueva vuelve a quedar pendiente de revisión.
+    hm = cab(cliente, "marta")
+    v = cliente.post(f"{base}/foto", files={"imagen": ("r.png", PNG, "image/png")}, headers=hm).json()
+    assert v["revision"] is None and v["pendiente_revision"] is True
+    # Una ejecución abandonada ya no se revisa.
+    cliente.post(f"{base}/abandonar", headers=hm)
+    assert cliente.post(f"{base}/revision", json={"decision": "aprobada"}, headers=ha).status_code == 409
+    # Sin foto, tampoco.
+    tarea, _ = crear_tarea_con_instruccion(bd, planta, "prod")
+    sin = cliente.post("/api/planta/ejecuciones", json={"tarea_id": tarea.id}, headers=cab(cliente, "pedro")).json()
+    r = cliente.post(f"/api/planta/ejecuciones/{sin['id']}/revision", json={"decision": "aprobada"}, headers=hj)
+    assert r.status_code == 409

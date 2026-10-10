@@ -74,6 +74,13 @@ log = logging.getLogger("cidia.mcp")
 
 MAX_LECTURA_AGENTE = 20_000  # caracteres de un fichero que se devuelven al agente
 MAX_FRAGMENTO = 1200  # caracteres de cada fragmento encontrado
+EJECUCION_NO_DISPONIBLE = (
+    "La ejecución de órdenes no está disponible en este servidor (no tiene activado el servicio "
+    "espacio-trabajo). No vuelvas a intentarlo: escribe el resultado directamente como fichero de texto "
+    "con espacio_escribir (por ejemplo, un informe en Markdown o una tabla CSV) y dile a la persona que "
+    "lo encontrará en «Espacio de trabajo». Si necesita gráficos, Word o PDF, explícale que hace falta "
+    "que la administración active la consola."
+)
 
 INSTRUCCIONES = (
     "Herramientas de CidIA, el copiloto de conocimiento de la planta. Antes de responder sobre "
@@ -496,11 +503,17 @@ def espacio_ejecutar(
     """Ejecuta una orden de bash en un contenedor aislado del servidor, sin red y con la carpeta
     de trabajo de esta persona en /trabajo (máximo 2 minutos). Tiene Python 3 con pandas,
     openpyxl, python-docx, matplotlib y reportlab para crear tablas, gráficos, Word y PDF.
-    Devuelve el código de salida y lo que escribió la orden."""
+    Devuelve el código de salida y lo que escribió la orden. Si el servidor no tiene activada la
+    consola, lo dice: entonces crea los ficheros directamente con espacio_escribir."""
     from cidia.servicios import espacio
 
     with _sesion() as (bd, actor):
-        res = espacio.ejecutar(actor, orden, espacio.TIEMPO_MAX)
+        try:
+            res = espacio.ejecutar(actor, orden, espacio.TIEMPO_MAX)
+        except HTTPException as e:
+            if e.status_code == 503:  # sin servicio espacio-trabajo o sin respuesta
+                raise ToolError(EJECUCION_NO_DISPONIBLE) from None
+            raise
         espacio.registrar(bd, actor, "ejecuto", None, via="mcp", resultado={
             "codigo": res["codigo"], "duracion": res["duracion"], "orden": (orden or "")[:500]})
         bd.commit()

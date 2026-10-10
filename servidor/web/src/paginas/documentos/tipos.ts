@@ -1,6 +1,7 @@
 // Tipos de la API de documentos (/api/documentos) y utilidades de presentación.
 
-export type EstadoDocumento = 'procesando' | 'listo' | 'error' | 'borrador'
+// «obsoleto»: versión sustituida de una instrucción (fuera del copiloto; se conserva por las citas).
+export type EstadoDocumento = 'procesando' | 'listo' | 'error' | 'borrador' | 'obsoleto'
 
 export interface Documento {
   id: number
@@ -156,6 +157,10 @@ export function claseTipo(tipo: string, nombre?: string | null): string {
   }
   return tipo
 }
+
+/** Una ficha en borrador se indexa al publicarla (desde Captura) y una versión sustituida ya no se
+ *  indexa: en los dos casos el servidor rechaza el reindexado, así que no se ofrece. */
+export const sePuedeReindexar = (d: Documento) => d.estado !== 'borrador' && d.estado !== 'obsoleto'
 
 export const NOMBRE_ORIGEN: Record<string, string> = {
   subida: 'Subido a mano',

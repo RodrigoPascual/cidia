@@ -19,6 +19,8 @@ export interface Fuente {
   validador?: string | null
   origen?: string | null
   origen_id?: number | null
+  /** Tarea de la instrucción citada (para abrirla en formación o en el modo planta). */
+  tarea_id?: number | null
   fragmento: string
   similitud?: number | null
   url?: string | null
@@ -92,7 +94,9 @@ export function ubicacion(f: Fuente): string {
   const partes: string[] = []
   if (f.codigo) partes.push(f.codigo)
   if (f.version) partes.push(`v${f.version}`)
-  if (f.paso !== null && f.paso !== undefined) partes.push(`paso ${f.paso}`)
+  // El «paso 0» de una instrucción es su cabecera: resumen, riesgos, EPI y herramientas.
+  if (f.paso === 0) partes.push('datos generales')
+  else if (f.paso !== null && f.paso !== undefined) partes.push(`paso ${f.paso}`)
   if (f.pagina) partes.push(`pág. ${f.pagina}`)
   if (f.hoja) partes.push(`hoja ${f.hoja}`)
   if (f.diapositiva) partes.push(`diapositiva ${f.diapositiva}`)

@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  ChevronRight, Download, FolderOpen, FolderPlus, HardDrive, House, Lock, Pencil, RefreshCw, Trash2, Upload,
+  ChevronRight, Download, FolderOpen, FolderPlus, HardDrive, House, Lock, Pencil, RefreshCw, SquareTerminal, Trash2,
+  Upload,
 } from 'lucide-react'
 import { del, fecha, get, hace, post, subir, tamano, urlServidor } from '../../api'
 import {
@@ -18,6 +19,9 @@ import { IconoElemento, buscarCarpeta, buscarElemento, padre, seAbre, unir, type
 import './espacio.css'
 
 interface EstadoEjecutor { disponible: boolean; mensaje?: string | null; tiempo_max?: number }
+
+// Mismo texto que da el servidor cuando falta el servicio espacio-trabajo.
+const SIN_CONSOLA = 'La consola para ejecutar órdenes no está disponible en este servidor. Tus ficheros sí: puedes verlos, subirlos y descargarlos.'
 interface Subida { nombre: string; pct: number; estado: 'espera' | 'subiendo' | 'hecho' | 'error'; error?: string }
 
 // ------------------------------------------------------------------ migas de pan
@@ -319,11 +323,16 @@ export default function Espacio() {
         </div>
       </div>
 
-      {ejecutor?.disponible && (
+      {ejecutor?.disponible ? (
         <div className="mt-3">
           <Consola tiempoMax={ejecutor.tiempo_max ?? 120} alTerminar={recargar} />
         </div>
-      )}
+      ) : arbol && (!arbol.ejecutor_configurado || ejecutor) ? (
+        <div className="espacio-sin-consola" role="note">
+          <SquareTerminal size={16} />
+          <span>{ejecutor?.mensaje || SIN_CONSOLA}</span>
+        </div>
+      ) : null}
 
       {/* Subida */}
       <Modal abierto={modalSubida} titulo={carpeta ? `Subir a «${carpeta.split('/').pop()}»` : 'Subir a tu carpeta'}

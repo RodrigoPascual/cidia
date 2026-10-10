@@ -38,8 +38,19 @@ export default function PaginaCaptura() {
   const [nota, setNota] = useState<NotaGrabada | null>(null)
   const [iniciando, setIniciando] = useState(false)
   const [ficha, setFicha] = useState<number | null>(null)
+  const [recien, setRecien] = useState<number | null>(null)
   const entradaAudio = useRef<HTMLInputElement>(null)
   const { setDatos } = lista
+
+  // Tras subir algo, la captura nueva (con sus fases en vivo) queda a la vista y resaltada un momento:
+  // en una pantalla de portátil la lista está por debajo de las tres vías.
+  useEffect(() => {
+    if (recien === null) return
+    const fila = document.getElementById(`cap-fila-${recien}`)
+    fila?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const t = setTimeout(() => setRecien(null), 2600)
+    return () => clearTimeout(t)
+  }, [recien])
 
   const tarea = tareas.datos?.find((t) => String(t.id) === tareaId) ?? null
   const sinTareas = !tareas.cargando && !tareas.error && !tareas.datos?.length
@@ -91,6 +102,7 @@ export default function PaginaCaptura() {
       const c = await subir<Captura>(`/api/captura/${tipo}`, formulario(fichero, nombre),
         (pct) => setSubida({ nombre, pct, tipo }))
       anadir(c)
+      setRecien(c.id)
       avisar(tipo === 'video' ? 'Vídeo recibido. CidIA está preparando el borrador de la instrucción.'
         : 'Nota recibida. CidIA la está transcribiendo y ordenando.')
       setTitulo('')
@@ -285,7 +297,7 @@ export default function PaginaCaptura() {
           ) : (
             <div className="cap-lista">
               {lista.datos.map((c) => (
-                <FilaCaptura key={c.id} c={c} onRevisar={() => abrirBorrador(c)} onBorrar={() => borrar(c)}
+                <FilaCaptura key={c.id} c={c} resaltada={c.id === recien} onRevisar={() => abrirBorrador(c)} onBorrar={() => borrar(c)}
                   onReintentar={() => reintentar(c)} onContinuar={() => navegar(`/captura/entrevista/${c.id}`)} />
               ))}
             </div>
@@ -309,8 +321,8 @@ function EstadoCaptura({ c }: { c: Captura }) {
   return <Etiqueta tono="naranja">Por revisar</Etiqueta>
 }
 
-function FilaCaptura({ c, onRevisar, onBorrar, onReintentar, onContinuar }: {
-  c: Captura; onRevisar: () => void; onBorrar: () => void; onReintentar: () => void; onContinuar: () => void
+function FilaCaptura({ c, resaltada, onRevisar, onBorrar, onReintentar, onContinuar }: {
+  c: Captura; resaltada?: boolean; onRevisar: () => void; onBorrar: () => void; onReintentar: () => void; onContinuar: () => void
 }) {
   const icono = c.tipo === 'video' ? <Video /> : c.tipo === 'audio' ? <Mic /> : <MessagesSquare />
   const activa = enProceso(c)
@@ -318,7 +330,7 @@ function FilaCaptura({ c, onRevisar, onBorrar, onReintentar, onContinuar }: {
   const esFicha = c.borrador?.tipo === 'ficha'
   const publicado = c.borrador?.estado === 'publicada' || c.borrador?.estado === 'obsoleta'
   return (
-    <div className={`cap-fila ${activa ? 'activa' : ''}`}>
+    <div id={`cap-fila-${c.id}`} className={`cap-fila ${activa ? 'activa' : ''} ${resaltada ? 'resaltada' : ''}`}>
       {c.miniatura_url ? <img className="cap-miniatura" src={urlServidor(c.miniatura_url)} alt="" />
         : <div className={`cap-miniatura icono ${c.tipo}`}>{icono}</div>}
       <div className="crece">
@@ -348,6 +360,9 @@ function FilaCaptura({ c, onRevisar, onBorrar, onReintentar, onContinuar }: {
         {c.estado === 'error' && c.mensaje && <div className="cap-error pequeno">{c.mensaje}</div>}
         {c.estado === 'borrador_listo' && c.origen_borrador === 'segmentos' && !publicado && (
           <div className="pequeno apagado mt-1">El modelo no pudo proponer los pasos: el borrador sigue los cambios de plano del vídeo.</div>
+        )}
+        {c.estado === 'borrador_listo' && c.origen_borrador === 'pasos_narrados' && !publicado && (
+          <div className="pequeno apagado mt-1">Los pasos siguen los que nombras en el vídeo («paso 1», «paso 2»…), con lo que dices en cada uno.</div>
         )}
       </div>
       <div className="cap-fila-acciones">

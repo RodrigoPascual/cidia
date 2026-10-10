@@ -288,7 +288,8 @@ def test_espacio_por_mcp(cliente, planta):
 
 def test_espacio_ejecutar_por_mcp(cliente, planta, monkeypatch):
     error, texto = llamar(cliente, cab(cliente, "pedro"), "espacio_ejecutar", orden="ls")
-    assert error and "no está disponible" in texto
+    # Sin consola: el agente sabe que no debe reintentar y qué puede hacer en su lugar.
+    assert error and "no está disponible" in texto and "espacio_escribir" in texto
 
     monkeypatch.setattr(ajustes(), "espacio_url", "http://ejecutor:8090")
     monkeypatch.setattr(ajustes(), "espacio_secreto", "secreto-de-pruebas")

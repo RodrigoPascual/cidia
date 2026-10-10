@@ -39,7 +39,7 @@ from cidia.conocimiento import Encontrado, motor
 from cidia.db import sesion_bd
 from cidia.ia import llm, prompts
 from cidia.modelos import (
-    Consulta, Documento, Ejecucion, EjecucionPaso, Empresa, Formacion, Paso, Sesion, Tarea, Usuario,
+    Consulta, Documento, Ejecucion, EjecucionPaso, Empresa, Formacion, Instruccion, Paso, Sesion, Tarea, Usuario,
 )
 from cidia.permisos import Alcance, alcance_de, departamentos_visibles, puede_ver
 from cidia.seguridad import Actor, limitar_invitado, url_fichero
@@ -63,6 +63,16 @@ MARGEN_SIMILITUD = 0.2  # un fragmento más de 0,2 por debajo del mejor no se ci
 _RE_MARCA = re.compile(r"[\[*`]*(?:SIN[_ ]RESPALDO|[Ss]in_[Rr]espaldo)[\]*`]*[ \t]*[:.\-–]?[ \t]*")
 _ABRE_MARCA = "*[`"  # signos que pueden ir delante de la marca
 _RE_CITA = re.compile(r"\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]")
+# Restos del razonamiento de los modelos que piensan (qwen3...): el bloque entero o una etiqueta suelta.
+_RE_PENSAMIENTO = re.compile(r"<think>.*?</think>\s*", re.S | re.I)
+_RE_ETIQUETA_PENSAMIENTO = re.compile(r"</?think>\s*", re.I)
+_ETIQUETAS_PENSAMIENTO = ("<think>", "</think>")
+# El modelo dice que la documentación no responde (con o sin la marca SIN_RESPALDO).
+_RE_NIEGA = re.compile(
+    r"\bno (?:lo |la |los |las |se )?(?:encuentr|he encontrado|hemos encontrado|aparece|figura|consta|indica|"
+    r"especifica|menciona|recoge|detalla|tengo (?:informaci|datos)|dispongo|hay (?:informaci|datos|nada))",
+    re.I,
+)
 
 # Palabras de cortesía (o sobre el propio copiloto): un mensaje formado solo por ellas no es una laguna.
 _CORTESIA = {
@@ -376,7 +386,21 @@ def _fuentes_y_contexto(bd: Session, encontrados: list[Encontrado]) -> tuple[lis
         bloques.append(prompts.fragmento_contexto(n, e.titulo, texto, version, meta.get("paso"), autor, validador,
                                                   meta.get("codigo")))
         total += len(texto)
+    _anadir_tarea(bd, fuentes)
     return fuentes, "\n\n".join(bloques)
+
+
+def _anadir_tarea(bd: Session, fuentes: list[dict[str, Any]]) -> None:
+    """Añade `tarea_id` a las fuentes que son una instrucción: la interfaz enlaza con la tarea en
+    formación o en el modo planta (el editor de instrucciones solo lo abren expertos y jefes)."""
+    ids = {f.get("origen_id") for f in fuentes
+           if f.get("origen") == "instruccion" and f.get("origen_id") and not f.get("tarea_id")}
+    if not ids:
+        return
+    tareas = dict(bd.execute(select(Instruccion.id, Instruccion.tarea_id).where(Instruccion.id.in_(ids))).all())
+    for f in fuentes:
+        if f.get("origen") == "instruccion" and not f.get("tarea_id"):
+            f["tarea_id"] = tareas.get(f.get("origen_id"))
 
 
 def preparar(bd: Session, actor: Actor, pregunta: str, modo: str = "normal",
@@ -420,7 +444,12 @@ def preparar(bd: Session, actor: Actor, pregunta: str, modo: str = "normal",
     recuerdos = [m.contenido for m in memoria.relevantes(bd, actor.id, pregunta, RECUERDOS_POR_CONSULTA)] \
         if usar_memoria and actor.id else []
     empresa = bd.scalar(select(Empresa.nombre).limit(1))
-    sistema = prompts.sistema_consulta(modo, bool(fuentes), empresa, tarea, recuerdos, persona)
+    # El puesto de quien pregunta solo va al prompt cuando la pregunta habla de sí misma («mi tarea»,
+    # «¿qué EPI necesito?»): en las demás distrae a los modelos pequeños del CONTEXTO.
+    habla_de_si = bool(_RE_MI_PUESTO.search(pregunta) or _RE_HABLA_DE_SI.search(pregunta)
+                       or re.search(r"\bnecesito\b|\bme toca\b|\bdebo\b", pregunta, re.I))
+    sistema = prompts.sistema_consulta(modo, bool(fuentes), empresa, tarea, recuerdos,
+                                       persona if habla_de_si else None)
     mensajes = [{"role": "system", "content": sistema}, *hist,
                 {"role": "user", "content": prompts.usuario_consulta(pregunta, texto_contexto or None)}]
     prep = Preparada(
@@ -443,7 +472,9 @@ def preparar(bd: Session, actor: Actor, pregunta: str, modo: str = "normal",
 
 
 class FiltroMarca:
-    """Quita la marca SIN_RESPALDO del texto aunque llegue partida entre varios trozos del streaming."""
+    """Limpia el texto del modelo aunque llegue partido entre varios trozos del streaming: quita la
+    marca SIN_RESPALDO (y anota que la ha visto) y los restos de razonamiento (<think>…</think> o una
+    etiqueta suelta), que nunca deben llegar a la persona."""
 
     def __init__(self) -> None:
         self.pendiente = ""
@@ -461,20 +492,28 @@ class FiltroMarca:
         return self._soltar(final=True)
 
     def _soltar(self, final: bool) -> str:
-        t = self.pendiente
+        t = _RE_PENSAMIENTO.sub("", self.pendiente)
+        # Un razonamiento abierto y sin cerrar todavía: se guarda hasta su cierre (al final se descarta).
+        en_pensamiento = ""
+        abre = t.lower().rfind("<think>")
+        if abre != -1:
+            t, en_pensamiento = t[:abre], ("" if final else t[abre:])
+        t = _RE_ETIQUETA_PENSAMIENTO.sub("", t)
         if _RE_MARCA.search(t):
             self.vista = True
             t = _RE_MARCA.sub("", t)
         retener = 0
-        if not final:  # un posible comienzo de la marca al final («SIN_RES», «**») espera al siguiente trozo
-            marca = prompts.MARCA_SIN_RESPALDO
-            for i in range(len(marca) - 1, 0, -1):
-                if t.endswith(marca[:i]):
-                    retener = i
-                    break
+        if not final and not en_pensamiento:
+            # Un posible comienzo de la marca («SIN_RES», «**») o de una etiqueta («</thi») al final
+            # espera al siguiente trozo.
+            for prefijo in (prompts.MARCA_SIN_RESPALDO, *_ETIQUETAS_PENSAMIENTO):
+                for i in range(len(prefijo) - 1, retener, -1):
+                    if t.endswith(prefijo[:i]):
+                        retener = i
+                        break
             while retener < len(t) and t[len(t) - retener - 1] in _ABRE_MARCA:
                 retener += 1
-        salida, self.pendiente = t[: len(t) - retener], t[len(t) - retener:]
+        salida, self.pendiente = t[: len(t) - retener], t[len(t) - retener:] + en_pensamiento
         if not self.emitido:
             salida = salida.lstrip(" \t\n:.-–")
             self.emitido = bool(salida)
@@ -490,6 +529,22 @@ def citadas(texto: str, n_fuentes: int) -> list[int]:
             if 1 <= n <= n_fuentes:
                 vistos.add(n)
     return sorted(vistos)
+
+
+def respaldada(texto: str, marca_vista: bool, n_fuentes: int) -> bool:
+    """¿La respuesta se apoya de verdad en el contexto?
+
+    Los modelos pequeños se equivocan con la marca en los dos sentidos: escriben SIN_RESPALDO y a
+    continuación responden con los fragmentos citándolos, o dicen «no lo encuentro» sin la marca.
+    Manda lo que hacen: con la marca solo cuenta como respaldada si cita fragmentos que existen y
+    no dice que no lo encuentra; sin la marca, una negativa sin ninguna cita tampoco es respaldo."""
+    if n_fuentes <= 0:
+        return False
+    citas = citadas(texto, n_fuentes)
+    niega = bool(_RE_NIEGA.search((texto or "")[:300]))
+    if marca_vista:
+        return bool(citas) and not niega
+    return bool(citas) or not niega
 
 
 def _merece_laguna(pregunta: str) -> bool:
@@ -523,12 +578,20 @@ def finalizar(bd: Session, actor: Actor, prep: Preparada, texto: str, marca_vist
     """Guarda la consulta, registra xAPI, apunta la laguna si no hubo respaldo y hace commit.
 
     `interrumpida`: la respuesta se cortó a mitad (se guarda lo que llegó a escribirse, o nada)."""
-    respaldo = prep.con_contexto and not marca_vista
+    # Si había documentación y el modelo no ha escrito nada, el fallo es del modelo, no una laguna.
+    fallo_del_modelo = prep.con_contexto and (texto or "").strip() == _SIN_TEXTO
+    if fallo_del_modelo:
+        respaldo = False
+    elif interrumpida and not (texto or "").strip():
+        # Una respuesta interrumpida antes de escribir nada no se juzga por su texto (no lo hay).
+        respaldo = prep.con_contexto and not marca_vista
+    else:
+        respaldo = prep.con_contexto and respaldada(texto, marca_vista, len(prep.fuentes))
     citas = citadas(texto, len(prep.fuentes)) if respaldo else []
     duracion = int((time.monotonic() - prep.inicio) * 1000)
     laguna_id = None
     pregunta_real = _merece_laguna(prep.pregunta)
-    if not respaldo and not actor.es_invitado and pregunta_real:
+    if not respaldo and not actor.es_invitado and pregunta_real and not fallo_del_modelo:
         try:
             # Punto de guardado: si la laguna falla en la BD, la sesión sigue sirviendo para la consulta.
             with bd.begin_nested():
@@ -537,7 +600,7 @@ def finalizar(bd: Session, actor: Actor, prep: Preparada, texto: str, marca_vist
             log.exception("No se pudo registrar la laguna")
             laguna_id = None
     # Avisar de que no hay respaldo tiene sentido para una pregunta, no para un «hola» o un «gracias».
-    aviso = not respaldo and (marca_vista or pregunta_real)
+    aviso = not respaldo and not fallo_del_modelo and (marca_vista or pregunta_real)
     c = Consulta(
         usuario_id=actor.id,
         sesion_id=actor.sesion.id if actor.sesion is not None else None,
@@ -703,6 +766,7 @@ def a_dict(bd: Session, c: Consulta, alcance: Alcance | None = None) -> dict[str
         else:
             fuentes.append({"n": f.get("n"), "documento_id": None, "titulo": "Documento no disponible",
                             "fragmento": "", "url": None, "disponible": False})
+    _anadir_tarea(bd, fuentes)  # las consultas guardadas antes de existir el campo
     return {
         "id": c.id,
         "pregunta": c.pregunta,
@@ -711,7 +775,8 @@ def a_dict(bd: Session, c: Consulta, alcance: Alcance | None = None) -> dict[str
         "fuentes": fuentes,
         "con_respaldo": c.con_respaldo,
         "laguna_id": c.laguna_id,
-        "aviso_sin_respaldo": not c.con_respaldo and (c.laguna_id is not None or _merece_laguna(c.pregunta)),
+        "aviso_sin_respaldo": not c.con_respaldo and (c.respuesta or "").strip() != _SIN_TEXTO
+        and (c.laguna_id is not None or _merece_laguna(c.pregunta)),
         "citadas": citadas(c.respuesta or "", len(fuentes)) if c.con_respaldo else [],
         "valoracion": c.valoracion,
         "tarea_id": c.tarea_id,

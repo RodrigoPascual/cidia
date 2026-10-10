@@ -70,8 +70,16 @@ class ErrorCaptura(RuntimeError):
 
 # Valores de relleno que los modelos pequeños escriben en vez de dejar el campo vacío.
 RELLENO = {"vacío", "vacio", "ninguno", "ninguna", "nada", "n/a", "na", "-", "...", "…", "no se dice",
-           "no se menciona", "sin datos", "null", "none"}
+           "no se menciona", "sin datos", "null", "none", "no aplica", "no hay", "desconocido", "mínimo", "minimo",
+           "bajo", "riesgo mínimo", "riesgo minimo", "riesgos mínimos", "riesgos minimos", "sin riesgo",
+           "sin riesgos", "no se indica", "no se indican"}
 _MARCA_TIEMPO = re.compile(r"^\[\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?\]\s*")
+# Elementos de lista que no son nada: números o marcas de tiempo sueltas («4.6», «0:05», «12 s») e
+# identificadores («riesgo_mínimo»), que los modelos diminutos copian del prompt.
+_NO_ELEMENTO = re.compile(r"^(?:[\d\s.,:;\-–]+(?:s|seg|segundos)?|\w+_\w+(?:_\w+)*)$", re.I)
+# Frases del resumen que hablan de segundos o de números de paso: el modelo repite los datos del
+# prompt («los pasos clave están en 4.6 y 55.9 segundos») en lugar de decir para qué sirve la tarea.
+_FRASE_DE_TIEMPOS = re.compile(r"\d+(?:[.,]\d+)?\s*(?:s|seg\.?|segundos)\b|\bpasos?\b[^.]*?\b\d+\b", re.I)
 
 
 def _limpio(v: Any, maximo: int) -> str:
@@ -94,7 +102,14 @@ def _lista(v: Any, maximo: int = 3000) -> str:
         v = list(v.values())
     elementos = v if isinstance(v, list) else str(v or "").splitlines()
     limpios = (_limpio(_MARCA_TIEMPO.sub("", _limpio(e, 300)), 300) for e in elementos)
-    return "\n".join(dict.fromkeys(x for x in limpios if x))[:maximo]
+    return "\n".join(dict.fromkeys(x for x in limpios if x and not _NO_ELEMENTO.match(x)))[:maximo]
+
+
+def _resumen_limpio(v: Any) -> str:
+    """Resumen sin las frases que solo repiten tiempos o números de paso."""
+    texto = _texto_libre(v, 3000)
+    frases = re.split(r"(?<=[.!?])\s+", texto)
+    return " ".join(f for f in frases if f and not _FRASE_DE_TIEMPOS.search(f)).strip()
 
 
 def _si(v: Any) -> bool:
@@ -138,13 +153,25 @@ def _segundos(v: Any) -> float | None:
     return f if f >= 0 else None
 
 
+_CORTES_TITULO = {"con", "para", "durante", "hasta", "sin", "en", "de", "desde", "sobre", "mediante", "por"}
+
+
 def titulo_de(texto: str, palabras: int = 8) -> str:
-    """Título corto a partir de la primera frase de un texto."""
+    """Título corto a partir de la primera frase de un texto. Si la frase es larga, se corta por una
+    coma o antes de una preposición («Aprieto los 4 tornillos en cruz con la llave…» → «Aprieto los
+    4 tornillos»), no a mitad de una expresión."""
     frase = re.split(r"(?<=[.;:!?])\s+|\n", (texto or "").strip(), maxsplit=1)[0]
     trozos = frase.strip(" .,;:¡!¿?-").split()
     if not trozos:
         return ""
-    t = " ".join(trozos[:palabras]).rstrip(",;:")
+    if len(trozos) > palabras:
+        coma = next((i for i, w in enumerate(trozos[:palabras]) if w.endswith(",") and i >= 1), None)
+        if coma is not None:
+            trozos = trozos[:coma + 1]
+        else:
+            corte = max((i for i in range(3, palabras + 1) if trozos[i].lower() in _CORTES_TITULO), default=None)
+            trozos = trozos[:corte] if corte else trozos[:palabras]
+    t = " ".join(trozos).rstrip(",;:")
     return t[0].upper() + t[1:]
 
 
@@ -513,7 +540,8 @@ def normalizar_propuesta(datos: Any, dur: float | None, con_tiempos: bool = True
         pasos.append({
             "titulo": titulo or titulo_de(texto) or f"Paso {len(pasos) + 1}",
             "texto": texto,
-            "es_critico": _si(e.get("es_critico")),
+            # Si el propio paso dice que es crítico, lo es aunque el modelo no lo marque.
+            "es_critico": _si(e.get("es_critico")) or bool(_DICHO_CRITICO.search(f"{titulo} {texto}")),
             "es_seguridad": _si(e.get("es_seguridad")),
             "criterio_aceptacion": _limpio(e.get("criterio_aceptacion"), 1000),
             "t_inicio": _segundos(e.get("t_inicio")),
@@ -535,7 +563,7 @@ def normalizar_propuesta(datos: Any, dur: float | None, con_tiempos: bool = True
             p["t_inicio"] = p["t_fin"] = None
     return {
         "titulo": _limpio(datos.get("titulo"), 300),
-        "resumen": _texto_libre(datos.get("resumen"), 3000),
+        "resumen": _resumen_limpio(datos.get("resumen")),
         "riesgos": _lista(datos.get("riesgos")),
         "epis": _lista(datos.get("epis")),
         "herramientas": _lista(datos.get("herramientas")),
@@ -544,25 +572,26 @@ def normalizar_propuesta(datos: Any, dur: float | None, con_tiempos: bool = True
 
 
 def borrador_por_segmentos(segmentos: list[dict[str, Any]], escenas: list[dict[str, Any]], dur: float | None,
-                           titulo: str | None) -> dict[str, Any]:
+                           titulo: str | None, desde: float = 0.0) -> dict[str, Any]:
     """Plan B sin modelo: un paso por tramo entre cambios de plano (o cada ~30 s si no los hay),
-    con el texto dicho en ese tramo. Siempre produce un borrador editable."""
+    con el texto dicho en ese tramo. Siempre produce un borrador editable. Con `desde`, solo cubre
+    el vídeo a partir de ese segundo (para completar una propuesta que se queda corta)."""
     dur = dur or max((s.get("fin", 0.0) for s in segmentos), default=0.0)
-    cortes: list[float] = [e["t"] for e in escenas if TRAMO_MINIMO <= e.get("t", 0) <= dur - TRAMO_MINIMO]
+    cortes: list[float] = [e["t"] for e in escenas if desde + TRAMO_MINIMO <= e.get("t", 0) <= dur - TRAMO_MINIMO]
     if not cortes and segmentos:
-        inicio = 0.0
+        inicio = desde
         for s in segmentos:
             if s["fin"] - inicio >= TRAMO_SIN_ESCENAS and s["fin"] <= dur - TRAMO_MINIMO:
                 cortes.append(s["fin"])
                 inicio = s["fin"]
     limpios: list[float] = []
     for c in sorted(cortes):
-        if c - (limpios[-1] if limpios else 0.0) >= TRAMO_MINIMO:
+        if c - (limpios[-1] if limpios else desde) >= TRAMO_MINIMO:
             limpios.append(c)
     if len(limpios) >= MAX_PASOS:  # demasiados cortes: se queda con unos repartidos
         paso = len(limpios) / (MAX_PASOS - 1)
         limpios = [limpios[int(i * paso)] for i in range(MAX_PASOS - 1)]
-    limites = [0.0, *limpios, dur]
+    limites = [desde, *limpios, dur]
     pasos = []
     for i in range(len(limites) - 1):
         a, b = limites[i], limites[i + 1]
@@ -577,22 +606,158 @@ def borrador_por_segmentos(segmentos: list[dict[str, Any]], escenas: list[dict[s
             "herramientas": "", "pasos": pasos}
 
 
+# --- pasos nombrados en voz alta («Paso 1…», «Paso dos…», «tercer paso…»)
+
+_CARDINALES = {"uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7, "ocho": 8,
+               "nueve": 9, "diez": 10, "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15}
+_ORDINALES = {"primer": 1, "primero": 1, "segundo": 2, "tercer": 3, "tercero": 3, "cuarto": 4, "quinto": 5,
+              "sexto": 6, "séptimo": 7, "septimo": 7, "octavo": 8, "noveno": 9, "décimo": 10, "decimo": 10}
+_MARCA_PASO = re.compile(
+    r"\b(?:paso\s+(?:n[úu]mero\s+)?(?P<n>\d{1,2}|" + "|".join(_CARDINALES) + r")"
+    r"|(?P<o>" + "|".join(_ORDINALES) + r")\s+paso)\b[ \t]*[.,:;]?", re.I)
+# «Paso 3 y es crítico.», «Paso 5, de seguridad:» → la marca del paso, que no forma parte de su texto.
+_CLAUSULA_PASO = re.compile(r"^(?:y\s+|que\s+)?(?:este\s+)?(?:es\s+)?(?:un\s+paso\s+|muy\s+)?"
+                            r"(?P<c>cr[ií]tico|importante|de\s+seguridad)\b\s*[.,:;!]*\s*", re.I)
+_DICHO_CRITICO = re.compile(r"\b(?:es|son)\s+(?:un\s+|muy\s+)?(?:paso\s+|punto\s+)?cr[ií]tic[oa]s?\b"
+                            r"|\bpunto\s+cr[ií]tico\b|\bpaso\s+cr[ií]tico\b", re.I)
+_DICHO_SEGURIDAD = re.compile(r"\bpor\s+(?:tu\s+)?seguridad\b|\bpeligr", re.I)
+AJUSTE_A_ESCENA = 1.5  # segundos: una marca dicha cerca de un cambio de plano empieza en el cambio
+
+
+def _secuencia_de_pasos(marcas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """La secuencia más larga de marcas con números crecientes que empieza por el 1 o el 2 y avanza
+    de uno en uno (o de dos, por si la transcripción se come una marca). Así un «paso 2 veces el
+    trapo» suelto no parte un paso por la mitad."""
+    mejor: list[list[dict[str, Any]]] = []
+    for i, m in enumerate(marcas):
+        previas = [mejor[j] for j in range(i) if mejor[j] and mejor[j][-1]["n"] < m["n"] <= mejor[j][-1]["n"] + 2]
+        if previas:
+            mejor.append(max(previas, key=len) + [m])
+        else:
+            mejor.append([m] if m["n"] <= 2 else [])
+    return max(mejor, key=len, default=[])
+
+
+def pasos_narrados(segmentos: list[dict[str, Any]], dur: float | None,
+                   escenas: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """Si el experto nombra los pasos al explicar («Paso 1. Preparo…», «Paso dos…»), los pasos salen
+    de ahí: el texto de cada uno es lo que dice hasta el siguiente y empieza en el momento en que lo
+    nombra (o en el cambio de plano más cercano). Es lo más fiel a lo que contó, así que manda sobre
+    los pasos del modelo. Devuelve {intro, pasos} o None si no hay al menos 3 marcas seguidas."""
+    utiles = [s for s in segmentos if str(s.get("texto") or "").strip()]
+    plano, inicios, marcas = "", [], []
+    for s in utiles:
+        texto = str(s["texto"]).strip()
+        base = len(plano)
+        inicios.append(base)
+        for m in _MARCA_PASO.finditer(texto):
+            n = int(m.group("n")) if (m.group("n") or "").isdigit() else (
+                _CARDINALES.get((m.group("n") or "").lower()) or _ORDINALES.get((m.group("o") or "").lower()))
+            ini, fin = _segundos(s.get("inicio")), _segundos(s.get("fin"))
+            t = None
+            if ini is not None and fin is not None and fin >= ini:
+                t = ini + (fin - ini) * m.start() / max(1, len(texto))
+            marcas.append({"n": n, "t": t, "desde": base + m.start(), "hasta": base + m.end()})
+        plano += texto + " "
+    elegidas = _secuencia_de_pasos([m for m in marcas if m["n"]])
+    if len(elegidas) < 3:
+        return None
+    cortes = [e["t"] for e in escenas or [] if isinstance(e.get("t"), (int, float))]
+    pasos: list[dict[str, Any]] = []
+    for i, m in enumerate(elegidas):
+        siguiente = elegidas[i + 1]["desde"] if i + 1 < len(elegidas) else len(plano)
+        texto = plano[m["hasta"]:siguiente].strip(" .,;:")
+        critico = seguridad = False
+        while (c := _CLAUSULA_PASO.match(texto)):
+            palabra = c.group("c").lower()
+            critico = critico or not palabra.startswith("de")
+            seguridad = seguridad or palabra.startswith("de")
+            texto = texto[c.end():]
+        texto = texto.strip(" .,;:")
+        texto = (texto[:1].upper() + texto[1:]) if texto else ""
+        if texto and texto[-1] not in ".!?":
+            texto += "."
+        t = m["t"]
+        if t is not None and cortes:
+            cerca = min(cortes, key=lambda c: abs(c - t))
+            t = cerca if abs(cerca - t) <= AJUSTE_A_ESCENA else t
+        pasos.append({"titulo": titulo_de(texto) or f"Paso {i + 1}", "texto": texto[:3000],
+                      "es_critico": critico or bool(_DICHO_CRITICO.search(texto)),
+                      "es_seguridad": seguridad or bool(_DICHO_SEGURIDAD.search(texto)),
+                      "criterio_aceptacion": "", "t_inicio": t, "t_fin": None})
+    if dur and all(p["t_inicio"] is not None for p in pasos):
+        for i, p in enumerate(pasos):
+            p["t_fin"] = pasos[i + 1]["t_inicio"] if i + 1 < len(pasos) else dur
+        _ajustar_tiempos(pasos, dur)
+    else:
+        for p in pasos:
+            p["t_inicio"] = p["t_fin"] = None
+    return {"intro": plano[:elegidas[0]["desde"]].strip(), "pasos": pasos[:MAX_PASOS]}
+
+
+def _completar_final(propuesta: dict[str, Any], segmentos: list[dict[str, Any]], escenas: list[dict[str, Any]],
+                     dur: float | None) -> int:
+    """Los modelos pequeños a veces se quedan sin pasos a mitad del vídeo: lo que se dice después del
+    último paso se añade como pasos del plan B (por cambios de plano). Devuelve cuántos añade."""
+    pasos = propuesta["pasos"]
+    fin = pasos[-1].get("t_fin") if pasos else None
+    if not dur or fin is None or fin >= dur * 0.85:
+        return 0
+    resto = [s for s in segmentos if str(s.get("texto") or "").strip()
+             and (float(s.get("inicio", 0)) + float(s.get("fin", 0))) / 2 >= fin]
+    if sum(len(str(s["texto"])) for s in resto) < 40:
+        return 0
+    extra = [p for p in borrador_por_segmentos(resto, escenas, dur, None, desde=fin)["pasos"] if p["texto"]]
+    for i, p in enumerate(extra):  # sin huecos: cada paso llega hasta el siguiente
+        p["t_inicio"] = fin if i == 0 else p["t_inicio"]
+        p["t_fin"] = extra[i + 1]["t_inicio"] if i + 1 < len(extra) else dur
+        p["es_critico"] = bool(_DICHO_CRITICO.search(p["texto"]))
+    pasos.extend(extra[:max(0, MAX_PASOS - len(pasos))])
+    return len(extra)
+
+
+def _frases(texto: str, n: int = 2) -> str:
+    return " ".join(re.split(r"(?<=[.!?])\s+", (texto or "").strip())[:n])[:600]
+
+
 def proponer_pasos(bd: Session, transcripcion: dict[str, Any], escenas: list[dict[str, Any]], dur: float,
                    nombre: str | None) -> tuple[dict[str, Any], str]:
-    """Propuesta del modelo a partir de la transcripción y los cambios de plano, o plan B.
-    Devuelve (propuesta, origen) con origen «modelo» o «segmentos»."""
+    """Propuesta a partir de la transcripción y los cambios de plano. Devuelve (propuesta, origen):
+    * «pasos_narrados»: el experto nombra los pasos en voz alta; los pasos salen de lo que dice y el
+      modelo aporta los datos generales (título, herramientas, EPIs, riesgos) y las marcas.
+    * «modelo»: los pasos del modelo (completados con el plan B si se quedan cortos).
+    * «segmentos»: plan B sin modelo, un paso por tramo entre cambios de plano."""
     segmentos = [s for s in transcripcion.get("segmentos") or [] if isinstance(s, dict)]
     texto = transcripcion.get("texto") or ""
+    propuesta: dict[str, Any] | None = None
     if texto.strip() or segmentos:
         try:
             datos = llm.chat_json(prompts.mensajes_pasos(nombre, dur, segmentos, texto, escenas), bd=bd)
             propuesta = normalizar_propuesta(datos, dur)
-            if propuesta:
-                propuesta["titulo"] = propuesta["titulo"] or (nombre or "")
-                return propuesta, "modelo"
-            log.info("La propuesta del modelo no sirve; se usa el borrador por segmentos")
+            if not propuesta:
+                log.info("La propuesta del modelo no sirve; se usa el plan B")
         except Exception as e:  # noqa: BLE001  (cualquier fallo del modelo → plan B)
-            log.warning("El modelo no ha propuesto pasos (%s); se usa el borrador por segmentos", e)
+            log.warning("El modelo no ha propuesto pasos (%s); se usa el plan B", e)
+    narrados = pasos_narrados(segmentos, dur, escenas)
+    if narrados:
+        pasos = narrados["pasos"]
+        general = propuesta or {}
+        if propuesta and len(propuesta["pasos"]) == len(pasos):  # mismos pasos: se suman sus marcas
+            for p, m in zip(pasos, propuesta["pasos"], strict=True):
+                p["es_critico"] = p["es_critico"] or m["es_critico"]
+                p["es_seguridad"] = p["es_seguridad"] or m["es_seguridad"]
+                p["criterio_aceptacion"] = p["criterio_aceptacion"] or m["criterio_aceptacion"]
+        intro = narrados["intro"] if len(narrados["intro"]) >= 15 else ""
+        return {"titulo": general.get("titulo") or (nombre or ""),
+                "resumen": general.get("resumen") or intro or _frases(texto),
+                "riesgos": general.get("riesgos", ""), "epis": general.get("epis", ""),
+                "herramientas": general.get("herramientas", ""), "pasos": pasos}, "pasos_narrados"
+    if propuesta:
+        propuesta["titulo"] = propuesta["titulo"] or (nombre or "")
+        propuesta["resumen"] = propuesta["resumen"] or _frases(texto)
+        if _completar_final(propuesta, segmentos, escenas, dur):
+            log.info("La propuesta del modelo no cubría el final del vídeo; se ha completado")
+        return propuesta, "modelo"
     return borrador_por_segmentos(segmentos, escenas, dur, nombre), "segmentos"
 
 
@@ -603,7 +768,22 @@ def _texto_mejorado(respuesta: str, original: str) -> str | None:
         return None
     if re.search(r"\b(no puedo|lo siento|no veo ninguna imagen|as an ai)\b", t, re.I):
         return None
-    return t
+    return t if _conserva_lo_dicho(original, t) else None
+
+
+def _conserva_lo_dicho(original: str, nuevo: str) -> bool:
+    """¿Mantiene el texto reescrito lo que dijo el experto? Todas sus cifras (pares, presiones,
+    cantidades) y al menos la mitad de sus palabras con contenido (se comparan por la raíz, para
+    admitir el paso a imperativo: «aprieto» → «aprieta»). Los modelos de visión diminutos a veces
+    describen la imagen y se olvidan del texto."""
+    cifras = set(re.findall(r"\d+(?:[.,]\d+)?", original or ""))
+    if not cifras <= set(re.findall(r"\d+(?:[.,]\d+)?", nuevo)):
+        return False
+    raices = {w[:5] for w in re.findall(r"[a-záéíóúñü]{5,}", (original or "").lower())}
+    if not raices:
+        return True
+    nuevas = {w[:5] for w in re.findall(r"[a-záéíóúñü]{5,}", nuevo.lower())}
+    return len(raices & nuevas) >= 0.5 * len(raices)
 
 
 def mejorar_con_vision(bd: Session, pasos: list[dict[str, Any]]) -> bool:

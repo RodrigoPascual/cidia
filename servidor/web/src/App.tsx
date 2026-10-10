@@ -1,54 +1,107 @@
 // Rutas de la interfaz. Cada página vive en src/paginas y se carga bajo demanda.
 
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Marco from './Marco'
-import Acceso from './paginas/Acceso'
+import Acceso, { CambioObligatorio, PantallaCarga, SinConexion } from './paginas/Acceso'
 import { BASE_APP } from './api'
 import { useSesion } from './sesion'
-import { Cargando } from './ui'
 
-const Inicio = lazy(() => import('./paginas/Inicio'))
-const Copiloto = lazy(() => import('./paginas/Copiloto'))
-const Perfil = lazy(() => import('./paginas/Perfil'))
-const PlantaTareas = lazy(() => import('./paginas/planta/Tareas'))
-const PlantaEjecucion = lazy(() => import('./paginas/planta/Ejecucion'))
-const Formacion = lazy(() => import('./paginas/formacion/Formacion'))
-const FormacionTarea = lazy(() => import('./paginas/formacion/Tarea'))
-const Evaluacion = lazy(() => import('./paginas/evaluacion/Evaluacion'))
-const MiProgreso = lazy(() => import('./paginas/progreso/MiProgreso'))
-const Equipo = lazy(() => import('./paginas/progreso/Equipo'))
-const Aportaciones = lazy(() => import('./paginas/aportaciones/Aportaciones'))
-const Validar = lazy(() => import('./paginas/aportaciones/Validar'))
-const Lagunas = lazy(() => import('./paginas/aportaciones/Lagunas'))
-const Espacio = lazy(() => import('./paginas/espacio/Espacio'))
-const Captura = lazy(() => import('./paginas/captura/Captura'))
-const Entrevista = lazy(() => import('./paginas/captura/Entrevista'))
-const Instrucciones = lazy(() => import('./paginas/instrucciones/Instrucciones'))
-const EditorInstruccion = lazy(() => import('./paginas/instrucciones/Editor'))
-const Documentos = lazy(() => import('./paginas/documentos/Documentos'))
-const Organizacion = lazy(() => import('./paginas/admin/Organizacion'))
-const Empleados = lazy(() => import('./paginas/admin/Empleados'))
-const Modelos = lazy(() => import('./paginas/admin/Modelos'))
-const Registro = lazy(() => import('./paginas/admin/Registro'))
-const Sistema = lazy(() => import('./paginas/admin/Sistema'))
+// Cada página con el servicio que la abre: se cargan bajo demanda y, cuando el navegador está
+// libre, se precargan las de la persona para que cambiar de sección sea inmediato.
+const PAGINAS = {
+  Inicio: ['perfil', () => import('./paginas/Inicio')],
+  Copiloto: ['chat', () => import('./paginas/Copiloto')],
+  Perfil: ['perfil', () => import('./paginas/Perfil')],
+  PlantaTareas: ['planta', () => import('./paginas/planta/Tareas')],
+  PlantaEjecucion: ['planta', () => import('./paginas/planta/Ejecucion')],
+  Formacion: ['formacion', () => import('./paginas/formacion/Formacion')],
+  FormacionTarea: ['formacion', () => import('./paginas/formacion/Tarea')],
+  Evaluacion: ['evaluacion', () => import('./paginas/evaluacion/Evaluacion')],
+  MiProgreso: ['progreso', () => import('./paginas/progreso/MiProgreso')],
+  Equipo: ['equipo', () => import('./paginas/progreso/Equipo')],
+  Aportaciones: ['aportaciones', () => import('./paginas/aportaciones/Aportaciones')],
+  Validar: ['validar', () => import('./paginas/aportaciones/Validar')],
+  Lagunas: ['lagunas', () => import('./paginas/aportaciones/Lagunas')],
+  Espacio: ['espacio', () => import('./paginas/espacio/Espacio')],
+  Captura: ['captura', () => import('./paginas/captura/Captura')],
+  Entrevista: ['captura', () => import('./paginas/captura/Entrevista')],
+  Instrucciones: ['instrucciones', () => import('./paginas/instrucciones/Instrucciones')],
+  EditorInstruccion: ['instrucciones', () => import('./paginas/instrucciones/Editor')],
+  Documentos: ['documentos', () => import('./paginas/documentos/Documentos')],
+  Organizacion: ['organizacion', () => import('./paginas/admin/Organizacion')],
+  Empleados: ['empleados', () => import('./paginas/admin/Empleados')],
+  Modelos: ['modelos', () => import('./paginas/admin/Modelos')],
+  Registro: ['registro', () => import('./paginas/admin/Registro')],
+  Sistema: ['sistema', () => import('./paginas/admin/Sistema')],
+} as const satisfies Record<string, readonly [string, () => Promise<unknown>]>
+
+const Inicio = lazy(PAGINAS.Inicio[1])
+const Copiloto = lazy(PAGINAS.Copiloto[1])
+const Perfil = lazy(PAGINAS.Perfil[1])
+const PlantaTareas = lazy(PAGINAS.PlantaTareas[1])
+const PlantaEjecucion = lazy(PAGINAS.PlantaEjecucion[1])
+const Formacion = lazy(PAGINAS.Formacion[1])
+const FormacionTarea = lazy(PAGINAS.FormacionTarea[1])
+const Evaluacion = lazy(PAGINAS.Evaluacion[1])
+const MiProgreso = lazy(PAGINAS.MiProgreso[1])
+const Equipo = lazy(PAGINAS.Equipo[1])
+const Aportaciones = lazy(PAGINAS.Aportaciones[1])
+const Validar = lazy(PAGINAS.Validar[1])
+const Lagunas = lazy(PAGINAS.Lagunas[1])
+const Espacio = lazy(PAGINAS.Espacio[1])
+const Captura = lazy(PAGINAS.Captura[1])
+const Entrevista = lazy(PAGINAS.Entrevista[1])
+const Instrucciones = lazy(PAGINAS.Instrucciones[1])
+const EditorInstruccion = lazy(PAGINAS.EditorInstruccion[1])
+const Documentos = lazy(PAGINAS.Documentos[1])
+const Organizacion = lazy(PAGINAS.Organizacion[1])
+const Empleados = lazy(PAGINAS.Empleados[1])
+const Modelos = lazy(PAGINAS.Modelos[1])
+const Registro = lazy(PAGINAS.Registro[1])
+const Sistema = lazy(PAGINAS.Sistema[1])
 
 function Protegida({ servicio, children }: { servicio?: string; children: ReactNode }) {
   const { perfil, puede } = useSesion()
   const lugar = useLocation()
-  if (!perfil) return <Navigate to="/acceso" state={{ desde: lugar.pathname }} replace />
+  if (!perfil) return <Navigate to="/acceso" state={{ desde: lugar.pathname + lugar.search }} replace />
   if (servicio && !puede(servicio)) {
     return <Navigate to={perfil.invitado ? '/copiloto' : '/'} replace />
   }
   return <>{children}</>
 }
 
+/** Precarga en segundo plano las páginas que puede abrir la persona (una vez por sesión). */
+function usePrecarga(servicios: readonly string[] | undefined) {
+  useEffect(() => {
+    if (!servicios?.length) return
+    const quiere = new Set(servicios)
+    const cargas = Object.values(PAGINAS).filter(([s]) => quiere.has(s)).map(([, cargar]) => cargar)
+    let cancelado = false
+    const ocioso = (f: () => void) =>
+      typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(f, { timeout: 4000 }) : setTimeout(f, 1500)
+    const siguiente = () => {
+      const c = cargas.shift()
+      if (!c || cancelado) return
+      c().catch(() => { /* se volverá a pedir al navegar */ }).finally(() => ocioso(siguiente))
+    }
+    const t = window.setTimeout(() => ocioso(siguiente), 2500)
+    return () => { cancelado = true; window.clearTimeout(t) }
+  }, [servicios?.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 function Rutas() {
-  const { perfil, cargando, puede } = useSesion()
-  if (cargando) return <Cargando texto="Conectando con CidIA…" />
+  const { perfil, cargando, sinConexion, puede } = useSesion()
+  usePrecarga(perfil?.servicios)
+  if (cargando) return <PantallaCarga />
+  // Hay sesión guardada pero el servidor no responde: se espera sin cerrar la sesión.
+  if (!perfil && sinConexion) return <SinConexion />
+  // Contraseña inicial o temporal: hay que cambiarla antes de usar nada (después se sigue en la
+  // misma dirección que se había pedido).
+  if (perfil?.debe_cambiar_contrasena) return <CambioObligatorio />
   const p = (servicio: string | undefined, el: ReactNode) => <Protegida servicio={servicio}>{el}</Protegida>
   return (
-    <Suspense fallback={<Cargando />}>
+    <Suspense fallback={<PantallaCarga />}>
       <Routes>
         <Route path="/acceso" element={perfil && !perfil.invitado ? <Navigate to="/" replace /> : <Acceso />} />
         {/* Modo planta: pantalla completa, sin barra lateral */}

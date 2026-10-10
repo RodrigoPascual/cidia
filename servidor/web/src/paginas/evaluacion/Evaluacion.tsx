@@ -5,9 +5,11 @@
 // La pestaña y lo que se está haciendo van en la URL (?pestana=observar&usuario=3&tarea=5),
 // para poder llegar desde el pasaporte o la matriz del equipo.
 
+import { useCallback } from 'react'
 import { ClipboardCheck, Eye, ListChecks } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { get } from '../../api'
+import { refrescarContadores } from '../../Marco'
 import { useSesion } from '../../sesion'
 import { Cabecera, ErrorCarga, Esqueleto, Pestanas, Tarjeta, useDatos } from '../../ui'
 import Cuestionario from './Cuestionario'
@@ -29,6 +31,8 @@ export default function Evaluacion() {
   const { puede } = useSesion()
   const [params, setParams] = useSearchParams()
   const { datos: pend, error, recargar } = useDatos((s) => get<Pendientes>('/api/evaluacion/pendientes', s), [])
+  // Algo ha cambiado (cuestionario, observación, preguntas): las pestañas y el menú lo reflejan ya.
+  const cambio = useCallback(() => { recargar(); refrescarContadores() }, [recargar])
 
   const disponibles: Pestana[] = ['cuestionarios']
   if (puede('revisar_preguntas')) disponibles.push('preguntas')
@@ -52,15 +56,15 @@ export default function Evaluacion() {
     if (tareaCuestionario) {
       return (
         <Cuestionario key={tareaCuestionario} tareaId={tareaCuestionario}
-          onSalir={(cambios) => { setParams({}); if (cambios) recargar() }} />
+          onSalir={(cambios) => { setParams({}); if (cambios) cambio() }} />
       )
     }
-    if (activa === 'observar') return <Observar sugeridas={pend?.observaciones ?? []} onCambio={recargar} />
+    if (activa === 'observar') return <Observar sugeridas={pend?.observaciones ?? []} onCambio={cambio} />
     if (error) return <Tarjeta><ErrorCarga error={error} reintentar={recargar} /></Tarjeta>
     if (!pend) {
       return <div className="rejilla auto">{[0, 1, 2].map((i) => <Esqueleto key={i} alto={190} />)}</div>
     }
-    if (activa === 'preguntas') return <RevisarPreguntas instrucciones={pend.preguntas ?? []} onCambio={recargar} />
+    if (activa === 'preguntas') return <RevisarPreguntas instrucciones={pend.preguntas ?? []} onCambio={cambio} />
     return <MisCuestionarios cuestionarios={pend.cuestionarios} onEmpezar={(id) => setParams({ tarea: String(id) })} />
   }
 

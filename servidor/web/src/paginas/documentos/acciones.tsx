@@ -35,10 +35,11 @@ export function useAccionesDocumento(opciones: Opciones | null, alCambiar: (d: D
   }, [avisar, avisarError, alCambiar])
 
   const borrar = useCallback(async (d: Documento) => {
-    const nacido = d.origen === 'instruccion'
-      ? ' Es la versión publicada de una instrucción: la instrucción seguirá existiendo, pero el copiloto no la citará hasta que se vuelva a publicar.'
-      : d.origen === 'aportacion'
-        ? ' Nació de una aportación validada: el copiloto dejará de citarla.'
+    // (Las instrucciones no se borran desde aquí: se gestionan desde Instrucciones.)
+    const nacido = d.origen === 'aportacion'
+      ? ' Nació de una aportación validada: el copiloto dejará de citarla.'
+      : d.estado === 'borrador'
+        ? ' Es una ficha sin publicar: su autor ya no podrá revisarla ni publicarla.'
         : ''
     const ok = await confirmar(
       'Borrar documento',

@@ -286,6 +286,35 @@ def test_indexado_interrumpido_se_puede_reindexar(cliente, planta, bd):
         bd.commit()
 
 
+def test_ficha_en_borrador_no_se_indexa_desde_documentos(cliente, planta, bd):
+    """Una ficha de captura sin publicar se ve en la biblioteca, pero reindexarla la pondría al
+    alcance del copiloto sin validar: solo se indexa al publicarla desde Captura."""
+    doc = Documento(titulo=_unico("Ficha sin validar"), tipo="ficha", departamento_id=planta.deps["prod"].id,
+                    nivel_minimo=1, estado="borrador", contenido_texto="Truco del sensor S4 sin revisar.",
+                    origen="captura")
+    bd.add(doc)
+    bd.commit()
+    r = cliente.post(f"/api/documentos/{doc.id}/reindexar", headers=cab(cliente, "javier"))
+    assert r.status_code == 409 and "borrador" in r.json()["detail"]
+    bd.expire_all()
+    assert bd.get(Documento, doc.id).estado == "borrador"
+    assert bd.scalar(select(Fragmento).where(Fragmento.documento_id == doc.id)) is None
+
+
+def test_las_instrucciones_no_se_borran_desde_documentos(cliente, planta, bd):
+    """El documento de una instrucción publicada (o sustituida) se gestiona desde Instrucciones:
+    borrarlo dejaría la instrucción vigente fuera del copiloto sin forma de volver a indexarla."""
+    doc = documentos.crear_desde_texto(
+        bd, _unico("IT-099 Engrase"), "Paso 1. Engrasa la guía.", tipo="instruccion",
+        departamento_id=planta.deps["prod"].id, origen="instruccion", en_segundo_plano=False,
+    )
+    bd.commit()
+    r = cliente.delete(f"/api/documentos/{doc.id}", headers=cab(cliente, "javier"))
+    assert r.status_code == 409 and "Instrucciones" in r.json()["detail"]
+    bd.expire_all()
+    assert bd.get(Documento, doc.id) is not None
+
+
 def test_nivel_no_numerico_en_la_subida(cliente, planta):
     r = _subir(cliente, cab(cliente, "javier"), "n.txt", "texto", nivel_minimo="alto")
     assert r.status_code == 400 and "nivel mínimo" in r.json()["detail"]
@@ -357,10 +386,29 @@ def test_probar_busqueda(cliente, planta, bd):
     assert all(x["es_publico"] for x in r.json()["resultados"])
     assert r.json()["alcance"] == [{"tipo": "publico", "texto": "Documentos públicos"}]
 
-    # un jefe no puede buscar como otra persona; una pregunta vacía no vale
+    # un jefe puede buscar como las personas de su departamento (pedro no ve lo de nivel 3)...
     r = cliente.post("/api/documentos/probar-busqueda", headers=hj,
-                     json={"consulta": "atasco", "como_usuario_id": planta.personas["pedro"].id})
-    assert r.status_code == 403
+                     json={"consulta": "atasco alimentador AL-9", "como_usuario_id": planta.personas["pedro"].id, "k": 10})
+    assert r.status_code == 200, r.text
+    titulos = [x["titulo"] for x in r.json()["resultados"]]
+    assert t_prod in titulos and t_jefes not in titulos and r.json()["como"]["nombre"] == "Pedro Ruiz"
+    # ... pero solo ve lo que él mismo puede ver: marta se forma en Oficina técnica y allí encuentra
+    # material que javier, de Producción, no tiene por qué ver
+    t_form = f"Formación del alimentador {marca}"
+    _subir(cliente, ha, "f.txt", "Guía de formación del alimentador AL-9 para quien empieza.", titulo=t_form,
+           es_formacion=True)
+    como_marta = {"consulta": "formación alimentador AL-9", "como_usuario_id": planta.personas["marta"].id, "k": 10}
+    assert t_form in [x["titulo"] for x in cliente.post("/api/documentos/probar-busqueda", headers=hadm,
+                                                         json=como_marta).json()["resultados"]]
+    r = cliente.post("/api/documentos/probar-busqueda", headers=hj, json=como_marta)
+    assert r.status_code == 200 and t_form not in [x["titulo"] for x in r.json()["resultados"]]
+    # no como personas de otro departamento ni como invitado; una pregunta vacía no vale
+    opciones = cliente.get("/api/documentos/opciones", headers=hj).json()
+    assert {p["usuario"] for p in opciones["personas"]} >= {"pedro", "marta"}
+    assert not {p["usuario"] for p in opciones["personas"]} & {"ana", "luis", "javier"}
+    for cuerpo in ({"como_usuario_id": planta.personas["luis"].id}, {"como_usuario_id": 999999}, {"como_invitado": True}):
+        r = cliente.post("/api/documentos/probar-busqueda", headers=hj, json={"consulta": "atasco", **cuerpo})
+        assert r.status_code == 403, cuerpo
     assert cliente.post("/api/documentos/probar-busqueda", headers=hj, json={"consulta": "  "}).status_code == 400
     r = cliente.post("/api/documentos/probar-busqueda", headers=hadm,
                      json={"consulta": "atasco", "como_usuario_id": 999999})

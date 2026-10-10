@@ -104,6 +104,9 @@
 }
 .cap-fila:last-child { border-bottom: none; padding-bottom: 4px; }
 .cap-fila:first-child { padding-top: 4px; }
+/* La captura recién subida se resalta un momento al aparecer en la lista. */
+.cap-fila { border-radius: 6px; transition: background 600ms ease-out, box-shadow 600ms ease-out; }
+.cap-fila.resaltada { background: var(--acento-suave); box-shadow: 0 0 0 8px var(--acento-suave); }
 .cap-miniatura {
   width: 92px; height: 58px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--tinta);
 }
