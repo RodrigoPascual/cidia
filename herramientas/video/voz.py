@@ -6,8 +6,9 @@
     python herramientas/video/voz.py voces
 
 Voces («motor:voz»):
-  kokoro:em_alex, kokoro:ef_dora   Kokoro-82M (Apache-2.0), la elegida: narrador em_alex y
-                                   preguntas al micrófono ef_dora (ver README)
+  supertonic:M1                    Supertonic 3 (OpenRAIL-M + MIT): el narrador de la v2 (--perfil v2)
+  kokoro:em_alex, kokoro:ef_dora   Kokoro-82M (Apache-2.0): narrador de la v1 y preguntas al micrófono
+                                   de la v1 y la v2 (ef_dora; ver README, apartado 6)
   piper:es_ES-carlfm-x_low         Piper (MIT) con voz de dominio público (calidad baja)
   piper:es_ES-davefx-medium        solo para comparar (afinada desde lessac: uso comercial dudoso)
   onecore:Microsoft Laura | Pablo | Helena, sapi:Microsoft Helena Desktop   voces de Windows
@@ -48,11 +49,83 @@ PREGUNTA_COMPARAR = '¿Qué llave uso para apretar los tornillos?'
 
 
 # ---------- Texto ----------
-def pronunciar(texto: str) -> str:
-    reglas = json.loads((AQUI / 'pronunciacion.json').read_text(encoding='utf-8'))['reemplazos']
-    for patron, por in reglas:
-        texto = re.sub(patron, por, texto)
-    return re.sub(r'\s+', ' ', texto).strip()
+def motor_de(spec: str) -> str:
+    return spec.partition(':')[0]
+
+
+def pronunciar(texto: str, motor: str = 'kokoro') -> str:
+    """Lo que dice la voz: pronunciacion.json (comunes y del motor) y, si el motor lo necesita, números en letras."""
+    from voz_texto import pronunciar as _pronunciar
+    return _pronunciar(texto, motor)
+
+
+# ---------- Voces de voz_voces.json (motores en su propio entorno) ----------
+def catalogo() -> dict:
+    return json.loads((AQUI / 'voz_voces.json').read_text(encoding='utf-8'))
+
+
+def voz_externa(spec: str) -> dict | None:
+    """Configuración exacta de una voz que corre en otro entorno (voz_motores.py), o None si es de las de v1."""
+    if motor_de(spec) in ('kokoro', 'piper', 'onecore', 'sapi') and spec not in catalogo()['voces']:
+        return None
+    v = catalogo()['voces'].get(spec)
+    if v is None:
+        raise ValueError(f'Voz desconocida: {spec} (mira voz.py voces)')
+    cfg = json.loads(json.dumps(v, ensure_ascii=False).replace('{voces}', (AQUI / 'voces').as_posix()))
+    return cfg
+
+
+def perfil(a: argparse.Namespace) -> dict:
+    """Narrador, micrófono y velocidad según --perfil o --motor (por defecto, los de la versión 1)."""
+    cat = catalogo()
+    if getattr(a, 'motor', None):
+        return cat['por_motor'][a.motor]
+    return cat['perfiles'][getattr(a, 'perfil', None) or 'v1']
+
+
+def sintetizar_externo(spec: str, trabajos: list[dict], velocidad: float = 1.0, semilla: int | None = None) -> None:
+    """Sintetiza de una vez (el modelo se carga una sola vez) los `trabajos` [{dicho, wav, antes, despues}] con la
+    voz `spec` en su entorno y deja cada WAV a 48 kHz. «[pausa N]» parte el texto y mete N ms de silencio.
+    Con `semilla`, el resultado se repite igual (Supertonic, Chatterbox...); otra semilla da otra toma."""
+    from voz_motores import python_de
+    v = voz_externa(spec)
+    config = dict(v.get('config') or {})
+    if semilla is not None:
+        config['semilla'] = int(semilla)
+    if velocidad != 1.0 and v['motor'] in ('supertonic', 'omnivoice'):
+        config['velocidad'] = round(float(config.get('velocidad', 1.0)) * velocidad, 3)
+    with tempfile.TemporaryDirectory() as tmp:
+        items, planes = [], []
+        for k, t in enumerate(trabajos):
+            plan = []
+            for j, trozo in enumerate(re.split(r'(\[pausa \d+\])', t['dicho'])):
+                m = re.fullmatch(r'\[pausa (\d+)\]', trozo)
+                if m:
+                    plan.append(('pausa', int(m.group(1)) / 1000))
+                elif trozo.strip():
+                    bruto = Path(tmp) / f'{k}-{j}.wav'
+                    items.append({'id': f'{k}-{j}', 'texto': trozo.strip(), 'salida': str(bruto)})
+                    plan.append(('voz', bruto))
+            planes.append(plan)
+        lote = Path(tmp) / 'lote.json'
+        lote.write_text(json.dumps({'motor': v['motor'], 'config': config, 'por_frases': v.get('por_frases', False),
+                                    'pausa_frase': v.get('pausa_frase', 0.32), 'items': items}, ensure_ascii=False), encoding='utf-8')
+        r = subprocess.run([str(python_de(v['motor'])), str(AQUI / 'voz_motores.py'), str(lote)], capture_output=True,
+                           text=True, encoding='utf-8', errors='replace')
+        if r.returncode != 0:
+            raise RuntimeError(f'{v["motor"]} falló:\n{r.stderr[-3000:]}')
+        for t, plan in zip(trabajos, planes):
+            pcm = bytearray(silencio(t.get('antes', 0.0)))
+            for tipo, x in plan:
+                if tipo == 'pausa':
+                    pcm += silencio(x)
+                else:
+                    limpio = x.with_name(x.stem + '-48.wav')
+                    a_48k(x, limpio)
+                    pcm += leer_pcm(limpio)
+            pcm += silencio(t.get('despues', 0.0))
+            Path(t['wav']).parent.mkdir(parents=True, exist_ok=True)
+            escribir_pcm(Path(t['wav']), bytes(pcm))
 
 
 def trocear(texto: str, pausa_frase: float) -> list[tuple[str, float]]:
@@ -160,44 +233,83 @@ def decir(spec: str, texto: str, destino: Path, velocidad: float = 1.0, pausa_fr
 
 # ---------- Órdenes ----------
 def narrar(a: argparse.Namespace) -> None:
-    _, piezas = cargar_proyecto(a.entrada)
+    _, piezas = cargar_proyecto(a.entrada, incluir_omitidas=a.incluir_omitidas)
     salida = Path(a.salida).resolve()
-    total = 0.0
+    pf = perfil(a)
+    voz_def = a.voz or pf['narrador']
+    vel_def = a.velocidad if a.velocidad is not None else float(pf.get('velocidad', 1.0))
+    indices, pendientes = [], {}
     for p in piezas:
         frags = p.get('narracion') or []
         if not frags or (a.solo and p.get('id') not in a.solo.split(',')):
             continue
-        spec = p.get('voz', a.voz)
-        vel = float(p.get('velocidad', a.velocidad))
+        spec = p.get('voz', voz_def)
+        vel = float(p.get('velocidad', vel_def))
+        externa = voz_externa(spec)
+        if externa and a.semilla is not None:
+            externa = {**externa, 'config': {**(externa.get('config') or {}), 'semilla': a.semilla}}
+        firma = json.dumps(externa, sort_keys=True, ensure_ascii=False) if externa else ''
         indice = salida / f"{p['id']}.json"
         previo = json.loads(indice.read_text(encoding='utf-8')) if indice.exists() else {'fragmentos': []}
         anteriores = {f['hash']: f for f in previo.get('fragmentos', [])}
         resultado = []
         for n, fr in enumerate(frags, 1):
             texto = fr['texto'] if isinstance(fr, dict) else str(fr)
-            dicho = pronunciar(texto)
-            h = hashlib.sha1(f'{spec}|{vel}|{a.pausa_frase}|{dicho}'.encode()).hexdigest()[:16]
+            dicho = pronunciar(texto, motor_de(spec) if not externa else externa['motor'])
+            # «semilla» en el fragmento: la toma elegida a oído (por ejemplo, la única en que Whisper oye «CidIA» como una
+            # sola palabra). Entra en la firma, así que cambiarla vuelve a sintetizar solo ese fragmento.
+            sem = fr.get('semilla') if isinstance(fr, dict) and fr.get('semilla') is not None else a.semilla
+            firma_fr = firma
+            if externa and sem != a.semilla:
+                firma_fr = json.dumps({**externa, 'config': {**(externa.get('config') or {}), 'semilla': sem}}, sort_keys=True,
+                                      ensure_ascii=False)
+            clave = f'{spec}|{firma_fr}|{vel}|{a.pausa_frase}|{dicho}' if externa else f'{spec}|{vel}|{a.pausa_frase}|{dicho}'  # v1: misma caché
+            h = hashlib.sha1(clave.encode()).hexdigest()[:16]
             wav = salida / p['id'] / f'{n:02d}.wav'
+            item = {'n': n, 'texto': texto, 'dicho': dicho, 'marca': fr.get('marca') if isinstance(fr, dict) else None,
+                    'tras': fr.get('tras', 0) if isinstance(fr, dict) else 0, 'wav': str(wav), 'duracion': None, 'hash': h}
+            if sem != a.semilla:
+                item['semilla'] = sem
             if h in anteriores and wav.exists() and not a.forzar and anteriores[h]['wav'] == str(wav):
-                d = anteriores[h]['duracion']
+                item['duracion'] = anteriores[h]['duracion']
+                for k in ('semilla', 'velocidad'):  # tomas rehechas por voz_revisar.py (otra semilla o más despacio)
+                    if k in anteriores[h]:
+                        item[k] = anteriores[h][k]
+            elif externa:
+                pendientes.setdefault((spec, vel, sem), []).append(item)
             else:
                 t = time.time()
-                d = decir(spec, dicho, wav, vel, a.pausa_frase)
-                print(f"  {p['id']} {n:02d}  {d:5.1f} s  ({time.time() - t:.1f} s)  {texto[:70]}")
-            total += d
-            resultado.append({'n': n, 'texto': texto, 'dicho': dicho, 'marca': fr.get('marca') if isinstance(fr, dict) else None,
-                              'tras': fr.get('tras', 0) if isinstance(fr, dict) else 0,
-                              'wav': str(wav), 'duracion': round(d, 3), 'hash': h})
+                item['duracion'] = round(decir(spec, dicho, wav, vel, a.pausa_frase), 3)
+                print(f"  {p['id']} {n:02d}  {item['duracion']:5.1f} s  ({time.time() - t:.1f} s)  {texto[:70]}")
+            resultado.append(item)
+        indices.append((indice, {'id': p['id'], 'voz': spec, 'velocidad': vel, 'fragmentos': resultado}))
+    for (spec, vel, sem), items in pendientes.items():
+        t = time.time()
+        print(f'  {spec}: {len(items)} fragmentos en un solo lote (semilla {sem})...', flush=True)
+        sintetizar_externo(spec, items, vel, sem)
+        for it in items:
+            it['duracion'] = round(duracion(Path(it['wav'])), 3)
+        print(f'  {spec}: {sum(i["duracion"] for i in items):.1f} s de voz en {time.time() - t:.0f} s')
+    total = 0.0
+    for indice, datos in indices:
+        total += sum(f['duracion'] for f in datos['fragmentos'])
         indice.parent.mkdir(parents=True, exist_ok=True)
-        indice.write_text(json.dumps({'id': p['id'], 'voz': spec, 'velocidad': vel, 'fragmentos': resultado},
-                                     ensure_ascii=False, indent=2), encoding='utf-8')
+        indice.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding='utf-8')
     print(f'Narración total: {total / 60:.1f} min')
 
 
 def frase(a: argparse.Namespace) -> None:
-    spec = a.voz if a.voz != NARRADOR or not a.microfono else VOZ_MICROFONO
-    d = decir(spec, pronunciar(a.texto), Path(a.salida), a.velocidad, a.pausa_frase,
-              antes=0.45 if a.microfono else 0.0, despues=1.0 if a.microfono else 0.0)
+    pf = perfil(a)
+    spec = a.voz or (pf['microfono'] if a.microfono else pf['narrador'])
+    vel = a.velocidad if a.velocidad is not None else float(pf.get('velocidad_microfono', 1.0) if a.microfono and not a.voz else 1.0)
+    antes, despues = (0.45, 1.0) if a.microfono else (0.0, 0.0)
+    externa = voz_externa(spec)
+    if externa:
+        sintetizar_externo(spec, [{'dicho': pronunciar(a.texto, externa['motor']), 'wav': str(Path(a.salida)),
+                                   'antes': antes, 'despues': despues}], vel, a.semilla)
+        d = duracion(Path(a.salida))
+    else:
+        d = decir(spec, pronunciar(a.texto, motor_de(spec)), Path(a.salida), vel, a.pausa_frase, antes=antes, despues=despues)
     print(json.dumps({'wav': str(Path(a.salida).resolve()), 'voz': spec, 'duracion_s': round(d, 2),
                       'mantener_ms': int(d * 1000 + 300)}, ensure_ascii=False))
 
@@ -299,10 +411,18 @@ def _transcribir(base: str, token: str, wav: Path) -> str:
 
 
 def voces(_: argparse.Namespace) -> None:
+    from voz_motores import python_de
     print('kokoro:', 'em_alex, ef_dora, em_santa' if (HERR / 'kokoro' / 'voices-v1.0.bin').exists() else '(falta: preparar.py)')
     d = HERR / 'piper' / 'voces'
     print('piper:', ', '.join(p.stem for p in sorted(d.glob('*.onnx'))) if d.exists() else '(falta: preparar.py --solo piper)')
     print('onecore y sapi: las voces es-ES instaladas en Windows (Configuración › Hora e idioma › Voz)')
+    cat = catalogo()
+    print('\nVoces de voz_voces.json (cada motor en su entorno de .herramientas/tts; elección en 04_VIDEO/v2/muestras-voz/indice.md):')
+    for spec, v in cat['voces'].items():
+        listo = 'listo' if python_de(v['motor']).exists() else 'falta el entorno'
+        print(f'  {spec:28s} {listo:17s} {v.get("licencia", "")[:70]}')
+    print('\nPerfiles (--perfil):', ', '.join(f'{k} = {v["narrador"]} + {v["microfono"]}' for k, v in cat['perfiles'].items()))
+    print('Por motor (--motor):', ', '.join(f'{k} = {v["narrador"]} + {v["microfono"]}' for k, v in cat['por_motor'].items()))
 
 
 if __name__ == '__main__':
@@ -310,14 +430,22 @@ if __name__ == '__main__':
     sub = ap.add_subparsers(dest='orden', required=True)
     for nombre in ('narrar', 'frase', 'comparar', 'voces'):
         s = sub.add_parser(nombre)
-        s.add_argument('--voz', default=NARRADOR)
-        s.add_argument('--velocidad', type=float, default=0.95 if nombre == 'narrar' else 1.0)
+        s.add_argument('--voz', default=None if nombre in ('narrar', 'frase') else NARRADOR,
+                       help='motor:voz; sin ella, la del perfil (narrador, o micrófono con --microfono)')
+        s.add_argument('--perfil', help='v1 (por defecto: Kokoro em_alex + ef_dora) o v2 (la elegida en 04_VIDEO/v2/muestras-voz)')
+        s.add_argument('--motor', help='usa el narrador y el micrófono elegidos de ese motor (voz_voces.json, por_motor)')
+        s.add_argument('--velocidad', type=float, default=None if nombre in ('narrar', 'frase') else 1.0,
+                       help='por defecto, la del perfil al narrar (0,95 en v1) y 1,0 en frase')
         s.add_argument('--pausa-frase', type=float, default=0.32)
+        s.add_argument('--semilla', type=int, default=None,
+                       help='voces de voz_voces.json: misma semilla, mismo audio (otra semilla, otra toma)')
         if nombre == 'narrar':
             s.add_argument('entrada')
             s.add_argument('--salida', required=True)
             s.add_argument('--solo')
             s.add_argument('--forzar', action='store_true')
+            s.add_argument('--incluir-omitidas', action='store_true',
+                           help='narra también las piezas con "omitir" (tomas nuevas aún sin grabar)')
         elif nombre == 'frase':
             s.add_argument('texto')
             s.add_argument('--salida', required=True)
@@ -329,7 +457,8 @@ if __name__ == '__main__':
             s.add_argument('--usuario', default='lucia')
             s.add_argument('--base', default='http://127.0.0.1:18700')
     a = ap.parse_args()
-    if a.orden != 'voces' and (a.voz.startswith('kokoro') or a.orden == 'comparar'):
+    if a.orden != 'voces':
+        # Kokoro de la v1 corre en este proceso; los demás motores, en su propio entorno (voz_motores.py).
         from comun import en_entorno
         en_entorno(['kokoro_onnx', 'soundfile', 'numpy'])
     {'narrar': narrar, 'frase': frase, 'comparar': comparar, 'voces': voces}[a.orden](a)

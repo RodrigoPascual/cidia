@@ -42,7 +42,9 @@
 //
 // Salida en --salida: <id>.mp4 y <id>.json (duración, marcas y esperas en ms desde el primer
 // fotograma, errores de consola, excepciones y peticiones fallidas). Código de salida 1 si alguna
-// acción falla o la página da errores: así se detectan antes del montaje.
+// acción falla o la página da errores: así se detectan antes del montaje. El informe lleva además el
+// registro del ratón para el montaje (zoom): «raton» ({t, x, y, ev}) y, en cada acción, cursor_ini,
+// cursor_fin y el rectángulo del elemento, en píxeles del vídeo (README, apartado 4.2).
 
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -439,7 +441,22 @@ async function grabarEscena(escena, dirEscena) {
     // Cursor: posición inicial y movimiento suave con eventos de puntero reales.
     let pos = escena.cursor_inicio ?? [Math.round(ancho * 0.62), Math.round(alto * 0.58)]
     let pulsado = false
-    const raton = (type, x, y, extra = {}) => cdp.enviar('Input.dispatchMouseEvent', { type, x, y, button: extra.button ?? (pulsado ? 'left' : 'none'), buttons: pulsado ? 1 : 0, pointerType: 'mouse', ...extra })
+    // Registro del ratón para el montaje (zoom a la zona de cada acción): en «informe.raton», cada evento
+    // con su tiempo (ms desde el primer fotograma) y su posición en píxeles del vídeo (CSS × escala). Los
+    // movimientos se apuntan como mucho uno cada 30 ms; las pulsaciones, las sueltas y la rueda, todas.
+    informe.coordenadas = { unidades: 'píxeles del vídeo', ancho: anchoFisico, alto: altoFisico, escala, nota: 'x, y = coordenadas CSS de la página × escala' }
+    informe.raton = []
+    let tCeroRaton = null, ultimoMovimiento = -1e9, regActual = null
+    const aVideo = (v) => Math.round(v * escala * 10) / 10
+    const rectVideo = (r) => r ? { x: aVideo(r.x), y: aVideo(r.y), w: aVideo(r.w), h: aVideo(r.h) } : null
+    const EVENTO = { mouseMoved: 'mover', mousePressed: 'pulsar', mouseReleased: 'soltar', mouseWheel: 'rueda' }
+    const apuntarRaton = (type, x, y) => {
+      if (tCeroRaton == null) return
+      const t = Math.round(Date.now() - tCeroRaton)
+      if (type === 'mouseMoved') { if (t - ultimoMovimiento < 30) return; ultimoMovimiento = t }
+      informe.raton.push({ t, x: aVideo(x), y: aVideo(y), ev: EVENTO[type] ?? type })
+    }
+    const raton = (type, x, y, extra = {}) => { apuntarRaton(type, x, y); return cdp.enviar('Input.dispatchMouseEvent', { type, x, y, button: extra.button ?? (pulsado ? 'left' : 'none'), buttons: pulsado ? 1 : 0, pointerType: 'mouse', ...extra }) }
     await raton('mouseMoved', pos[0], pos[1])
     await evaluar(`window.__cc && window.__cc.mover(${pos[0]}, ${pos[1]})`)
     if (escena.cursor === false) await evaluar('window.__cc && window.__cc.mostrar(false)')
@@ -495,6 +512,8 @@ async function grabarEscena(escena, dirEscena) {
         await dormir(120)
       }
       const fx = a.punto?.[0] ?? (r.w > 520 ? 0.3 : 0.5), fy = a.punto?.[1] ?? 0.5
+      // Rectángulo del elemento (ya centrado en la vista) en el informe de la acción, en píxeles del vídeo.
+      if (regActual) regActual.elemento = rectVideo(r)
       return { x: Math.round(r.x + r.w * fx), y: Math.round(r.y + Math.min(r.h, 120) * fy), r }
     }
     async function pulsar(x, y, doble = false) {
@@ -524,6 +543,8 @@ async function grabarEscena(escena, dirEscena) {
     async function rueda(total, enX, enY) {
       const pasos = Math.max(8, Math.round(Math.abs(total) / 28))
       let hecho = 0
+      apuntarRaton('mouseWheel', enX, enY)
+      if (regActual) regActual.rueda = total
       for (let i = 1; i <= pasos; i++) {
         const objetivo = Math.round(total * suave(i / pasos))
         await cdp.enviar('Input.dispatchMouseEvent', { type: 'mouseWheel', x: enX, y: enY, deltaX: 0, deltaY: objetivo - hecho, pointerType: 'mouse' })
@@ -574,17 +595,22 @@ async function grabarEscena(escena, dirEscena) {
     }
 
     // ---------- A grabar ----------
-    await cdp.enviar('Page.startScreencast', { format: 'jpeg', quality: CALIDAD, maxWidth: anchoFisico, maxHeight: altoFisico, everyNthFrame: 1 })
+    // "cada_n_fotogramas": 2 en escenas con una animación continua durante minutos (la captura de vídeo
+    // de 03a): con todos los repintados, Edge se va retrasando y los últimos segundos se perdían.
+    await cdp.enviar('Page.startScreencast', { format: 'jpeg', quality: CALIDAD, maxWidth: anchoFisico, maxHeight: altoFisico, everyNthFrame: Number(escena.cada_n_fotogramas ?? 1) })
     grabando = true
     const tArranque = Date.now()
     while (!fotos.length && Date.now() - tArranque < 5000) { await raton('mouseMoved', pos[0], pos[1]); await dormir(50) }
     const t0 = fotos.length ? fotos[0].t * 1000 : Date.now()
     const ahora = () => Math.round(Date.now() - t0)
+    tCeroRaton = t0
+    informe.raton.push({ t: ahora(), x: aVideo(pos[0]), y: aVideo(pos[1]), ev: 'inicio' })
     await dormir(Number(escena.colchon_inicial_ms ?? 500))
 
     for (const [i, a] of (escena.acciones ?? []).entries()) {
       const tipo = Object.keys(a).find((k) => !['pausa', 'max', 'acelerar', 'dentro', 'limpiar', 'ms_tecla', 'doble', 'punto', 'ms', 'nota', 'en', 'recargar', 'obligatorio', 'clic', 'clicTexto', 'input', 'cerca', 'oscurecer', 'marco'].includes(k)) ?? (a.clic ? 'clic' : a.clicTexto ? 'clicTexto' : '?')
-      const reg = { i, tipo, inicio: ahora() }
+      const reg = { i, tipo, inicio: ahora(), cursor_ini: [aVideo(pos[0]), aVideo(pos[1])] }
+      regActual = reg
       let pausa = 0
       try {
         if (tipo === 'marca') {
@@ -734,12 +760,14 @@ async function grabarEscena(escena, dirEscena) {
       } catch (e) {
         reg.error = String(e.message ?? e)
         informe.fallos.push(`acción ${i} (${tipo}): ${reg.error}`)
-        if (a.obligatorio) { reg.fin = ahora(); informe.acciones.push(reg); break }
+        if (a.obligatorio) { reg.fin = ahora(); reg.cursor_fin = [aVideo(pos[0]), aVideo(pos[1])]; informe.acciones.push(reg); break }
       }
       await dormir(a.pausa ?? pausa)
       reg.fin = ahora()
+      reg.cursor_fin = [aVideo(pos[0]), aVideo(pos[1])]
       informe.acciones.push(reg)
     }
+    regActual = null
     let minimo = Number(escena.duracion_minima_ms ?? 0)
     if (frags.length) {
       colocarVoz(null, 0) // los fragmentos que quedan van seguidos

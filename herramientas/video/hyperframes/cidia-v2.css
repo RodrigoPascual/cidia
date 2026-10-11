@@ -1,0 +1,251 @@
+/* Estilo del vídeo v2 de CidIA (04_VIDEO/v2/notas/guia-estilo.md). Fuentes OFL en copia local. */
+@font-face { font-family: "Archivo"; src: url("fuentes/Archivo.ttf"); font-weight: 100 900; font-stretch: 62% 125%; }
+@font-face { font-family: "Fira Sans"; src: url("fuentes/FiraSans-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: "Fira Sans"; src: url("fuentes/FiraSans-Medium.ttf"); font-weight: 500; }
+@font-face { font-family: "Fira Sans"; src: url("fuentes/FiraSans-SemiBold.ttf"); font-weight: 600; }
+@font-face { font-family: "Fira Sans"; src: url("fuentes/FiraSans-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "JetBrains Mono"; src: url("fuentes/JetBrainsMono.ttf"); font-weight: 100 800; }
+
+:root {
+  --tinta: #1F2328; --tinta-2: #2B3036; --tinta-3: #3A4048; --noche: #16191D;
+  --papel: #F5F6F8; --niebla: #AEB5BF; --pizarra-2: #8A93A0; --texto-2: #D5D9DF;
+  --acento: #F2C200; --verde: #3CC49C; --verde-app: #1F8A70; --info: #6EA8F2; --alerta: #F07A62; --aviso: #F5A23D;
+}
+html, body { margin: 0; padding: 0; background: #000; }
+.raiz { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #181B1F;
+  font-family: "Fira Sans", sans-serif; color: var(--papel); -webkit-font-smoothing: antialiased; }
+.raiz * { box-sizing: border-box; }
+.capa { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.fondo { background-size: 1920px 1080px; }
+.oculto { display: none !important; }
+.mono { font-family: "JetBrains Mono", monospace; }
+.archivo { font-family: "Archivo", sans-serif; font-stretch: 102%; }
+.etiqueta { font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 21px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--acento); white-space: nowrap; }
+.pieza { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+
+/* ---------- Marco de la grabación y cámara ---------- */
+.marco { position: absolute; left: 180px; top: 76px; width: 1560px; height: 878px; border-radius: 22px; overflow: hidden;
+  background: #fff; transform-origin: 0 0;
+  box-shadow: 0 30px 46px rgba(0,0,0,.62), 0 6px 10px rgba(0,0,0,.35); }
+.marco::after { content: ""; position: absolute; inset: 0; border-radius: 22px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+  pointer-events: none; }
+.camara { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+.camara video, .camara img { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; display: block; }
+.marco .barra-real { position: absolute; left: 0; bottom: 0; height: 4px; width: 0; background: var(--acento); }
+.marco-previo { position: absolute; left: 180px; top: 76px; width: 1560px; height: 878px; border-radius: 22px; overflow: hidden;
+  box-shadow: 0 30px 46px rgba(0,0,0,.62); }
+.marco-previo img { width: 1560px; height: 878px; display: block; }
+
+/* ---------- Cabecera de escena ---------- */
+.cabecera { position: absolute; left: 180px; top: 12px; width: 1560px; height: 52px; display: flex; align-items: center;
+  justify-content: space-between; }
+.cab-izq { display: flex; align-items: center; gap: 22px; min-width: 0; }
+.cab-seccion { font-family: "JetBrains Mono", monospace; font-size: 20px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--niebla); white-space: nowrap; }
+.cab-seccion b { color: var(--acento); font-weight: 700; margin-right: 10px; }
+.cab-seccion i { font-style: normal; color: var(--tinta-3); margin-right: 10px; }
+.persona { display: flex; align-items: center; height: 46px; padding: 0 18px 0 7px; gap: 12px; border-radius: 23px;
+  background: var(--tinta-2); white-space: nowrap; font-size: 22px; }
+/* Avatar: iniciales centradas con flex (revisión del 11/10: «.ficha span» le quitaba el grid y se salían del círculo) y un
+   aro claro para que el gris de Pedro (el de la app) no se pierda sobre el fondo oscuro. */
+.raiz .avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  line-height: 1; color: #fff; font-weight: 600; font-size: 14px; letter-spacing: .02em; flex: none; text-align: center;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.22); }
+.avatar svg { width: 18px; height: 18px; }
+.persona .pila { display: flex; }
+.persona b { font-weight: 600; color: var(--papel); }
+.persona > span:not(.avatar):not(.pila) { color: var(--niebla); }
+.cab-bases { display: flex; align-items: center; gap: 10px; }
+.cab-bases .etq { font-family: "JetBrains Mono", monospace; font-size: 20px; font-weight: 600; letter-spacing: .1em; color: var(--acento); }
+.contador { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 8px; border-radius: 20px;
+  background: var(--tinta-2); font-size: 21px; font-weight: 500; }
+
+/* ---------- Chips de bases ---------- */
+.chip { display: inline-flex; align-items: center; gap: 9px; height: 40px; padding: 0 16px 0 8px; border-radius: 20px;
+  background: var(--tinta-2); font-size: 21px; font-weight: 500; color: var(--papel); white-space: nowrap; }
+.check { width: 24px; height: 24px; border-radius: 50%; background: var(--verde-app); display: grid; place-items: center; flex: none; }
+.check svg { width: 15px; height: 15px; stroke: #fff; stroke-width: 3.2; fill: none; }
+.medio { width: 24px; height: 24px; flex: none; }
+
+/* ---------- Reloj de espera acelerada ---------- */
+.reloj { position: absolute; left: 960px; top: 44px; height: 64px; display: flex; align-items: center; gap: 14px;
+  padding: 0 26px 0 14px; border-radius: 32px; background: rgba(22,25,29,.94); transform: translateX(-50%);
+  box-shadow: 0 12px 30px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.08); white-space: nowrap; }
+.reloj svg { width: 40px; height: 40px; }
+.reloj .factor { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 28px; color: var(--acento); }
+.reloj .real { font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 28px; color: var(--papel); }
+.reloj .real small { font-size: 20px; color: var(--niebla); font-weight: 500; }
+.reloj .tarea { font-size: 22px; color: var(--niebla); max-width: 560px; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Panel de resultado ---------- */
+.resultado { position: absolute; left: 1336px; top: 150px; width: 464px; padding: 30px 30px 28px; border-radius: 20px;
+  background: rgba(43,48,54,.96); box-shadow: 0 24px 50px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.07); }
+.pildora { display: inline-block; padding: 6px 14px; border-radius: 8px; background: var(--acento); color: var(--tinta);
+  font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 20px; letter-spacing: .1em; }
+.res-texto { margin-top: 18px; font-size: 31px; line-height: 40px; font-weight: 600; color: var(--papel); }
+.res-bases { margin-top: 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.res-bases .etq { font-family: "JetBrains Mono", monospace; font-size: 20px; font-weight: 600; letter-spacing: .1em; color: var(--acento);
+  margin-bottom: 2px; }
+.res-bases .chip { white-space: normal; height: auto; min-height: 40px; padding: 7px 16px 7px 8px; line-height: 26px; }
+.comparar { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
+.comparar .lado { position: relative; }
+.comparar .lado .img { border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+.comparar .lado .img img { display: block; width: 100%; }
+.comparar .lado .nombre { display: block; margin-bottom: 6px; font-family: "JetBrains Mono", monospace; font-size: 20px;
+  font-weight: 600; letter-spacing: .04em; color: var(--niebla); }
+.comparar .lado.alerta .nombre { color: var(--alerta); }
+.comparar .lado.verde .nombre { color: var(--verde); }
+.comparar.lado-a-lado { flex-direction: row; }
+.comparar.lado-a-lado .lado { flex: 1; }
+.iluo { margin-top: 22px; }
+.iluo .quien { font-size: 24px; font-weight: 600; margin-bottom: 12px; }
+.iluo .fila { display: flex; gap: 10px; }
+.iluo .nivel { flex: 1; height: 92px; border-radius: 12px; background: var(--tinta); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; box-shadow: inset 0 0 0 1px var(--tinta-3); }
+.iluo .nivel b { font-family: "Archivo", sans-serif; font-size: 40px; line-height: 44px; font-weight: 800; color: var(--niebla); }
+.iluo .nivel span { font-size: 20px; color: var(--pizarra-2); text-align: center; line-height: 21px; }
+.iluo .nivel.de b { color: var(--papel); }
+.iluo .nivel.a { background: var(--acento); box-shadow: none; }
+.iluo .nivel.a b, .iluo .nivel.a span { color: var(--tinta); }
+
+/* ---------- Subtítulos ---------- */
+.subs { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+.sub { position: absolute; left: 0; right: 0; bottom: 18px; display: flex; justify-content: center; }
+.sub .placa { display: block; max-width: 1296px; text-align: center; padding: 10px 24px; border-radius: 12px;
+  background: rgba(22,25,29,.82); font-size: 38px; line-height: 50px; font-weight: 600; color: var(--papel); white-space: pre-line; }
+.sub em { font-style: normal; color: var(--acento); }
+/* Placa del micrófono: dos líneas fijas desde la primera palabra; con 46 px de interlínea y 8 px de relleno no pisa el
+   canto inferior del marco (revisión del 11/10). */
+.sub.micro .placa { display: flex; align-items: flex-start; gap: 16px; text-align: left; white-space: normal; line-height: 46px;
+  padding: 8px 24px; }
+.sub.micro .quien { display: flex; align-items: center; gap: 8px; flex: none; height: 46px; font-family: "JetBrains Mono", monospace;
+  font-size: 20px; font-weight: 600; letter-spacing: .04em; color: var(--acento); text-transform: uppercase; }
+.sub.micro .quien svg { width: 26px; height: 26px; stroke: var(--acento); }
+.sub.micro .w { opacity: 0; }
+
+/* ---------- Pie: raíl de bloques y veracidad ---------- */
+.rail { position: absolute; left: 180px; top: 1068px; width: 1560px; height: 4px; }
+.rail .seg { position: absolute; top: 0; height: 4px; border-radius: 2px; background: var(--tinta-3); overflow: hidden; }
+.rail .seg i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--acento); }
+.rail .seg.hecho { background: rgba(245,246,248,.43); }
+.pie-izq, .pie-der { position: absolute; top: 1043px; font-family: "JetBrains Mono", monospace; font-size: 14px; font-weight: 500;
+  letter-spacing: .08em; color: rgba(138,147,160,.85); white-space: nowrap; text-transform: uppercase; }
+.pie-izq { left: 180px; }
+.pie-der { right: 180px; text-align: right; }
+
+/* ---------- Cortinilla y negro ---------- */
+.cortinilla { position: absolute; left: 0; top: 0; width: 1940px; height: 1080px; background: var(--tinta);
+  box-shadow: 6px 0 0 0 var(--acento); }
+.negro { position: absolute; inset: 0; background: #000; opacity: 0; }
+
+/* ---------- Tarjetas ---------- */
+.linea-mask { display: block; overflow: hidden; padding-bottom: 6px; margin-bottom: -6px; }
+.linea-mask > span { display: block; }
+.t-titular { font-family: "Archivo", sans-serif; font-weight: 800; font-stretch: 100%; color: var(--papel); letter-spacing: -.01em; }
+.t-texto { font-size: 32px; line-height: 44px; color: var(--texto-2); }
+.t-sub { font-family: "JetBrains Mono", monospace; font-size: 20px; font-weight: 600; letter-spacing: .1em; color: var(--niebla);
+  text-transform: uppercase; }
+.preview { position: absolute; border-radius: 22px; overflow: hidden; background: #fff; transform-origin: 0 0;
+  box-shadow: 0 30px 46px rgba(0,0,0,.62), 0 6px 10px rgba(0,0,0,.35); }
+.preview .lienzo { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+.preview video, .preview img { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; display: block; }
+.raya-funcs { position: absolute; left: 120px; top: 44px; width: 1680px; height: 6px; }
+.raya-funcs .s { position: absolute; top: 0; height: 6px; border-radius: 3px; background: var(--tinta-3); }
+.raya-funcs .s.hecho { background: rgba(245,246,248,.43); }
+.raya-funcs .s.actual { background: var(--acento); }
+
+/* Mapa */
+.tesela { position: absolute; border-radius: 18px; background: var(--tinta-2); padding: 20px 22px; overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--tinta-3); }
+.tesela .cab { display: flex; justify-content: space-between; align-items: center; height: 30px; }
+.tesela .num { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 22px; color: var(--pizarra-2); letter-spacing: .06em; }
+.tesela .ico svg { width: 28px; height: 28px; stroke: var(--niebla); }
+.tesela .verbo { margin-top: 8px; font-family: "Archivo", sans-serif; font-weight: 800; font-size: 36px; line-height: 40px; color: var(--papel); }
+.tesela .tit { margin-top: 2px; font-size: 20px; line-height: 24px; color: var(--niebla); }
+.tesela ul { list-style: none; margin: 10px 0 0; padding: 0; }
+.tesela li { font-size: 20px; line-height: 26px; color: var(--texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tesela li b { font-family: "JetBrains Mono", monospace; font-weight: 600; color: var(--pizarra-2); margin-right: 8px; font-size: 18px; }
+.tesela .ciclo { position: absolute; right: 22px; bottom: 16px; font-family: "JetBrains Mono", monospace; font-size: 14px;
+  letter-spacing: .1em; color: var(--pizarra-2); }
+.tesela.actual { background: #30353C; box-shadow: inset 0 0 0 3px var(--acento), 0 22px 44px rgba(0,0,0,.45); }
+.tesela.actual .num, .tesela.actual .ico svg { color: var(--acento); stroke: var(--acento); }
+.tesela.hecho .verbo, .tesela.hecho li, .tesela.hecho .tit { opacity: .55; }
+.tesela .hecho-check { position: absolute; right: 24px; top: 22px; }
+.flecha { position: absolute; width: 24px; height: 24px; stroke: var(--acento); }
+
+/* Personas del reparto */
+.ficha { position: absolute; width: 520px; height: 146px; border-radius: 18px; background: var(--tinta-2); display: flex;
+  align-items: center; gap: 22px; padding: 0 26px; box-shadow: inset 0 0 0 1px var(--tinta-3); }
+.raiz .ficha .avatar { width: 72px; height: 72px; font-size: 26px; letter-spacing: .03em; }
+.ficha b { display: block; font-size: 29px; font-weight: 600; margin-bottom: 2px; }
+.ficha div > span { display: block; font-size: 21px; color: var(--niebla); }
+.ficha small { display: block; font-size: 20px; color: var(--pizarra-2); }
+.ficha.nombrada { box-shadow: inset 0 0 0 3px var(--acento); background: #30353C; }
+
+/* Criterios y cobertura: filas compactas a la izquierda; a la derecha, el criterio activo en grande con su prueba */
+.criterio { position: absolute; border-radius: 16px; background: var(--tinta-2);
+  display: flex; align-items: center; gap: 22px; padding: 0 18px 0 24px; box-shadow: inset 0 0 0 1px var(--tinta-3); }
+.criterio.vivo { box-shadow: inset 5px 0 0 var(--acento), inset 0 0 0 1px var(--tinta-3); background: #30353C; }
+.criterio .peso { width: 112px; flex: none; }
+.criterio .peso b { font-family: "JetBrains Mono", monospace; font-size: 46px; font-weight: 700; color: var(--acento); }
+.criterio .peso b small { font-size: 22px; margin-left: 2px; }
+.criterio .peso i { display: block; height: 5px; border-radius: 3px; background: var(--acento); margin-top: 4px; }
+.criterio .txt { flex: 1; min-width: 0; }
+.criterio .txt b { display: block; font-family: "Archivo", sans-serif; font-weight: 760; font-size: 32px; line-height: 38px; }
+.criterio .mini { width: 150px; height: 84px; border-radius: 8px; overflow: hidden; flex: none; background: #fff; }
+.criterio .mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.criterio .mini .mini-tablero { display: grid; grid-template-columns: repeat(6, 14px); gap: 6px; padding: 14px 18px; background: var(--tinta);
+  width: 100%; height: 100%; }
+.criterio .mini .mini-tablero i { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--verde-app); }
+.crit-panel { position: absolute; left: 1000px; top: 236px; width: 800px; }
+.crit-panel b { display: block; font-family: "Archivo", sans-serif; font-weight: 800; font-size: 40px; line-height: 46px; color: var(--papel); }
+.crit-panel span { display: block; margin-top: 10px; font-size: 25px; line-height: 33px; color: var(--texto-2); }
+.crit-media { position: absolute; transform-origin: 0 0; border-radius: 16px; overflow: hidden; background: var(--tinta);
+  box-shadow: 0 26px 50px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.08); opacity: 0; }
+.crit-media .cm { position: absolute; inset: 0; background: #fff; }
+.crit-media .cm img, .crit-media .cm video { position: absolute; left: 0; top: 0; width: 800px; height: 450px; object-fit: cover; display: block; }
+.tablero { position: absolute; left: 0; top: 0; width: 800px; height: 450px; padding: 30px 40px; }
+.tablero .tt { font-family: "Archivo", sans-serif; font-weight: 800; font-size: 36px; line-height: 42px; }
+.tablero .ts { font-size: 23px; color: var(--niebla); margin-top: 6px; }
+.celdas { margin-top: 18px; display: grid; grid-template-columns: repeat(10, 58px); gap: 9px; }
+.celda { width: 58px; height: 58px; border-radius: 10px; background: var(--tinta-2); display: grid; place-items: center;
+  box-shadow: inset 0 0 0 1px var(--tinta-3); }
+.celda svg { width: 30px; height: 30px; }
+.leyenda { margin-top: 18px; display: flex; gap: 26px; font-size: 22px; color: var(--niebla); align-items: center; }
+.leyenda span { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Implantación: instaladores lado a lado, cifra grande en el centro */
+.instala { position: absolute; width: 700px; height: 196px; border-radius: 18px; background: var(--tinta-2); padding: 30px 32px;
+  display: flex; gap: 26px; align-items: flex-start; box-shadow: inset 0 0 0 1px var(--tinta-3); text-align: left; }
+.instala .ico svg { width: 46px; height: 46px; stroke: var(--acento); }
+.instala b { display: block; font-family: "JetBrains Mono", monospace; font-size: 30px; font-weight: 700; color: var(--papel); }
+.instala div > span { display: block; margin-top: 12px; font-size: 26px; line-height: 34px; color: var(--texto-2); }
+.coste { position: absolute; left: 0; top: 530px; width: 1920px; text-align: center; transform-origin: 50% 50%; }
+.coste .gran { display: block; font-family: "JetBrains Mono", monospace; font-size: 120px; line-height: 132px; font-weight: 700; color: var(--acento); }
+.coste .txt { display: block; margin-top: 8px; font-size: 30px; line-height: 40px; color: var(--papel); }
+
+/* Final */
+.recap { position: absolute; width: 520px; height: 292px; border-radius: 16px; overflow: hidden; background: #fff;
+  box-shadow: 0 20px 40px rgba(0,0,0,.5); }
+.recap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.recap .v { position: absolute; left: 14px; bottom: 14px; padding: 4px 12px; border-radius: 8px; background: rgba(22,25,29,.9);
+  font-family: "JetBrains Mono", monospace; font-size: 20px; font-weight: 700; letter-spacing: .08em; color: var(--acento);
+  text-transform: uppercase; }
+.logo svg { display: block; }
+.creditos { position: absolute; left: 0; width: 1920px; text-align: center; font-family: "Fira Sans", sans-serif; font-size: 20px;
+  font-weight: 500; letter-spacing: .01em; color: var(--niebla); line-height: 30px; }
+
+/* Apertura */
+.frase-ap { position: absolute; left: 180px; top: 962px; font-family: "Archivo", sans-serif; font-weight: 800; font-size: 64px;
+  line-height: 76px; color: var(--papel); white-space: nowrap; }
+.frase-ap em { font-style: normal; color: var(--acento); }
+
+/* Llamada */
+.llamada { position: absolute; padding: 10px 18px; border-radius: 12px; background: var(--tinta); color: var(--papel);
+  font-size: 26px; font-weight: 600; white-space: nowrap; box-shadow: 0 14px 30px rgba(0,0,0,.45), inset 4px 0 0 var(--acento); }
+
+/* Tapa: texto neutro encima de algo de la grabación que no debe verse (los nombres de los modelos de pruebas) */
+.tapa { position: absolute; display: flex; align-items: center; padding: 0 10px; border-radius: 7px; background: #2B3036;
+  color: #F5F6F8; font-family: "JetBrains Mono", monospace; font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.9); }

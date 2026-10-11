@@ -1,0 +1,55 @@
+{
+  "id": "11b-agente-app",
+  "titulo": "El agente de la app usa el espacio por MCP",
+  "bases": "Bases: integración (MCP y API compatible con OpenAI)",
+  "rol": "Jefe de equipo (javier) en la app de escritorio",
+  "contexto": "app",
+  "conectar": {
+    "puerto": 9333,
+    "objetivo": "dsh-app://app/"
+  },
+  "usuario": null,
+  "ruta": null,
+  "escala": 1,
+  "acciones": [
+    {
+      "clicTexto": "Nueva conversación"
+    },
+    {
+      "escribir": [
+        "textarea, [contenteditable=true]",
+        "Usa la herramienta mcp__cidia__espacio_listar y dime qué ficheros hay en mi carpeta de trabajo."
+      ],
+      "ms_tecla": 35
+    },
+    {
+      "tecla": "Enter"
+    },
+    {
+      "esperarTexto": "paradas-prensa3",
+      "max": 180000,
+      "acelerar": "El agente llama a la herramienta del servidor"
+    }
+  ],
+  "narracion": [
+    {
+      "texto": "Desde la app, el agente lista los ficheros de la carpeta de Javier con la herramienta del servidor."
+    },
+    {
+      "texto": "Un agente que trabaja con los datos de la planta sin sacarlos de ella."
+    }
+  ],
+  "verificado": "Probado el 10/10 en la app con Lucía: con qwen3:0.6b el agente no llama a las herramientas MCP ni siquiera nombrándolas y responde sin fuentes (inventa). Se deja fuera del vídeo; la frase de 11a dice solo lo que hay (el espacio se ofrece al agente por MCP).",
+  "notas": "Solo si sale bien en un ensayo. Si no, se queda fuera y basta la frase final de 11a.",
+  "requiere_grabacion": true,
+  "cola_voz_s": 0.7,
+  "cola_accion_s": 0.7,
+  "resultado": {
+    "texto": "Un agente que trabaja con los datos de la planta sin sacarlos de ella.",
+    "bases": [
+      "Base tecnológica e IA relevante",
+      "Integración (MCP y API compatible con OpenAI)"
+    ],
+    "desde_fragmento": 2
+  }
+}

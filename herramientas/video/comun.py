@@ -67,16 +67,17 @@ def resolver(ruta: str, base: Path, extra: dict[str, str] | None = None) -> Path
     return p if p.is_absolute() else (base / p).resolve()
 
 
-def cargar_proyecto(fichero: str | Path) -> tuple[dict, list[dict]]:
+def cargar_proyecto(fichero: str | Path, incluir_omitidas: bool = False) -> tuple[dict, list[dict]]:
     """Devuelve (proyecto, piezas). Cada pieza lleva '_dir' y, si es escena, sus datos completos.
-    Un fichero de escena suelto se trata como un proyecto de una sola pieza."""
+    Un fichero de escena suelto se trata como un proyecto de una sola pieza.
+    Con `incluir_omitidas`, también las piezas con "omitir" (para narrar de antemano las tomas aún sin grabar)."""
     f = Path(fichero).resolve()
     datos = json.loads(f.read_text(encoding='utf-8'))
     if 'piezas' not in datos:
         return {'titulo': datos.get('titulo', datos['id']), '_dir': f.parent}, [{**datos, 'tipo': 'escena', '_dir': f.parent}]
     piezas = []
     for p in datos['piezas']:
-        if p.get('omitir'):
+        if p.get('omitir') and not incluir_omitidas:
             continue  # pieza apartada del montaje (opcional o sin grabar)
         if isinstance(p.get('escena'), dict):
             # Escena en línea, dentro de la propia pieza.

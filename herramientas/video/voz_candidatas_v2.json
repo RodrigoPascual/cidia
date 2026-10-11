@@ -1,0 +1,324 @@
+{
+ "_nota": "Candidatas para el banco del guion v2 (voz_banco.py sintetizar voz_candidatas_v2.json --banco voz_banco_v2.json --salida 04_VIDEO/v2/muestras-voz/banco-v2). Solo voces de catálogo con licencia apta para uso comercial: VoxCPM2 y Qwen3-TTS VoiceDesign quedaron fuera porque no traen voces de catálogo en castellano (solo diseño por descripción o clonación).",
+ "voces": [
+  {
+   "id": "kokoro-alex-v1",
+   "motor": "kokoro",
+   "papel": "narrador",
+   "licencia": "Apache-2.0 (Kokoro-82M, hexgrad; voces de catálogo incluidas en el modelo) + MIT (kokoro-onnx)",
+   "notas": "Referencia: la voz de la versión 1 (em_alex a 0,95, frase a frase con 0,32 s de pausa).",
+   "config": {
+    "voz": "em_alex",
+    "velocidad": 0.95
+   },
+   "por_frases": true,
+   "pausa_frase": 0.32
+  },
+  {
+   "id": "kokoro-dora",
+   "motor": "kokoro",
+   "papel": "empleado",
+   "licencia": "Apache-2.0 (Kokoro-82M, hexgrad; voces de catálogo incluidas en el modelo) + MIT (kokoro-onnx)",
+   "notas": "Referencia: la voz de las preguntas al micrófono de la versión 1 (ef_dora).",
+   "config": {
+    "voz": "ef_dora",
+    "velocidad": 1.0
+   },
+   "por_frases": true,
+   "pausa_frase": 0.32
+  },
+  {
+   "id": "chatterbox-es",
+   "motor": "chatterbox",
+   "papel": "ambos",
+   "licencia": "MIT (ResembleAI/Chatterbox-Multilingual-es-es, castellano de España; voz incorporada conds.pt de ResembleAI/chatterbox, MIT)",
+   "notas": "Chatterbox Multilingual V3 afinado para es-ES con su voz incorporada (sin referencia), frase a frase.",
+   "config": {
+    "exageracion": 0.5,
+    "cfg": 0.5,
+    "temperatura": 0.8,
+    "semilla": 1234
+   },
+   "por_frases": true,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-m1",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo M1, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M1",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m2",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo M2, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M2",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m3",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo M3, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M3",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m4",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo M4, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M4",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m5",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo M5, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M5",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f1",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo F1, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F1",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f2",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo F2, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F2",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f3",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo F3, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F3",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f4",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo F4, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F4",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f5",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "notas": "Supertonic 3, voz de catálogo F5, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F5",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m1-p16",
+   "motor": "supertonic",
+   "papel": "narrador",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, M1, 16 pasos, velocidad 1,05, fragmento entero.",
+   "config": {
+    "voz": "M1",
+    "velocidad": 1.05,
+    "pasos": 16
+   },
+   "por_frases": false,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-m1-p16-frases",
+   "motor": "supertonic",
+   "papel": "narrador",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, M1, 16 pasos, velocidad 1,05, frase a frase con 0,3 s.",
+   "config": {
+    "voz": "M1",
+    "velocidad": 1.05,
+    "pasos": 16
+   },
+   "por_frases": true,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-m4-p16",
+   "motor": "supertonic",
+   "papel": "narrador",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, M4, 16 pasos, velocidad 1,05, fragmento entero.",
+   "config": {
+    "voz": "M4",
+    "velocidad": 1.05,
+    "pasos": 16
+   },
+   "por_frases": false,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-m4-p16-frases",
+   "motor": "supertonic",
+   "papel": "narrador",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, M4, 16 pasos, velocidad 1,05, frase a frase con 0,3 s.",
+   "config": {
+    "voz": "M4",
+    "velocidad": 1.05,
+    "pasos": 16
+   },
+   "por_frases": true,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-f1-p16",
+   "motor": "supertonic",
+   "papel": "narrador",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, F1, 16 pasos, velocidad 1,05, fragmento entero.",
+   "config": {
+    "voz": "F1",
+    "velocidad": 1.05,
+    "pasos": 16
+   },
+   "por_frases": false,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-f1-p16-frases",
+   "motor": "supertonic",
+   "papel": "narrador",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, F1, 16 pasos, velocidad 1,05, frase a frase con 0,3 s.",
+   "config": {
+    "voz": "F1",
+    "velocidad": 1.05,
+    "pasos": 16
+   },
+   "por_frases": true,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-f5-p16",
+   "motor": "supertonic",
+   "papel": "narrador",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, F5, 16 pasos, velocidad 1,05, fragmento entero.",
+   "config": {
+    "voz": "F5",
+    "velocidad": 1.05,
+    "pasos": 16
+   },
+   "por_frases": false,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-f5-p16-frases",
+   "motor": "supertonic",
+   "papel": "narrador",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, F5, 16 pasos, velocidad 1,05, frase a frase con 0,3 s.",
+   "config": {
+    "voz": "F5",
+    "velocidad": 1.05,
+    "pasos": 16
+   },
+   "por_frases": true,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-f3-p16-empleado",
+   "motor": "supertonic",
+   "papel": "empleado",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, F3, 16 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F3",
+    "velocidad": 1.0,
+    "pasos": 16
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f5-p16-empleado",
+   "motor": "supertonic",
+   "papel": "empleado",
+   "licencia": "Pesos: BigScience OpenRAIL-M (Supertone/supertonic-3): uso comercial permitido; restricción de uso (e): avisar de que el contenido es sintético. SDK y código: MIT. Voz de catálogo del modelo.",
+   "ronda": 2,
+   "notas": "Supertonic 3, F5, 16 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F5",
+    "velocidad": 1.0,
+    "pasos": 16
+   },
+   "por_frases": false
+  }
+ ]
+}

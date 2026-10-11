@@ -1,0 +1,63 @@
+{
+  "_nota": "Banco de pruebas de voces con los textos del guion v2 (docs/video/v2/recorrido.json). Tres fragmentos del narrador (apertura; técnico con IT-023, 25 N·m e ILUO; cierre) y las dos preguntas que los empleados dicen al micrófono (la de la toma nueva 06-planta-lucia y la de 05a). Los términos se buscan en la transcripción de Whisper para medir si se entienden. Uso: voz_banco.py sintetizar|medir ... --banco voz_banco_v2.json",
+  "narrador": [
+    {
+      "id": "apertura",
+      "origen": "recorrido.json v2: v2-portada y v2-problema, tal cual",
+      "texto": "Esto es CidIA: un copiloto de inteligencia artificial para la industria que funciona entero dentro de la empresa. El saber de la planta se jubila: en diez años saldrán del mercado laboral más de cinco millones de mayores de cincuenta y cinco años, y entrarán menos de dos millones de jóvenes.",
+      "terminos": [
+        "cidia",
+        "ia_entera",
+        "cifras"
+      ]
+    },
+    {
+      "id": "tecnico",
+      "origen": "recorrido.json v2: 03b-borrador-carmen (fragmento 1, con «de IT-023», el código del rótulo de 03c) y 09b-matriz-javier (fragmento 2)",
+      "texto": "Siete pasos, cada uno con su imagen, su clip y lo que dijo Carmen. El paso 3 de IT-023 sale crítico porque ella lo dijo: cuatro tornillos en cruz a 25 N·m. Y la matriz ILUO, sin papeles: Lucía ya está en L y Pedro, en U.",
+      "terminos": [
+        "it023",
+        "nm",
+        "iluo",
+        "niveles"
+      ]
+    },
+    {
+      "id": "cierre",
+      "origen": "recorrido.json v2: cierre-criterios (fragmento 5) y cierre-final, tal cual",
+      "texto": "E innovación, el diez: el ciclo completo, en local, con evidencias y un saber que crece desde la planta. CidIA: el conocimiento de la planta, capturado, enseñado y medido, sin salir de la empresa.",
+      "terminos": [
+        "cidia"
+      ]
+    }
+  ],
+  "empleado": [
+    {
+      "id": "llave",
+      "origen": "tomas-por-grabar/06-planta-lucia.json: texto_microfono (Lucía, toma nueva)",
+      "texto": "¿Con qué llave aprieto?",
+      "terminos": [
+        "llave"
+      ]
+    },
+    {
+      "id": "prensa",
+      "origen": "recorrido.json v2: audios_microfono prensa3 (05a-copiloto-voz-marta)",
+      "texto": "La prensa 3 se ha atascado al cambiar el molde. ¿Qué hago?",
+      "terminos": [
+        "prensa3"
+      ]
+    }
+  ],
+  "terminos": {
+    "cidia": "\\b[csz][iy] ?d ?[iy] ?a\\b",
+    "ia_entera": "\\binteligencia artificial\\b",
+    "cifras": "\\bcincuenta y cinco anos\\b",
+    "it023": "\\b(i|y|it|ite|i te|y te|e te)\\s?(guion\\s)?(cero|o)\\s?(dos tres|veintitres)\\b",
+    "nm": "\\bveinticinco (newton|newtons|niuton|niutons|nuton)s?( por)? metros?\\b|\\bveinticinco n m\\b",
+    "iluo": "\\b(i|y)\\s?(l|ele)\\s?(u)\\s?(o)\\b|\\biluo\\b",
+    "niveles": "\\ben (l|ele) y pedro en u\\b",
+    "prensa3": "\\bprensa tres\\b",
+    "llave": "\\bcon que llave aprieto\\b"
+  }
+}

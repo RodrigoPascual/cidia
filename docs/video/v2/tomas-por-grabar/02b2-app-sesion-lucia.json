@@ -1,0 +1,106 @@
+{
+  "id": "02b2-app-sesion-lucia",
+  "titulo": "Lucía Herrero inicia sesión · operaria de Producción, nivel 1",
+  "bases": "Bases: adaptado al perfil · integración (módulo de identidad)",
+  "rol": "Empleada (operaria) que inicia sesión en la app",
+  "contexto": "app",
+  "conectar": {
+    "puerto": 9333,
+    "objetivo": "dsh-app://app/"
+  },
+  "usuario": null,
+  "cuenta_acceso": "lucia",
+  "ruta": null,
+  "escala": 1.25,
+  "acciones": [
+    {
+      "esperarSinTexto": "Application",
+      "max": 1500,
+      "acelerar": false,
+      "nota": "Guarda: la barra de menús ya debe estar en castellano"
+    },
+    {
+      "esperar": 500
+    },
+    {
+      "clicTexto": "Acceso",
+      "dentro": "nav[class*='panelList']"
+    },
+    {
+      "esperarSelector": "#usuario",
+      "marco": "iframe",
+      "max": 15000,
+      "acelerar": false
+    },
+    {
+      "esperar": 600
+    },
+    {
+      "escribir": [
+        "#usuario",
+        "lucia"
+      ],
+      "marco": "iframe",
+      "ms_tecla": 75
+    },
+    {
+      "escribir": [
+        "#contrasena",
+        "{contrasena}"
+      ],
+      "marco": "iframe",
+      "ms_tecla": 55
+    },
+    {
+      "marca": "entrar"
+    },
+    {
+      "clicTexto": "Iniciar sesión",
+      "marco": "iframe"
+    },
+    {
+      "esperarTexto": "Modo planta",
+      "max": 30000,
+      "acelerar": false
+    },
+    {
+      "esperar": 1500
+    },
+    {
+      "marca": "secciones"
+    },
+    {
+      "resaltar": "nav[class*='panelList']",
+      "ms": 3200,
+      "nota": "Ocho secciones para una operaria"
+    },
+    {
+      "esperar": 900
+    }
+  ],
+  "narracion": [
+    {
+      "texto": "Lucía, operaria recién llegada a la línea 2, entra con su usuario. La contraseña nunca se ve."
+    },
+    {
+      "texto": "Ve ocho secciones: las de su trabajo, ni una más.",
+      "marca": "secciones"
+    }
+  ],
+  "preparacion": [
+    "P6"
+  ],
+  "verificado": "Sin grabar. Mismas acciones que 02b-app-sesion-lucia (probadas el 10/10 en la app instalada por CDP), con la app ya traducida.",
+  "notas": "Comprobar antes con app/instalador/verificar.mjs --sin-marca que los menús nativos salen en castellano. Si «Application» no está en el DOM (menú nativo), quitar la guarda y mirarlo en el primer fotograma.",
+  "ocultar_css": "[data-row-key^='session:']",
+  "cursor_inicio": [
+    900,
+    520
+  ],
+  "requiere_grabacion": true,
+  "sustituye": [
+    "02b-app-sesion-lucia"
+  ],
+  "cola_voz_s": 0.7,
+  "cola_accion_s": 0.7
+}

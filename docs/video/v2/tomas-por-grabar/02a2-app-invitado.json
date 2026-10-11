@@ -1,0 +1,151 @@
+{
+  "id": "02a2-app-invitado",
+  "titulo": "App de escritorio CidIA · sin iniciar sesión",
+  "bases": "Bases: implantación sencilla · proteger el conocimiento experto",
+  "rol": "Invitado (sin sesión) en la app de escritorio",
+  "contexto": "app",
+  "conectar": {
+    "puerto": 9333,
+    "objetivo": "dsh-app://app/"
+  },
+  "usuario": null,
+  "ruta": null,
+  "escala": 1.25,
+  "acciones": [
+    {
+      "esperarSinTexto": "Application",
+      "max": 1500,
+      "acelerar": false,
+      "nota": "Guarda: la barra de menús ya debe estar en castellano"
+    },
+    {
+      "esperar": 900
+    },
+    {
+      "resaltar": "nav[class*='panelList']",
+      "ms": 2600,
+      "nota": "Sin sesión: solo Acceso y Copiloto"
+    },
+    {
+      "clicTexto": "Copiloto",
+      "dentro": "nav[class*='panelList']"
+    },
+    {
+      "esperarSelector": "textarea[aria-label='Tu pregunta']",
+      "marco": "iframe",
+      "max": 20000,
+      "acelerar": false
+    },
+    {
+      "esperar": 700
+    },
+    {
+      "marca": "pregunta"
+    },
+    {
+      "escribir": [
+        "textarea[aria-label='Tu pregunta']",
+        "¿Cuál es el teléfono de emergencias?"
+      ],
+      "marco": "iframe",
+      "ms_tecla": 45
+    },
+    {
+      "tecla": "Enter"
+    },
+    {
+      "esperarSelector": ".acciones-respuesta",
+      "marco": "iframe",
+      "max": 90000,
+      "acelerar": "El copiloto busca en los documentos públicos"
+    },
+    {
+      "marca": "respuesta"
+    },
+    {
+      "resaltar": ".burbuja.asistente .globo",
+      "marco": "iframe",
+      "ms": 2600
+    },
+    {
+      "clicTexto": "Nueva conversación",
+      "marco": "iframe"
+    },
+    {
+      "esperar": 700
+    },
+    {
+      "escribir": [
+        "textarea[aria-label='Tu pregunta']",
+        "¿A cuánto se aprietan los tornillos de la brida B?"
+      ],
+      "marco": "iframe",
+      "ms_tecla": 40
+    },
+    {
+      "tecla": "Enter"
+    },
+    {
+      "esperarSelector": ".acciones-respuesta",
+      "marco": "iframe",
+      "max": 90000,
+      "acelerar": "El copiloto busca en los documentos públicos"
+    },
+    {
+      "marca": "restringida"
+    },
+    {
+      "resaltar": ".sin-respaldo",
+      "marco": "iframe",
+      "ms": 2800
+    },
+    {
+      "esperar": 500
+    }
+  ],
+  "narracion": [
+    {
+      "texto": "Así se ve sin iniciar sesión: solo el acceso y el copiloto."
+    },
+    {
+      "texto": "Cualquiera puede preguntar, por ejemplo, el teléfono de emergencias.",
+      "marca": "pregunta"
+    },
+    {
+      "texto": "Responde con la extensión 200 y cita de dónde sale: la guía de bienvenida. Ahora, algo del puesto: el apriete de la brida B.",
+      "marca": "respuesta"
+    },
+    {
+      "texto": "No lo encuentra: lo interno no existe para quien no ha entrado.",
+      "marca": "restringida"
+    }
+  ],
+  "preparacion": [
+    "P6",
+    "P1"
+  ],
+  "verificado": "Sin grabar. Mismas acciones que 02a-app-invitado (probadas el 10/10 en la app instalada por CDP), con la app ya traducida.",
+  "notas": "Comprobar antes con app/instalador/verificar.mjs --sin-marca que los menús nativos salen en castellano. Si «Application» no está en el DOM (menú nativo), quitar la guarda y mirarlo en el primer fotograma.",
+  "ocultar_css": "[data-row-key^='session:']",
+  "cursor_inicio": [
+    900,
+    520
+  ],
+  "antes_js": "(async () => {\n  const pausa = (ms) => new Promise((r) => setTimeout(r, ms));\n  let hecho = 'sin copiloto';\n  for (const f of document.querySelectorAll('iframe')) {\n    try { const d = f.contentDocument; if (!d || !/copiloto/.test(f.src)) continue;\n      const b = [...d.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Nueva conversación'); if (b) { b.click(); hecho = 'nueva' } } catch (e) {}\n  }\n  const acceso = [...document.querySelectorAll(\"nav[class*='panelList'] button\")].find((b) => b.innerText.trim() === 'Acceso');\n  if (acceso) acceso.click();\n  await pausa(1500);\n  return hecho;\n})()",
+  "asentar_ms": 1200,
+  "requiere_grabacion": true,
+  "sustituye": [
+    "02a-app-invitado"
+  ],
+  "cola_voz_s": 0.7,
+  "cola_accion_s": 0.7,
+  "resultado": {
+    "texto": "Lo público, a mano para todos; lo interno, protegido.",
+    "bases": [
+      "Implantación sencilla y económica",
+      "Proteger el conocimiento experto",
+      "Acceso inmediato a contenidos"
+    ],
+    "desde_fragmento": 4
+  }
+}

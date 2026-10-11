@@ -1,0 +1,210 @@
+{
+  "id": "06-planta-lucia",
+  "titulo": "Lucía Herrero · modo planta en la estación E2, de principio a fin",
+  "bases": "Bases: asistencia guiada paso a paso · formación contextualizada en el puesto · validación de tareas realizadas",
+  "rol": "Empleada (lucia), recién incorporada, nivel I en IT-023",
+  "usuario": "lucia",
+  "ruta": "/app/planta",
+  "escala": 1.25,
+  "microfono": "{voces}/microfono/llave.wav",
+  "esperar_inicio": "¿Qué tarea vas a hacer?",
+  "acciones": [
+    {
+      "resaltar": ".pt-tarjeta:first-child",
+      "ms": 1600
+    },
+    {
+      "clicTexto": "Empezar",
+      "dentro": ".pt-tarjeta:first-child"
+    },
+    {
+      "esperarTexto": "Paso 1 de 7",
+      "max": 20000
+    },
+    {
+      "marca": "paso1"
+    },
+    {
+      "resaltarTexto": "Antes de empezar",
+      "ms": 2600
+    },
+    {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+    },
+    {
+      "esperar": 900
+    },
+    {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+    },
+    {
+      "esperarTexto": "PASO CRÍTICO",
+      "max": 10000
+    },
+    {
+      "marca": "paso3"
+    },
+    {
+      "esperarVoz": true
+    },
+    {
+      "mantenerMicro": [
+        "button[aria-label='Mantén pulsado para preguntar']",
+        "auto"
+      ]
+    },
+    {
+      "esperarJs": "(() => { const rs = document.querySelectorAll('.ej-respuesta'); const r = rs[rs.length - 1]; if (!r || r.querySelector('.girando')) return false; const t = r.innerText; if (t.length < 30) return false; if (window.__ultR === t) window.__nR = (window.__nR || 0) + 1; else { window.__ultR = t; window.__nR = 0 } return window.__nR >= 8 })()",
+      "max": 150000,
+      "acelerar": "Transcribe la voz y responde con la instrucción"
+    },
+    {
+      "marca": "respuesta"
+    },
+    {
+      "resaltar": ".ej-columna:last-child",
+      "ms": 3200
+    },
+    {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+    },
+    {
+      "esperarTexto": "Sin ella no se puede seguir",
+      "max": 5000
+    },
+    {
+      "marca": "sinmarcar"
+    },
+    {
+      "clic": ".ej-casilla"
+    },
+    {
+      "esperar": 700
+    },
+    {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+    },
+    {
+      "esperarTexto": "Paso 4 de 7",
+      "max": 10000,
+      "acelerar": false
+    },
+    {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+    },
+    {
+      "esperar": 700
+    },
+    {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+    },
+    {
+      "esperar": 700
+    },
+    {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+    },
+    {
+      "esperar": 700
+    },
+    {
+      "clicTexto": "Hecho",
+      "dentro": ".planta-pie"
+    },
+    {
+      "esperarTexto": "Foto del resultado",
+      "max": 10000
+    },
+    {
+      "marca": "foto"
+    },
+    {
+      "subir": "{salida}/ficheros/foto-resultado.jpg",
+      "clicTexto": "Hacer foto"
+    },
+    {
+      "esperarTexto": "Comparando con la imagen del experto",
+      "max": 20000
+    },
+    {
+      "resaltarTexto": "Así debe quedar",
+      "ms": 2000
+    },
+    {
+      "marca": "fin"
+    },
+    {
+      "clicTexto": "Finalizar"
+    },
+    {
+      "esperarTexto": "Tarea completada",
+      "max": 20000
+    },
+    {
+      "resaltarTexto": "Consultas al copiloto",
+      "ms": 2200
+    }
+  ],
+  "narracion": [
+    {
+      "texto": "Lucía empieza la brida B en el portátil del puesto."
+    },
+    {
+      "texto": "Un paso por pantalla, con letra grande. Primero, EPI, herramientas y riesgos.",
+      "marca": "paso1"
+    },
+    {
+      "texto": "El paso 3 es crítico. Con las manos ocupadas, Lucía pregunta por voz:",
+      "marca": "paso3"
+    },
+    {
+      "texto": "La respuesta sale de la instrucción y cita el paso: llave dinamométrica de media pulgada, en cruz.",
+      "marca": "respuesta"
+    },
+    {
+      "texto": "Sin confirmar el punto crítico, no puede seguir.",
+      "marca": "sinmarcar"
+    },
+    {
+      "texto": "Al final, una foto: un modelo con visión la compara con la del experto.",
+      "marca": "foto"
+    },
+    {
+      "texto": "Ejecución registrada, con su tiempo y sus consultas: así se mide su autonomía.",
+      "marca": "fin"
+    }
+  ],
+  "verificado": "Sin grabar. Une las acciones de 06a (hasta el paso 4) y de 06b (pasos 4 a 7, foto y cierre), ya probadas por separado el 10/10. En la v1 el reloj saltaba de 2:52 a 5:34 entre las dos tomas.",
+  "notas": "La espera de la respuesta por voz duró 2 min 21 s en Oracle: el montaje la acelera con su rótulo. Recorte sugerido como en la v1: el rato quieto antes de pulsar el micrófono si la voz es más corta.",
+  "oir_microfono": true,
+  "texto_microfono": "¿Con qué llave aprieto?",
+  "requiere_grabacion": true,
+  "sustituye": [
+    "06a-planta-pasos-lucia",
+    "06b-planta-cierre-lucia"
+  ],
+  "preparacion": [
+    "P1",
+    "P4: foto-resultado.jpg en <salida>/ficheros/ (está en 04_VIDEO/material/grabaciones/ficheros/).",
+    "Lucía sin ninguna ejecución de IT-023 en curso (si no, el botón dice «Continuar»).",
+    "Micrófono: {voces}/microfono/llave.wav (copiado en 04_VIDEO/v2/voces/microfono/)."
+  ],
+  "cola_voz_s": 0.7,
+  "cola_accion_s": 0.7,
+  "resultado": {
+    "texto": "Guiada paso a paso, con los críticos confirmados y la ejecución registrada.",
+    "bases": [
+      "Asistencia guiada paso a paso",
+      "Formación contextualizada en el puesto",
+      "Garantizar la correcta ejecución"
+    ],
+    "desde_fragmento": 7
+  }
+}

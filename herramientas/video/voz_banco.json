@@ -1,0 +1,61 @@
+{
+  "_nota": "Banco de pruebas de voces (voz_banco.py). Mismos textos para todos los motores: tres fragmentos del narrador sacados de docs/video/recorrido.json y las dos preguntas que dicen los empleados al micrófono. Los términos se buscan en la transcripción de Whisper para medir si se entienden.",
+  "narrador": [
+    {
+      "id": "apertura",
+      "origen": "recorrido.json: 00-portada y 01b-cidia, tal cual",
+      "texto": "Esto es CidIA: un copiloto de inteligencia artificial para la industria que funciona entero dentro de la empresa. CidIA cierra el ciclo completo que piden las bases: captura lo que sabe el experto, lo convierte en instrucciones y formación, acompaña en el puesto y certifica quién domina cada tarea. Y los modelos de IA corren en un servidor de la empresa: los datos no salen de la planta.",
+      "terminos": [
+        "cidia",
+        "cidia2",
+        "ia"
+      ]
+    },
+    {
+      "id": "tecnico",
+      "origen": "recorrido.json: 03b-borrador-carmen (fragmento 1, con «de IT-023», el código del rótulo de 03c) y 09b-matriz-javier (fragmento 2)",
+      "texto": "Siete pasos con su imagen, su clip y lo que Carmen dice en cada uno. El paso 3 de IT-023 llega marcado como crítico porque ella lo dijo: cuatro tornillos en cruz a 25 N·m. Y la matriz ILUO, ya sin papeles: cada celda con sus evidencias. Pedro acaba de pasar a U.",
+      "terminos": [
+        "it023",
+        "nm",
+        "iluo"
+      ]
+    },
+    {
+      "id": "cierre",
+      "origen": "recorrido.json: 13e-innovacion y 13g-final, tal cual",
+      "texto": "Y la innovación está en la combinación: el ciclo completo, en local, con evidencias y con un saber que crece desde la planta. CidIA: el conocimiento de la planta, capturado, enseñado y medido, sin salir de la empresa.",
+      "terminos": [
+        "cidia"
+      ]
+    }
+  ],
+  "empleado": [
+    {
+      "id": "prensa",
+      "origen": "recorrido.json: texto_microfono de 05a-copiloto-voz-marta",
+      "texto": "La prensa 3 se ha atascado al cambiar el molde. ¿Qué hago?",
+      "terminos": [
+        "prensa3"
+      ]
+    },
+    {
+      "id": "llave",
+      "origen": "recorrido.json: texto_microfono de 06a-planta-pasos-lucia",
+      "texto": "¿Con qué llave aprieto?",
+      "terminos": [
+        "llave"
+      ]
+    }
+  ],
+  "terminos": {
+    "cidia": "\\b[csz][iy] ?d ?[iy] ?a\\b",
+    "cidia2": "\\b[csz][iy] ?d ?[iy] ?a\\b.*\\b[csz][iy] ?d ?[iy] ?a\\b",
+    "ia": "\\bmodelos de (i a|ia|inteligencia artificial)\\b",
+    "it023": "\\b(i|y|it|ite|i te|y te|e te)\\s?(guion\\s)?(cero|o)\\s?(dos tres|veintitres)\\b",
+    "nm": "\\bveinticinco (newton|newtons|niuton|niutons|nuton)s?( por)? metros?\\b|\\bveinticinco n m\\b",
+    "iluo": "\\b(i|y)\\s?(l|ele)\\s?(u)\\s?(o)\\b|\\biluo\\b",
+    "prensa3": "\\bprensa tres\\b",
+    "llave": "\\bcon que llave aprieto\\b"
+  }
+}

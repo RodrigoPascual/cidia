@@ -1,0 +1,305 @@
+{
+ "_nota": "Voces probadas con el banco (voz_banco.py sintetizar voz_candidatas.json --salida 04_VIDEO/v2/muestras-voz). Ninguna clona a una persona real: voces de catálogo del propio modelo o voces diseñadas a partir de una descripción (y, para fijar el timbre, el audio de esa voz diseñada como referencia).",
+ "voces": [
+  {
+   "id": "kokoro-alex-v1",
+   "motor": "kokoro",
+   "papel": "narrador",
+   "licencia": "Apache-2.0 (Kokoro-82M) + MIT (kokoro-onnx)",
+   "notas": "La de la versión 1: em_alex a 0,95, frase a frase con 0,32 s de pausa.",
+   "config": {
+    "voz": "em_alex",
+    "velocidad": 0.95
+   },
+   "por_frases": true,
+   "pausa_frase": 0.32
+  },
+  {
+   "id": "kokoro-alex-entero",
+   "motor": "kokoro",
+   "papel": "narrador",
+   "licencia": "Apache-2.0 + MIT",
+   "notas": "em_alex a 1,0 con el fragmento entero: Kokoro pone él las pausas y la entonación de párrafo.",
+   "config": {
+    "voz": "em_alex",
+    "velocidad": 1.0
+   },
+   "por_frases": false
+  },
+  {
+   "id": "kokoro-alex-santa",
+   "motor": "kokoro",
+   "papel": "narrador",
+   "licencia": "Apache-2.0 + MIT",
+   "notas": "Mezcla de estilos 60 % em_alex y 40 % em_santa (más grave), a 0,95, frase a frase con 0,28 s.",
+   "config": {
+    "voz": {
+     "em_alex": 0.6,
+     "em_santa": 0.4
+    },
+    "velocidad": 0.95
+   },
+   "por_frases": true,
+   "pausa_frase": 0.28
+  },
+  {
+   "id": "kokoro-dora",
+   "motor": "kokoro",
+   "papel": "empleado",
+   "licencia": "Apache-2.0 + MIT",
+   "notas": "La voz del micrófono de la versión 1.",
+   "config": {
+    "voz": "ef_dora",
+    "velocidad": 1.0
+   },
+   "por_frases": true
+  },
+  {
+   "id": "kokoro-santa",
+   "motor": "kokoro",
+   "papel": "empleado",
+   "licencia": "Apache-2.0 + MIT",
+   "notas": "La nota de voz de Pedro en la versión 1.",
+   "config": {
+    "voz": "em_santa",
+    "velocidad": 1.0
+   },
+   "por_frases": true
+  },
+  {
+   "id": "chatterbox-es-incorporada",
+   "motor": "chatterbox",
+   "papel": "ambos",
+   "licencia": "MIT (Chatterbox Multilingual V3 es-ES, Resemble AI)",
+   "notas": "Ajuste fino de castellano de España con la voz incorporada del modelo (conds.pt), sin referencia.",
+   "config": {
+    "exageracion": 0.5,
+    "cfg": 0.5,
+    "temperatura": 0.8,
+    "semilla": 1234
+   },
+   "por_frases": true,
+   "pausa_frase": 0.3
+  },
+  {
+   "id": "supertonic-m1",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo M1, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M1",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m2",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo M2, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M2",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m3",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo M3, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M3",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m4",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo M4, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M4",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-m5",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo M5, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "M5",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f1",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo F1, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F1",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f2",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo F2, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F2",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f3",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo F3, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F3",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f4",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo F4, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F4",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "supertonic-f5",
+   "motor": "supertonic",
+   "papel": "ambos",
+   "licencia": "Pesos BigScience OpenRAIL-M (uso comercial permitido con restricciones de uso: avisar de que la voz es sintética); SDK MIT",
+   "notas": "Supertonic 3, voz de catálogo F5, 8 pasos, velocidad 1,0, fragmento entero.",
+   "config": {
+    "voz": "F5",
+    "velocidad": 1.0,
+    "pasos": 8
+   },
+   "por_frases": false
+  },
+  {
+   "id": "voxcpm-narrador-hombre",
+   "motor": "voxcpm",
+   "papel": "narrador",
+   "licencia": "Apache-2.0 (VoxCPM2, OpenBMB): uso comercial permitido",
+   "notas": "Voz diseñada con una descripción (sin referencia de ninguna persona) y fijada: se genera una vez la referencia y todos los fragmentos se dicen con ella.",
+   "config": {
+    "diseno": "Un hombre español de unos cuarenta años, de Castilla, con acento peninsular neutro; voz grave, cálida y clara de narrador de documental; ritmo pausado y seguro",
+    "texto_diseno": "Hola, soy la voz que os acompañará en este recorrido. Vamos a ver, paso a paso, cómo se captura el conocimiento de la planta y cómo se enseña en cada puesto de trabajo.",
+    "referencia": "{voz}/referencia.wav",
+    "cfg": 2.0,
+    "pasos": 10,
+    "semilla": 1234
+   },
+   "por_frases": false
+  },
+  {
+   "id": "voxcpm-narradora-mujer",
+   "motor": "voxcpm",
+   "papel": "narrador",
+   "licencia": "Apache-2.0 (VoxCPM2, OpenBMB): uso comercial permitido",
+   "notas": "Voz diseñada (mujer) y fijada como la anterior.",
+   "config": {
+    "diseno": "Una mujer española de unos treinta y cinco años, de Madrid, con acento peninsular neutro; voz clara, cálida y profesional de locutora; ritmo pausado",
+    "texto_diseno": "Hola, soy la voz que os acompañará en este recorrido. Vamos a ver, paso a paso, cómo se captura el conocimiento de la planta y cómo se enseña en cada puesto de trabajo.",
+    "referencia": "{voz}/referencia.wav",
+    "cfg": 2.0,
+    "pasos": 10,
+    "semilla": 1234
+   },
+   "por_frases": false
+  },
+  {
+   "id": "voxcpm-empleada",
+   "motor": "voxcpm",
+   "papel": "empleado",
+   "licencia": "Apache-2.0 (VoxCPM2, OpenBMB): uso comercial permitido",
+   "notas": "Voz diseñada de operaria joven, natural, preguntando en el puesto.",
+   "config": {
+    "diseno": "Una mujer joven española, operaria de fábrica, acento de España, voz natural y cercana, habla con normalidad, sin teatralidad",
+    "texto_diseno": "Oye, una cosa: la prensa se ha vuelto a parar y no sé si es el sensor. ¿Me ayudas a mirarlo antes de que llegue el siguiente turno?",
+    "referencia": "{voz}/referencia.wav",
+    "cfg": 2.0,
+    "pasos": 10,
+    "semilla": 1234
+   },
+   "por_frases": false
+  },
+  {
+   "id": "voxcpm-empleado",
+   "motor": "voxcpm",
+   "papel": "empleado",
+   "licencia": "Apache-2.0 (VoxCPM2, OpenBMB): uso comercial permitido",
+   "notas": "Voz diseñada de operario de mediana edad.",
+   "config": {
+    "diseno": "Un hombre español de unos cincuenta años, operario de taller, acento de España, voz natural y algo ronca, habla con normalidad",
+    "texto_diseno": "Oye, una cosa: la prensa se ha vuelto a parar y no sé si es el sensor. ¿Me ayudas a mirarlo antes de que llegue el siguiente turno?",
+    "referencia": "{voz}/referencia.wav",
+    "cfg": 2.0,
+    "pasos": 10,
+    "semilla": 1234
+   },
+   "por_frases": false
+  },
+  {
+   "id": "qwen3-narrador-hombre",
+   "motor": "qwen3tts",
+   "papel": "narrador",
+   "licencia": "Apache-2.0 (Qwen3-TTS, Qwen/Alibaba): uso comercial permitido",
+   "notas": "Qwen3-TTS 1.7B VoiceDesign: voz diseñada con una descripción, la misma descripción y semilla en cada fragmento.",
+   "config": {
+    "modelo": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "diseno": "A Spanish man from Spain in his forties, neutral Castilian (peninsular Spanish) accent. Deep, warm and clear documentary narrator voice. Calm, confident, moderate pace.",
+    "semilla": 1234
+   },
+   "por_frases": false
+  },
+  {
+   "id": "qwen3-empleada",
+   "motor": "qwen3tts",
+   "papel": "empleado",
+   "licencia": "Apache-2.0 (Qwen3-TTS, Qwen/Alibaba): uso comercial permitido",
+   "notas": "Qwen3-TTS 1.7B VoiceDesign: operaria joven.",
+   "config": {
+    "modelo": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "diseno": "A young Spanish woman from Spain, factory worker, peninsular Spanish accent. Natural, friendly everyday voice, asking a colleague a quick question.",
+    "semilla": 1234
+   },
+   "por_frases": false
+  }
+ ]
+}

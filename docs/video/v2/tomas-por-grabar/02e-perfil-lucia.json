@@ -1,0 +1,155 @@
+{
+  "id": "02e-perfil-lucia",
+  "titulo": "Mi perfil · Lucía Herrero",
+  "bases": "Bases: adaptado al perfil · proteger el conocimiento experto (privacidad)",
+  "rol": "Empleada (lucia)",
+  "usuario": "lucia",
+  "cuenta_acceso": "lucia",
+  "ruta": "/app/copiloto",
+  "escala": 1.25,
+  "esperar_inicio": "Escribe tu pregunta",
+  "acciones": [
+    {
+      "esperar": 600
+    },
+    {
+      "clic": ".usuario-enlace",
+      "nota": "Su nombre, al pie de la barra lateral"
+    },
+    {
+      "esperarTexto": "Cambiar la contraseña",
+      "max": 10000,
+      "acelerar": false
+    },
+    {
+      "marca": "perfil"
+    },
+    {
+      "resaltar": ".perfil-datos",
+      "ms": 2200,
+      "nota": "Puesto, departamento, nivel y formaciones"
+    },
+    {
+      "marca": "contrasena"
+    },
+    {
+      "escribir": [
+        "input[autocomplete='current-password']",
+        "{contrasena}"
+      ],
+      "ms_tecla": 55
+    },
+    {
+      "escribir": [
+        "input[autocomplete='new-password'][aria-describedby]",
+        "{contrasena_nueva}"
+      ],
+      "ms_tecla": 55
+    },
+    {
+      "escribir": [
+        "input[autocomplete='new-password']:not([aria-describedby])",
+        "{contrasena_nueva}"
+      ],
+      "ms_tecla": 55
+    },
+    {
+      "resaltar": ".reglas-contrasena",
+      "ms": 1800,
+      "nota": "Las reglas se comprueban al escribir"
+    },
+    {
+      "clicTexto": "Cambiar contraseña"
+    },
+    {
+      "esperarTexto": "Contraseña cambiada",
+      "max": 15000,
+      "acelerar": false
+    },
+    {
+      "marca": "memoria"
+    },
+    {
+      "scroll": ".memoria-explicacion"
+    },
+    {
+      "resaltar": ".memoria-explicacion",
+      "ms": 2600,
+      "nota": "Desactivada por defecto; solo la ve ella"
+    },
+    {
+      "clicTexto": "Activar la memoria"
+    },
+    {
+      "esperarSelector": "input[aria-label='Nuevo recuerdo']",
+      "max": 10000,
+      "acelerar": false
+    },
+    {
+      "escribir": [
+        "input[aria-label='Nuevo recuerdo']",
+        "Trabajo en el turno de mañana en la línea 2"
+      ],
+      "ms_tecla": 45
+    },
+    {
+      "clicTexto": "Añadir",
+      "dentro": ".memoria-nuevo"
+    },
+    {
+      "esperarTexto": "Lo añadiste tú",
+      "max": 15000,
+      "acelerar": "Guardando el recuerdo en el servidor"
+    },
+    {
+      "marca": "recuerdo"
+    },
+    {
+      "resaltar": ".recuerdos",
+      "ms": 2200,
+      "nota": "Se ve, se borra uno a uno o todo"
+    },
+    {
+      "hover": ".recuerdo button[aria-label^='Borrar el recuerdo']"
+    },
+    {
+      "esperar": 900
+    }
+  ],
+  "narracion": [
+    {
+      "texto": "Lucía entra en su perfil desde su nombre."
+    },
+    {
+      "texto": "Ve sus datos y puede cambiar la contraseña: CidIA comprueba las reglas y nunca la muestra.",
+      "marca": "perfil"
+    },
+    {
+      "texto": "Y decide si el copiloto la recuerda: la memoria está apagada por defecto, y lo que guarda solo lo ve ella.",
+      "marca": "memoria"
+    },
+    {
+      "texto": "Lo que recuerda se ve, se borra y se queda en el servidor de la empresa.",
+      "marca": "recuerdo"
+    }
+  ],
+  "requiere_grabacion": true,
+  "preparacion": [
+    "P1 (datos limpios) y grabarla la última de Lucía: cambia su contraseña y su memoria.",
+    "grabador.mjs: hoy solo sustituye {contrasena}. Hay que añadir {contrasena_nueva} con la clave CIDIA_DEMO_CONTRASENA_NUEVA del fichero de secretos, con el mismo trato (solo en campos de tipo password y nunca en el informe).",
+    "Al terminar, fuera de cámara: «Borrar todo» y desactivar la memoria, y devolver la contraseña de demostración (POST /api/auth/contrasena con la nueva como actual) o volver a sembrar (P1)."
+  ],
+  "verificado": "Sin grabar. Selectores y textos sacados de servidor/web/src/paginas/Perfil.tsx, Acceso.tsx (CampoContrasena) y Marco.tsx (.usuario-enlace) el 10/10: «Cambiar la contraseña», «Contraseña cambiada», «Activar la memoria», input aria-label «Nuevo recuerdo», «Añadir», «Lo añadiste tú», .recuerdos, .memoria-explicacion y .reglas-contrasena.",
+  "notas": "Parte opcional (02f): con la memoria activa, preguntar en el copiloto «Soy nueva en la línea 2. ¿Qué EPI necesito para la brida B?» y volver al perfil: el copiloto extrae en segundo plano un recuerdo («Lo aprendió el copiloto»). Con el modelo de pruebas puede no salir; ensayar antes.",
+  "cola_voz_s": 0.7,
+  "cola_accion_s": 0.7,
+  "resultado": {
+    "texto": "Privacidad por defecto: la memoria está apagada hasta que la persona la enciende.",
+    "bases": [
+      "Adaptado al perfil",
+      "Proteger el conocimiento experto (privacidad)",
+      "Integración (cuentas del directorio)"
+    ],
+    "desde_fragmento": 4
+  }
+}

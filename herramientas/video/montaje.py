@@ -23,10 +23,12 @@ Después: fundidos encadenados entre piezas (xfade de 0,5 s), narración complet
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
 import shutil
+import subprocess
 import sys
 import wave
 from pathlib import Path
@@ -355,8 +357,62 @@ def partir_lineas(t: str, maximo: int = 46) -> str:
     return t[:c] + '\n' + t[c + 1:]
 
 
+# ---------- Rampas de velocidad (v2) ----------
+def rampa_de(R: float, f: float, d: float) -> tuple[float, float]:
+    """Duración en el montaje (U) y rampa efectiva de un tramo de R s de grabación acelerado ×f con rampas de d s
+    al entrar y al salir (la velocidad sube de 1 a f, se mantiene y vuelve a 1). Sin rampa: (R / f, 0)."""
+    if d <= 0 or f <= 1.05:
+        return R / f, 0.0
+    d = min(d, 0.45 * R / (1 + f))  # que quede tramo a velocidad constante
+    return 2 * d + (R - d * (1 + f)) / f, d
+
+
+def u_de_r(r: float, R: float, f: float, d: float) -> float:
+    """Segundo del montaje (desde el inicio del tramo) en que se ve el segundo r de la grabación (desde el inicio
+    del tramo) en un tramo con rampas: la velocidad crece linealmente de 1 a f en los primeros d s del montaje."""
+    if d <= 0:
+        return r / f
+    k = (f - 1) / d
+    r1 = d * (1 + f) / 2
+    U = 2 * d + (R - 2 * r1) / f
+    if r <= r1:
+        return (math.sqrt(1 + 2 * k * max(r, 0.0)) - 1) / k
+    if r <= R - r1:
+        return d + (r - r1) / f
+    return U - (math.sqrt(1 + 2 * k * max(R - r, 0.0)) - 1) / k
+
+
+def setpts_rampa(R: float, f: float, d: float, o: float = 0.0) -> str:
+    """La misma función para el filtro setpts de ffmpeg, para un trozo del tramo que empieza o s después de su
+    inicio (T = segundo de la grabación desde el inicio del trozo, ya con PTS-STARTPTS)."""
+    if d <= 0:
+        return f'PTS/{f:.6f}'
+    k = (f - 1) / d
+    r1 = d * (1 + f) / 2
+    U = 2 * d + (R - 2 * r1) / f
+    x = f'(T+{o:.6f})'
+    e = (f"if(lte({x},{r1:.6f}),(sqrt(1+{2 * k:.6f}*{x})-1)/{k:.6f},if(lte({x},{R - r1:.6f}),{d:.6f}+({x}-{r1:.6f})/{f:.6f},"
+         f"{U:.6f}-(sqrt(1+{2 * k:.6f}*max({R:.6f}-{x},0))-1)/{k:.6f}))-{u_de_r(o, R, f, d):.6f}")
+    return f"'({e})/TB'"
+
+
+def filtro_segmento(s: dict, primero: bool, pad_ini: float) -> str:
+    """trim + cambio de velocidad (con rampa si la hay) + congelados de un segmento de la escena."""
+    c = f"trim=start={s['a']:.4f}:end={s['b']:.4f},setpts=PTS-STARTPTS"
+    if s['f'] != 1:
+        c += f",setpts={setpts_rampa(s['R'], s['f'], s.get('rampa', 0.0), s.get('o', 0.0))},fps={FPS}"
+    if primero and pad_ini > 0:
+        c += f",tpad=start_mode=clone:start_duration={pad_ini:.3f}"
+    if s['pad_fin'] > 0:
+        c += f",tpad=stop_mode=clone:stop_duration={s['pad_fin']:.3f}"
+    return c
+
+
 # ---------- Línea de tiempo de una escena ----------
 def planificar(p: dict, inf: dict, voz: dict | None, a: argparse.Namespace) -> dict:
+    """Línea de tiempo de una escena. Con `a.rampa` (s, v2) las aceleraciones entran y salen con rampa de velocidad;
+    sin ella (v1) el cambio de velocidad es seco."""
+    rampa = float(getattr(a, 'rampa', 0.0) or 0.0)
     D = inf['duracion_ms'] / 1000
     marcas = {m['nombre']: m['t'] / 1000 for m in inf.get('marcas', [])}
     umbral = float(p.get('umbral_espera_s', 2.5))
@@ -396,17 +452,24 @@ def planificar(p: dict, inf: dict, voz: dict | None, a: argparse.Namespace) -> d
         if ini > t:
             tramos.append({'a': t, 'b': ini, 'f': 1.0})
         etiqueta = e['acelerar'] if isinstance(e.get('acelerar'), str) else 'Procesando en el servidor'
-        tramos.append({'a': ini, 'b': fin, 'f': f, 'etiqueta': etiqueta, 'real': fin - ini})
+        U, d_r = rampa_de(fin - ini, f, rampa)
+        tramos.append({'a': ini, 'b': fin, 'f': f, 'etiqueta': etiqueta, 'real': fin - ini, 'U': U, 'rampa': d_r})
         t = fin
     tramos.append({'a': t, 'b': D, 'f': 1.0})
     congelar: dict[float, float] = {}
+
+    def dur_tramo(tr: dict, hasta: float) -> float:
+        r = min(hasta, tr['b']) - tr['a']
+        if tr.get('rampa'):
+            return u_de_r(r, tr['b'] - tr['a'], tr['f'], tr['rampa'])
+        return r / tr['f']
 
     def M(ts: float) -> float:
         out = 0.0
         for tr in tramos:
             if ts <= tr['a']:
                 break
-            out += (min(ts, tr['b']) - tr['a']) / tr['f']
+            out += dur_tramo(tr, ts)
         return out + sum(v for k, v in congelar.items() if k <= ts)
 
     hueco, inicio_voz, desfase = float(p.get('hueco_voz_s', 0.35)), float(p.get('inicio_voz_s', 0.6)), 0.15
@@ -448,7 +511,8 @@ def planificar(p: dict, inf: dict, voz: dict | None, a: argparse.Namespace) -> d
         if x1 - x0 < 1e-6:
             continue
         tr = next(tr for tr in tramos if tr['a'] - 1e-6 <= x0 < tr['b'] - 1e-6)
-        segs.append({'a': x0, 'b': x1, 'f': tr['f'], 'pad_fin': congelar.get(x1, 0.0), 'corte': tr.get('corte', False)})
+        segs.append({'a': x0, 'b': x1, 'f': tr['f'], 'pad_fin': congelar.get(x1, 0.0), 'corte': tr.get('corte', False),
+                     'rampa': tr.get('rampa', 0.0), 'R': tr['b'] - tr['a'], 'o': x0 - tr['a']})
     # Un segmento de menos de un fotograma no da imagen: su congelación pasa al anterior. Los recortes no
     # se montan (su congelación, si la hay, también pasa al anterior).
     limpios = []
@@ -485,7 +549,8 @@ def planificar(p: dict, inf: dict, voz: dict | None, a: argparse.Namespace) -> d
     return {'duracion': round(final, 3), 'segmentos': limpios, 'pad_ini': pad_ini, 'voz': colocados + oido, 'etiquetas': etiquetas,
             'congelado_s': round(sum(congelar.values()), 2),
             'acelerado': [round(tr['f'], 1) for tr in tramos if tr['f'] > 1 and not tr.get('corte')],
-            'recortado_s': round(sum(tr['b'] - tr['a'] for tr in tramos if tr.get('corte')), 2), 'avisos': avisos}
+            'recortado_s': round(sum(tr['b'] - tr['a'] for tr in tramos if tr.get('corte')), 2), 'avisos': avisos,
+            '_M': M, '_tramos': tramos, '_congelar': congelar}
 
 
 # ---------- Render de piezas ----------
@@ -545,14 +610,7 @@ def render_escena(p: dict, voz: dict | None, a: argparse.Namespace, trab: Path) 
     segs = plan['segmentos']
     fc = [f'[0:v]split={len(segs)}' + ''.join(f'[e{i}]' for i in range(len(segs)))]
     for i, s in enumerate(segs):
-        c = f"[e{i}]trim=start={s['a']:.4f}:end={s['b']:.4f},setpts=(PTS-STARTPTS)/{s['f']:.5f}"
-        if s['f'] != 1:
-            c += f',fps={FPS}'
-        if i == 0 and plan['pad_ini'] > 0:
-            c += f",tpad=start_mode=clone:start_duration={plan['pad_ini']:.3f}"
-        if s['pad_fin'] > 0:
-            c += f",tpad=stop_mode=clone:stop_duration={s['pad_fin']:.3f}"
-        fc.append(c + f'[s{i}]')
+        fc.append(f'[e{i}]' + filtro_segmento(s, i == 0, plan['pad_ini']) + f'[s{i}]')
     fc.append(''.join(f'[s{i}]' for i in range(len(segs))) + f'concat=n={len(segs)}:v=1:a=0,fps={FPS},'
               f'trim=duration={dur:.3f},setpts=PTS-STARTPTS[b0]')
     cur, n_in, fk = 'b0', 1, []
@@ -584,13 +642,208 @@ def render_escena(p: dict, voz: dict | None, a: argparse.Namespace, trab: Path) 
             'grabado_s': round(inf['duracion_ms'] / 1000, 1)}
 
 
+# ---------- v2: escena limpia y mapa de tiempos ----------
+def ratos_quietos(video: Path, umbral: int = 10, minimo_s: float = 1.0) -> list[tuple[float, float]]:
+    """Ratos de la grabación en que no cambia nada, ni el cursor (fotogramas a 10 por segundo, 240 x 135, en gris):
+    la diferencia máxima entre dos fotogramas seguidos no pasa de `umbral` niveles."""
+    w, h, fps = 240, 135, 10
+    r = subprocess.run([ffmpeg(), '-v', 'error', '-i', str(video), '-vf', f'fps={fps},scale={w}:{h}:flags=area,format=gray',
+                        '-f', 'rawvideo', '-'], capture_output=True)
+    x = np.frombuffer(r.stdout, np.uint8)
+    x = x[:len(x) // (w * h) * w * h].reshape(-1, h, w).astype(np.int16)
+    if len(x) < 2:
+        return []
+    quieto = np.abs(np.diff(x, axis=0)).max(axis=(1, 2)) < umbral
+    out, i = [], 0
+    while i < len(quieto):
+        if quieto[i]:
+            j = i
+            while j + 1 < len(quieto) and quieto[j + 1]:
+                j += 1
+            a0, b0 = (i + 0.5) / fps, (j + 1.5) / fps
+            if b0 - a0 >= minimo_s:
+                out.append((round(a0, 2), round(b0, 2)))
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+
+def recortes_auto(p: dict, inf: dict, voz: dict | None, a: argparse.Namespace, quietos: list[tuple[float, float]],
+                  minimo_s: float = 1.4, margen_s: float = 0.4) -> list[list[float]]:
+    """Ratos con la pantalla quieta y sin voz que se pueden quitar sin que se note (como los «recortes» a mano de la
+    v1): ni dentro de una aceleración, ni con la narración o el micrófono sonando. Se deja `margen_s` a cada lado."""
+    plan = planificar(p, inf, voz, a)
+    M, tramos = plan['_M'], plan['_tramos']
+    voces = [(c['ini'], c['fin']) for c in plan['voz']]
+    D = inf['duracion_ms'] / 1000
+    out = []
+    for s0, s1 in quietos:
+        if s1 - s0 < minimo_s or s1 >= D - 0.2:
+            continue
+        if any(tr['f'] > 1 and tr['a'] < s1 and tr['b'] > s0 for tr in tramos):
+            continue
+        u0, u1 = M(s0), M(s1)
+        if any(v0 < u1 + 0.25 and v1 > u0 - 0.25 for v0, v1 in voces):
+            continue
+        c0, c1 = s0 + margen_s, s1 - margen_s
+        if c1 - c0 >= 0.5:
+            out.append([round(c0, 3), round(c1, 3)])
+    return out
+
+
+def cargar_voz_v2(p: dict, voces: Path) -> dict | None:
+    """Índice de voz de la pieza (o de otra con «voz_de»: {id, fragmentos}); exige que los textos coincidan."""
+    ref = p.get('voz_de') or {}
+    fv = voces / f"{ref.get('id', p['id'])}.json"
+    if not fv.exists():
+        if p.get('narracion'):
+            raise SystemExit(f"{p['id']}: falta la voz ({fv}); ejecuta voz.py narrar")
+        return None
+    voz = json.loads(fv.read_text(encoding='utf-8'))
+    frs = voz.get('fragmentos', [])
+    if ref.get('fragmentos'):
+        frs = [frs[n - 1] for n in ref['fragmentos']]
+    for fr in frs:
+        if not Path(fr['wav']).exists():
+            fr['wav'] = str(voces / ref.get('id', p['id']) / Path(fr['wav']).name)
+    textos = [f['texto'] for f in frs]
+    pedidos = [x['texto'] for x in p.get('narracion') or []]
+    if textos != pedidos:
+        raise SystemExit(f"{p['id']}: la voz de {fv.name} no coincide con la narración del proyecto; ejecuta voz.py narrar")
+    # Las marcas y silencios son los del proyecto (por si «voz_de» viene de otra pieza).
+    out = []
+    for k, (fr, nr) in enumerate(zip(frs, p.get('narracion') or []), 1):
+        out.append({**fr, 'n': k, 'marca': nr.get('marca'), 'tras': nr.get('tras', 0)})
+    return {**voz, 'fragmentos': out}
+
+
+def informe_hasta(inf: dict, k: int, cola_s: float = 0.9) -> dict:
+    """Informe recortado tras la acción k (para usar solo el principio de una toma)."""
+    fin = inf['acciones'][k]['fin'] + cola_s * 1000
+    inf = json.loads(json.dumps(inf))
+    inf['duracion_ms'] = min(inf['duracion_ms'], fin)
+    inf['acciones'] = [x for x in inf['acciones'] if x['inicio'] < fin]
+    inf['marcas'] = [m for m in inf.get('marcas', []) if m['t'] < fin]
+    inf['esperas'] = [e for e in inf.get('esperas', []) if e['inicio'] < fin]
+    inf['micro'] = [m for m in inf.get('micro', []) if m['t'] < fin]
+    inf['raton'] = [r for r in inf.get('raton', []) if r['t'] < fin]
+    return inf
+
+
+def mapa_tiempos(p: dict, inf: dict, plan: dict, recortes: list) -> dict:
+    """Todo lo que el diseño v2 necesita saber de la escena, ya en segundos del montaje (el vídeo limpio)."""
+    M, tramos, congelar = plan['_M'], plan['_tramos'], plan['_congelar']
+
+    def en_tramo(ts: float) -> dict | None:
+        return next((tr for tr in tramos if tr['a'] - 1e-6 <= ts < tr['b'] - 1e-6), None)
+
+    def visible(ts: float) -> bool:
+        tr = en_tramo(ts)
+        return tr is not None and tr['f'] == 1
+
+    acciones = []
+    for x in inf.get('acciones', []):
+        a0, a1 = x['inicio'] / 1000, x['fin'] / 1000
+        acciones.append({'i': x['i'], 'tipo': x['tipo'], 'ini': round(M(a0), 3), 'fin': round(M(a1), 3),
+                         'rec': [round(a0, 3), round(a1, 3)], 'visible': visible(a0) or visible(max(a0, a1 - 0.05)),
+                         **{k: x[k] for k in ('cursor_ini', 'cursor_fin', 'elemento', 'rueda') if k in x}})
+    raton = [{'t': round(M(r['t'] / 1000), 3), 'x': r['x'], 'y': r['y'], 'ev': r['ev']}
+             for r in inf.get('raton', []) if visible(r['t'] / 1000)]
+    esperas = [{'ini': round(M(tr['a']), 3), 'fin': round(M(tr['b']) - sum(v for k, v in congelar.items() if tr['a'] < k <= tr['b']), 3),
+                'factor': round(tr['f'], 2), 'real': round(tr['real'], 2), 'etiqueta': tr['etiqueta'], 'rampa': round(tr.get('rampa', 0), 3)}
+               for tr in tramos if tr['f'] > 1 and not tr.get('corte')]
+    congelados = [{'en': round(M(k) - v, 3), 'dur': round(v, 3)} for k, v in sorted(congelar.items()) if v > 0.01]
+    marcas = {m['nombre']: round(M(m['t'] / 1000), 3) for m in inf.get('marcas', [])}
+    voz = [{k: c[k] for k in ('n', 'ini', 'fin', 'wav', 'texto') if k in c} | {'microfono': bool(c.get('microfono')),
+            'ganancia': c.get('ganancia', 1.0)} for c in plan['voz']]
+    narr = p.get('narracion') or []
+    for c in voz:
+        if not c['microfono'] and 1 <= c.get('n', 0) <= len(narr):
+            c['marca'] = narr[c['n'] - 1].get('marca')
+    res = p.get('resultado') if isinstance(p.get('resultado'), dict) else None
+    res_ini = None
+    if res:
+        n = int(res.get('desde_fragmento', 1))
+        res_ini = next((c['ini'] for c in voz if not c['microfono'] and c.get('n') == n), None)
+    return {'id': p['id'], 'grabacion': p.get('grabacion', p['id']), 'duracion': plan['duracion'], 'fps': FPS,
+            'grabado_s': round(inf['duracion_ms'] / 1000, 2),
+            'tramos': [{'a': round(tr['a'], 3), 'b': round(tr['b'], 3), 'u0': round(M(tr['a']), 3), 'f': round(min(tr['f'], 1e9), 3),
+                        'tipo': 'corte' if tr.get('corte') else ('acelerado' if tr['f'] > 1 else 'normal')} for tr in tramos],
+            'recortes': recortes, 'congelados': congelados, 'marcas': marcas, 'acciones': acciones, 'raton': raton,
+            'esperas': esperas, 'voz': voz, 'resultado_ini': res_ini, 'congelado_s': plan['congelado_s'],
+            'recortado_s': plan['recortado_s'], 'avisos': plan['avisos']}
+
+
+def render_limpia(plan: dict, video: Path, salida: Path, bitrate: str = '16M') -> None:
+    """La escena con su línea de tiempo (aceleraciones con rampa, congelados y recortes) y sin ningún rótulo."""
+    segs = plan['segmentos']
+    fc = [f'[0:v]split={len(segs)}' + ''.join(f'[e{i}]' for i in range(len(segs)))]
+    for i, s in enumerate(segs):
+        fc.append(f'[e{i}]' + filtro_segmento(s, i == 0, plan['pad_ini']) + f'[s{i}]')
+    fc.append(''.join(f'[s{i}]' for i in range(len(segs))) + f'concat=n={len(segs)}:v=1:a=0,fps={FPS},'
+              f"trim=duration={plan['duracion']:.3f},setpts=PTS-STARTPTS,format=yuv420p[v]")
+    tmp = salida.with_suffix('.tmp.mp4')
+    correr([ffmpeg(), '-y', '-hide_banner', '-loglevel', 'error', '-i', str(video), '-filter_complex', ';'.join(fc), '-map', '[v]',
+            '-an', '-c:v', 'libopenh264', '-profile:v', 'high', '-b:v', bitrate, '-maxrate', '40M', '-g', '15', '-r', str(FPS),
+            '-t', f"{plan['duracion']:.3f}", '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709',
+            '-color_trc', 'bt709', '-movflags', '+faststart', str(tmp)])
+    tmp.replace(salida)
+
+
+def main_limpio(a: argparse.Namespace) -> None:
+    """--limpio: por escena, el vídeo limpio (<id>.mp4) y su mapa de tiempos (<id>.mapa.json) para el diseño v2."""
+    _, piezas = cargar_proyecto(a.proyecto)
+    dest = Path(a.limpio).resolve()
+    dest.mkdir(parents=True, exist_ok=True)
+    voces = Path(a.voces).resolve()
+    solo = set(a.solo.split(',')) if a.solo else None
+    grab = Path(a.grabaciones).resolve()
+    for p in piezas:
+        if p['tipo'] != 'escena' or (solo and p['id'] not in solo):
+            continue
+        gid = p.get('grabacion', p['id'])
+        video, finf = grab / f'{gid}.mp4', grab / f'{gid}.json'
+        if not video.exists():
+            raise SystemExit(f"Falta la grabación de {p['id']}: {video}")
+        inf = json.loads(finf.read_text(encoding='utf-8'))
+        if p.get('hasta_accion') is not None:
+            inf = informe_hasta(inf, int(p['hasta_accion']), float(p.get('cola_accion_s', 0.9)))
+        voz = cargar_voz_v2(p, voces)
+        quietos = ratos_quietos(video)
+        auto = [] if a.sin_recortes_auto else recortes_auto(p, inf, voz, a, quietos)
+        p2 = {**p, 'recortes': [*p.get('recortes', []), *auto]}
+        plan = planificar(p2, inf, voz, a)
+        mapa = mapa_tiempos(p2, inf, plan, p2['recortes'])
+        firma = json.dumps({'segs': plan['segmentos'], 'pad': plan['pad_ini'], 'dur': plan['duracion'],
+                            'video': [video.stat().st_size, int(video.stat().st_mtime)]}, sort_keys=True, default=str)
+        mapa['firma'] = hashlib.sha1(firma.encode()).hexdigest()[:16]
+        fm, fv = dest / f"{p['id']}.mapa.json", dest / f"{p['id']}.mp4"
+        previo = json.loads(fm.read_text(encoding='utf-8')) if fm.exists() else {}
+        if a.forzar or previo.get('firma') != mapa['firma'] or not fv.exists():
+            render_limpia(plan, video, fv)
+            hecho = 'hecho'
+        else:
+            hecho = 'sin cambios'
+        fm.write_text(json.dumps(mapa, ensure_ascii=False, indent=1), encoding='utf-8')
+        print(f"  {p['id']:<30} {plan['duracion']:6.1f} s  congelado {plan['congelado_s']:4.1f} s  recortado {plan['recortado_s']:5.1f} s"
+              f"  ({len(auto)} ratos quietos)  acelerado {plan['acelerado']}  {hecho}")
+        for av in plan['avisos']:
+            print('     aviso:', av)
+
+
 # ---------- Programa ----------
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('proyecto')
     ap.add_argument('--grabaciones', required=True)
     ap.add_argument('--voces', required=True)
-    ap.add_argument('--salida', required=True)
+    ap.add_argument('--salida', help='MP4 final (montaje v1)')
+    ap.add_argument('--limpio', metavar='CARPETA',
+                    help='v2: por escena, vídeo limpio sin rótulos y mapa de tiempos (<id>.mp4, <id>.mapa.json) para hyperframes.py')
+    ap.add_argument('--rampa', type=float, default=None, help='rampa de velocidad de las aceleraciones, en s (0 en v1; 0,3 con --limpio)')
+    ap.add_argument('--sin-recortes-auto', action='store_true', help='v2: no quitar los ratos quietos y sin voz')
+    ap.add_argument('--forzar', action='store_true', help='v2: rehacer los vídeos limpios aunque no hayan cambiado')
     ap.add_argument('--trabajo')
     ap.add_argument('--solo', help='ids de piezas separados por comas (para revisar una parte)')
     ap.add_argument('--quemar-subtitulos', action='store_true')
@@ -600,6 +853,13 @@ def main() -> None:
     ap.add_argument('--musica', action='store_true', help='fondo musical sintetizado aquí mismo (sin licencias de terceros)')
     ap.add_argument('--musica-db', default='-17', help='nivel del fondo respecto a la voz, en dB (por defecto -17)')
     a = ap.parse_args()
+    if a.limpio:
+        a.rampa = 0.3 if a.rampa is None else a.rampa
+        main_limpio(a)
+        return
+    if not a.salida:
+        ap.error('falta --salida (o --limpio para el montaje v2)')
+    a.rampa = a.rampa or 0.0
 
     proyecto, piezas = cargar_proyecto(a.proyecto)
     salida = Path(a.salida).resolve()

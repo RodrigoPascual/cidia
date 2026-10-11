@@ -1,5 +1,14 @@
 {
-  "_nota": "Reemplazos (expresiones regulares de Python) que se aplican al texto que se dice, no al de los subtítulos. Se aplican en orden.",
+  "_nota": "Reemplazos (expresiones regulares de Python) que se aplican al texto que se dice, no al de los subtítulos. Se aplican en orden: primero los de por_motor del motor que habla y después los comunes. Los motores de numeros_en_letras reciben además los números escritos en letras (voz_texto.py).",
+  "numeros_en_letras": ["chatterbox", "supertonic", "voxcpm", "qwen3tts", "omnivoice"],
+  "por_motor": {
+    "supertonic": [
+      ["\\bCidIA\\b", "Zidía"],
+      ["\\bnivel L\\b", "nivel ele"],
+      ["\\ben L\\b", "en ele"],
+      ["\\bM(\\d+)\\b", "eme \\1"]
+    ]
+  },
   "reemplazos": [
     ["\\bCidIA\\b", "Cidía"],
     ["\\bIT-0(\\d)(\\d)\\b", "i te cero \\1 \\2"],

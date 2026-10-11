@@ -1,0 +1,70 @@
+{
+  "id": "12c2-modelos-admin",
+  "titulo": "Modelos permitidos · solo locales",
+  "bases": "Bases: bajo coste (15 %) · proteger el conocimiento experto",
+  "rol": "Administración (admin)",
+  "usuario": "admin",
+  "ruta": "/app/admin/modelos",
+  "escala": 1.25,
+  "esperar_inicio": "Modelos permitidos",
+  "acciones": [
+    {
+      "esperarSinTexto": "DeepSeek",
+      "max": 1500,
+      "acelerar": false,
+      "nota": "Guarda: si la fila sigue en la página, la toma falla y no se graba"
+    },
+    {
+      "esperar": 600
+    },
+    {
+      "resaltarTexto": "CHAT Y COPILOTO",
+      "ms": 1600
+    },
+    {
+      "resaltarTexto": "VISIÓN",
+      "ms": 1400
+    },
+    {
+      "marca": "nube"
+    },
+    {
+      "scroll": 380
+    },
+    {
+      "resaltarTexto": "EN LA NUBE",
+      "ms": 2600
+    },
+    {
+      "esperarSinTexto": "DeepSeek",
+      "max": 1500,
+      "acelerar": false
+    }
+  ],
+  "narracion": [
+    {
+      "texto": "Uno para el chat, otro para la visión, otro para la búsqueda."
+    },
+    {
+      "texto": "Los servicios en la nube están bloqueados: sin nube y sin pago por consulta.",
+      "marca": "nube"
+    }
+  ],
+  "verificado": "Sin grabar. Mismas acciones que 12c, sin «antes_js»: solo cuando Administración › Modelos ya no liste ese proveedor (incidencia I8). Las dos guardas «esperarSinTexto» hacen fallar la toma si aparece.",
+  "notas": "Recortes del montaje como en 12c (el rato quieto de la marca «nube»), ajustados al informe nuevo.",
+  "requiere_grabacion": true,
+  "sustituye": [
+    "12c-modelos-admin"
+  ],
+  "cola_voz_s": 0.7,
+  "cola_accion_s": 0.7,
+  "resultado": {
+    "texto": "Sin nube y sin pago por consulta.",
+    "bases": [
+      "Bajo coste (15 %)",
+      "Proteger el conocimiento experto",
+      "Base tecnológica e IA relevante"
+    ],
+    "desde_fragmento": 2
+  }
+}
