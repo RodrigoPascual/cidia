@@ -116,11 +116,12 @@ Un servidor dormido no responde a los portátiles.
 
 ### 4.1 Traer el código
 
-Desde el repositorio privado (git pedirá usuario y un token de acceso):
+Desde el repositorio privado, con la herramienta de GitHub (abre el navegador para iniciar sesión con una cuenta que tenga acceso al repositorio):
 
 ```bash
-sudo apt install -y git
-git clone https://github.com/ORGANIZACION/cidia.git ~/cidia
+sudo apt install -y git gh
+gh auth login --web
+gh repo clone RodrigoPascual/cidia ~/cidia
 ```
 
 O copia la carpeta `cidia` del repositorio con una memoria USB a `~/cidia`.
