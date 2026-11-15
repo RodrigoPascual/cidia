@@ -6,6 +6,34 @@ El conocimiento experto se queda en la empresa: modelos, documentos, audios y v�
 
 [![CidIA: el conocimiento experto se queda en la empresa](docs/video/portada.jpg)](https://github.com/RodrigoPascual/cidia/releases/tag/v0.1.0)
 
+## Cómo funciona
+
+```mermaid
+flowchart LR
+    A["Experto<br/>vídeo, nota de voz<br/>o entrevista"] --> B["CAPTURAR<br/>transcripción y visión<br/>proponen el borrador"]
+    B --> C["ESTRUCTURAR<br/>el experto revisa y publica<br/>la instrucción (v1, v2…)"]
+    C --> D["FORMAR<br/>micro-lecciones<br/>y tutor socrático"]
+    C --> E["ACOMPAÑAR<br/>modo planta paso a paso,<br/>preguntas por voz con citas"]
+    D --> F["EVALUAR<br/>cuestionario validado<br/>y observación en el puesto"]
+    E --> F
+    F --> G["CERTIFICAR<br/>matriz ILUO, pasaporte<br/>y evidencias xAPI"]
+    E -. "pregunta sin respuesta" .-> H["Laguna de conocimiento"]
+    H -. "el experto responde por voz" .-> C
+    C -. "nueva versión: reevaluación" .-> F
+```
+
+La IA propone y decide la persona: el experto valida los borradores, las preguntas del cuestionario y la foto final del puesto.
+
+## Datos seguros
+
+* **Nada sale de la empresa.** Modelos, documentos, audios, vídeos y evidencias viven en un servidor propio; la app de los portátiles solo habla con ese servidor y cualquier otra conexión se corta en el propio equipo.
+* **Sin nube y sin pago por consulta.** Los modelos son abiertos y se ejecutan en local; los modelos en la nube están bloqueados por política. Si una empresa lo quisiera, el administrador puede habilitar modelos externos y CidIA se integra con otros sistemas por estándares abiertos (API compatible con OpenAI, MCP y xAPI para LMS y ERP).
+* **Cada persona ve solo lo suyo.** Los permisos por departamento, nivel y formación se aplican en la base de datos antes de que el modelo lea nada, y todo queda en el registro de actividad.
+
+## Cuánto cuesta y qué ahorra
+
+Una instalación tipo (1 servidor con GPU y 5 puestos) ronda los **6.200 € en hardware**, sin licencias ni cuotas: todo el software es libre y de uso comercial ([`docs/presupuesto-hardware.md`](docs/presupuesto-hardware.md)). A cambio, el saber de los veteranos queda capturado y versionado, la formación de un recién llegado se apoya en el copiloto en lugar de en horas de un experto, y las auditorías encuentran las instrucciones actualizadas y quién está cualificado en cada tarea.
+
 ## Vídeo
 
 <!-- AVANCE: aquí va el avance de 1 minuto (CidIA-avance.mp4), arrastrado desde el editor de GitHub -->
