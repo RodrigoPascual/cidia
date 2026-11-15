@@ -34,6 +34,8 @@ La IA propone y decide la persona: el experto valida los borradores, las pregunt
 
 Una instalación tipo (1 servidor con GPU y 5 puestos) ronda los **6.200 € en hardware**, sin licencias ni cuotas: todo el software es libre y de uso comercial ([`docs/presupuesto-hardware.md`](docs/presupuesto-hardware.md)). A cambio, el saber de los veteranos queda capturado y versionado, la formación de un recién llegado se apoya en el copiloto en lugar de en horas de un experto, y las auditorías encuentran las instrucciones actualizadas y quién está cualificado en cada tarea.
 
+Caso de uso dimensionado para una pyme industrial de 65 personas: [`docs/empresa-modelo.md`](docs/empresa-modelo.md).
+
 ## Vídeo
 
 <!-- AVANCE: aquí va el avance de 1 minuto (CidIA-avance.mp4), arrastrado desde el editor de GitHub -->
