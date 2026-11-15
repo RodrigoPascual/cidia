@@ -157,6 +157,10 @@ Ollama carga cada modelo con el contexto de `OLLAMA_CONTEXT_LENGTH`, también el
 * **La base se queda.** `cidia modelos` la marca como «base de un modelo derivado» y `modelos borrar` no la borra sin `--forzar`.
 * **Con WeKnora** (motor opcional), la base de conocimiento conserva el modelo con el que se dio de alta; funciona igual, pero WeKnora seguiría pidiendo el modelo base con el contexto global.
 
+## Acceso desde fuera de la red de la empresa
+
+CidIA se publica solo en la red local (`--lan`). Para una demostración a distancia, sin abrir puertos en el router, se puede publicar el puerto 18700 con un túnel saliente de dirección fija (por ejemplo, un túnel con nombre de Cloudflare sobre un dominio propio). Antes de abrirlo: solo datos de demostración, contraseña de administración cambiada, cuentas de demo para los visitantes y el túnel apagado al terminar. En producción, lo recomendable es la VPN de la empresa.
+
 ## Garantías
 
 * Solo toca el proyecto de compose `cidia`: contenedores, volúmenes y redes se filtran por la etiqueta `com.docker.compose.project=cidia`. Nunca usa `docker system prune` ni borra imágenes de terceros.

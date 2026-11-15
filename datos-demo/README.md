@@ -4,6 +4,10 @@ Todo lo que hay en esta carpeta es **sintético**. «Metalúrgica Arlanza, S. L.
 ficticia de Burgos: sus personas, proveedores, precios, códigos de piezas y máquinas son inventados.
 No hay ningún dato real ni confidencial.
 
+Es una muestra reducida de la empresa modelo de 65 personas descrita en
+[`docs/empresa-modelo.md`](../docs/empresa-modelo.md), preparada con una persona del sector: mismos
+departamentos y tipos de documento, con las personas justas para enseñar cada rol.
+
 La semilla (`servidor/gateway/cidia/semilla.py`) carga en una base vacía la organización, las
 personas, los documentos, las instrucciones y seis semanas de actividad coherente, con sus
 sentencias xAPI. Esta carpeta guarda copias de los documentos y los medios para probar la

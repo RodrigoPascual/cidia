@@ -196,6 +196,7 @@ Para la v2 se repitió la comparación con tres fragmentos del guion v2 y modelo
 * **Datos limpios.** Las preguntas que el copiloto no sabe responder se apuntan como lagunas y aparecen después en Inicio y en Lagunas de los jefes. Antes de la grabación final, vuelve a sembrar los datos (`python -m cidia.semilla --forzar` en el servidor de demostración) y graba en el orden del guion.
 * **Modelos diminutos en el servidor de pruebas.** Las respuestas cambian de una vez a otra: comprueba en el informe y en las capturas que la respuesta grabada es la que cuenta la narración y, si no, repite la escena (`--solo id`).
 * **Un WAV de micrófono por escena.** Si una escena necesita dos preguntas por voz, pártela en dos.
+* **Lo que pidió la revisión del sector para la próxima versión:** narración con voces humanas del equipo en lugar de voz sintética, quitar el cambio de contraseña (es común a todas las aplicaciones) y un mapa del proceso en pantalla al empezar cada bloque (ya está en el README).
 
 ## 8. Licencias
 

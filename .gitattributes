@@ -10,3 +10,5 @@
 *.mp4 binary
 *.webm binary
 *.exe binary
+*.wav binary
+*.docx binary

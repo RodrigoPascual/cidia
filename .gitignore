@@ -32,3 +32,7 @@ _datos_pruebas/
 _registros_pruebas/
 _datos_qa/
 servidor/despliegue/perfiles/generico.env
+
+# Túneles y entregas locales
+.cloudflared/
+*.zip

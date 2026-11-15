@@ -125,7 +125,15 @@ Qué deja en el equipo (todo en el usuario de Windows):
 | `HKCU\…\Uninstall\CidIA` | entrada «CidIA» en Aplicaciones instaladas |
 | Escritorio y menú Inicio | acceso directo «CidIA» al lanzador, con el icono de CidIA y el AppUserModelID `CidIA.Escritorio` |
 
-Para cambiar de servidor sin reinstalar: edita las tres líneas `CIDIA_*_URL` de `%LOCALAPPDATA%\CidIA\datos\.env` y reinicia CidIA.
+Para cambiar de servidor sin reinstalar: edita las tres líneas `CIDIA_*_URL` de `%LOCALAPPDATA%\CidIA\datos\.env` y reinicia CidIA. Ejemplo, para pasar al servidor de la empresa en `http://10.168.168.98:18700`:
+
+```
+CIDIA_GATEWAY_URL=http://10.168.168.98:18700
+CIDIA_LLM_URL=http://10.168.168.98:18700/v1
+CIDIA_MCP_URL=http://10.168.168.98:18700/mcp
+```
+
+El portátil tiene que estar en la misma red que el servidor (o en su VPN). Antes de tocar nada, la dirección se puede comprobar en el navegador: `http://<servidor>:18700/salud` responde `{"estado":"ok"}`.
 
 **Desinstalar**: desde Aplicaciones instaladas o `"%LOCALAPPDATA%\Programs\CidIA\Desinstalar CidIA.exe"`. Una página pregunta si borrar también los datos (sin marcar por defecto); sin ventanas: `/S` conserva los datos y `/S /BORRARDATOS` los borra. Quita primero el *junction* del perfil (nunca borra a través de él), después la instalación, los accesos directos y las claves del registro, y devuelve el protocolo `dsh://` a DeepSeek Harness si está instalada.
 

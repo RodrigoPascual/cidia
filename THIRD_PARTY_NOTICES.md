@@ -80,7 +80,10 @@ Sirven solo para producir el vídeo de demostración; se descargan en `herramien
 
 | Componente | Licencia | Uso |
 |---|---|---|
-| Kokoro-82M (hexgrad), voces em_alex y ef_dora | Apache-2.0 | Voz del vídeo, sintetizada en local |
+| Supertonic 3 (Supertone), voz de catálogo M1 | Pesos OpenRAIL-M, SDK MIT | Narrador del vídeo v2, sintetizado en local; la licencia pide indicar que la voz es sintética (lo dicen los créditos del vídeo y el README) |
+| HyperFrames 0.8.145 (heygen-com/hyperframes) | Apache-2.0 | Montaje del vídeo v2 (rótulos, transiciones, cámara), con la telemetría y las actualizaciones apagadas |
+| Archivo y JetBrains Mono | SIL Open Font License 1.1 | Tipografías del vídeo v2 |
+| Kokoro-82M (hexgrad), voces em_alex y ef_dora | Apache-2.0 | Voz del vídeo v1 y preguntas habladas del v2, sintetizadas en local |
 | kokoro-onnx 0.6.1, ONNX Runtime | MIT | Ejecutar Kokoro |
 | phonemizer 3.4, espeak-ng (en espeakng-loader, MIT) | GPL-3.0 | Texto a fonemas; se usan como programas aparte, el audio generado no queda sujeto a la GPL |
 | NumPy, soundfile (libsndfile LGPL-2.1), Pillow | BSD-3-Clause / MIT-CMU | Audio, tarjetas y rótulos |
